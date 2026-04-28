@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Blocks pushes that contain sensitive data.
+# Install: bash .claude/hooks/install.sh
+
+set -uo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+VIOLATIONS=0
+
+# ── Known API key formats ─────────────────────────────────────────────────────
+API_PATTERNS=(
+  'sk-ant-[A-Za-z0-9_-]{20,}'           # Anthropic
+  'sk-[A-Za-z0-9]{32,}'                  # OpenAI
+  'AKIA[A-Z0-9]{16}'                      # AWS Access Key ID
+  'ghp_[A-Za-z0-9]{36}'                  # GitHub Personal Access Token
+  'glpat-[A-Za-z0-9_-]{20}'             # GitLab PAT
+  'xoxb-[0-9A-Za-z-]{50,}'              # Slack Bot token
+  'xoxp-[0-9A-Za-z-]{50,}'              # Slack User token
+  'lin_api_[A-Za-z0-9]{40}'             # Linear API key
+  'Bearer [A-Za-z0-9_-]{20,}'           # Generic Bearer token
+)
+
+# ── Generic secret patterns ───────────────────────────────────────────────────
+SECRET_PATTERNS=(
+  '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY'
+  '(password|passwd|pwd)\s*[:=]\s*"[^"]{6,}"'
+  "(password|passwd|pwd)\s*[:=]\s*'[^']{6,}'"
+  '(api_?key|apikey)\s*[:=]\s*"[^"]{8,}"'
+  "(api_?key|apikey)\s*[:=]\s*'[^']{8,}'"
+  '(secret|client_secret)\s*[:=]\s*"[^"]{8,}"'
+  "(secret|client_secret)\s*[:=]\s*'[^']{8,}'"
+  '(access_token|auth_token)\s*[:=]\s*"[^"]{8,}"'
+  "(access_token|auth_token)\s*[:=]\s*'[^']{8,}'"
+)
+
+# ── Build combined regex ──────────────────────────────────────────────────────
+ALL_PATTERNS=("${API_PATTERNS[@]}" "${SECRET_PATTERNS[@]}")
+PATTERN=$(IFS='|'; echo "${ALL_PATTERNS[*]}")
+
+# ── Scan all tracked files ────────────────────────────────────────────────────
+echo -e "${BOLD}Running security scan before push...${NC}"
+
+while IFS= read -r file; do
+  [[ -f "$file" ]] || continue
+  matches=$(grep -nEi "$PATTERN" "$file" 2>/dev/null || true)
+  if [[ -n "$matches" ]]; then
+    echo -e "  ${RED}BLOCKED${NC}  $file"
+    while IFS= read -r match; do
+      echo "           $match"
+    done <<< "$matches"
+    VIOLATIONS=$((VIOLATIONS + 1))
+  fi
+done < <(git ls-files)
+
+# ── Result ────────────────────────────────────────────────────────────────────
+if [[ $VIOLATIONS -gt 0 ]]; then
+  echo
+  echo -e "${RED}${BOLD}Push blocked — sensitive data found in $VIOLATIONS file(s).${NC}"
+  echo -e "${YELLOW}Remove or move the values to environment variables, then push again.${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}No sensitive data detected. Proceeding.${NC}"
+exit 0

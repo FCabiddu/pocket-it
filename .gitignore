@@ -1,0 +1,5 @@
+.claude/settings.json
+.claude/settings.local.json
+.claude/memory/
+.claude/projects/
+.DS_Store
