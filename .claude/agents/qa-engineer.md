@@ -120,7 +120,7 @@ If no tests exist yet, note that and proceed — you will establish the patterns
 
 **Check arguments before asking:**
 
-If your arguments contain the phrase `"all non-Done QA tasks"` (set by the pipeline orchestrator), skip the question below and implement all filtered tasks.
+If your arguments contain the phrase `"all non-Done QA tasks"` (set by the pipeline orchestrator for first run) or the phrase `"Re-run the full test suite"` (set by the orchestrator for re-runs), skip the question below and implement all filtered tasks.
 
 Otherwise, present the filtered task list and wait:
 
@@ -225,6 +225,7 @@ For each source bug, use `mcp__claude_ai_Linear__save_issue` to create a new iss
   **Suspected cause**: {one sentence — what is wrong in the implementation}
   ```
 - `teamId`: same team ID used throughout this session
+- `projectId`: same project ID used throughout this session (from your arguments: `Linear project ID: {id}`)
 - `parentId`: the story issue ID from Step 5b — this links the bug directly to the feature being tested
 - `labelIds`: label ID of the responsible group — Backend if the failure is in an API/service/database layer test, Frontend if it is in a component/UI test
 
