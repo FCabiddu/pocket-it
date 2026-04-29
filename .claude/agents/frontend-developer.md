@@ -66,9 +66,25 @@ Also note any `> **MVP note:**` callouts in the TAD — these indicate intention
 
 ---
 
-## Step 2 — Research current best practices for the detected stack (MANDATORY)
+## Step 2 — Load best-practices references
 
-Before writing a single line of code, run targeted web searches to ground your implementation in current best practices for the exact stack found in the TAD. Run these in parallel:
+Before writing a single line of code, check whether the tech-architect has already generated best-practices files for this stack:
+
+```bash
+ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+```
+
+**If `best-practices/` exists:**
+
+1. List the files: `ls ./best-practices/`
+2. Read every file relevant to frontend work (e.g. `frontend-*.md`, `testing-*.md`)
+3. Treat the contents as your authoritative guide — apply every convention, pattern, and anti-pattern listed
+
+Do **not** run web searches if the files are present. The architect already did this research.
+
+**If `best-practices/` is missing (standalone run without tech-architect):**
+
+Fall back to targeted web searches in parallel:
 
 1. **Framework conventions**: `"{framework} {version} best practices {year}"` — read top 2 results
 2. **Project structure**: `"{framework} folder structure scalable {year}"` — read top 1–2 results
@@ -76,7 +92,7 @@ Before writing a single line of code, run targeted web searches to ground your i
 4. **Performance**: `"{framework} performance optimisation {year}"` — read top 1 result
 5. **State management** (if non-trivial): `"{state_library} best practices {year}"` — read top 1 result
 
-Synthesise findings into a short internal note (do not write this to a file) that you will apply throughout implementation. Cite specific sources when they inform a non-obvious decision.
+Synthesise findings into an internal note you will apply throughout implementation.
 
 ---
 

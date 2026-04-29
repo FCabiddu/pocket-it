@@ -50,6 +50,19 @@ Model rationale: Opus for open-ended reasoning over an unknown codebase; Sonnet 
 
 ---
 
+## Output folders
+
+| Folder | Created by | Read by |
+|--------|-----------|---------|
+| `business-analysis/` | `business-analyst` | `tech-architect` |
+| `tech-analysis/` | `tech-architect` | all developer agents |
+| `best-practices/` | `tech-architect` (Step 7) | `backend-developer`, `frontend-developer`, `devops-engineer`, `qa-engineer` |
+| `implementation-plans/` | `implementation-planner` | `develop`, all developer agents |
+
+Developer agents check for `best-practices/` at Step 2. If present they read the relevant files instead of web-searching; if absent they fall back to web searches. This makes them fully standalone while saving tokens in the full pipeline.
+
+---
+
 ## TAD section map
 
 Agents reference TAD sections by number. These are fixed — if the tech-architect template changes section order, all downstream agents break.

@@ -65,9 +65,25 @@ Also note any `> **MVP note:**` callouts — these are intentional shortcuts you
 
 ---
 
-## Step 2 — Research current best practices for the detected stack (MANDATORY)
+## Step 2 — Load best-practices references
 
-Before writing any configuration, run targeted web searches in parallel:
+Before writing any configuration, check whether the tech-architect has already generated best-practices files for this stack:
+
+```bash
+ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+```
+
+**If `best-practices/` exists:**
+
+1. List the files: `ls ./best-practices/`
+2. Read every file relevant to DevOps work (e.g. `devops-*.md`)
+3. Treat the contents as your authoritative guide — apply every convention, pattern, and anti-pattern listed
+
+Do **not** run web searches if the files are present. The architect already did this research.
+
+**If `best-practices/` is missing (standalone run without tech-architect):**
+
+Fall back to targeted web searches in parallel:
 
 1. **Container best practices**: `"{runtime} Dockerfile best practices {year}"` — read top 2 results
 2. **CI/CD pipeline**: `"{ci_cd_tool} pipeline best practices {year}"` — read top 1–2 results

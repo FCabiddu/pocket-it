@@ -69,9 +69,25 @@ Also note any `> **MVP note:**` callouts — these are intentional shortcuts you
 
 ---
 
-## Step 2 — Research current best practices for the detected stack (MANDATORY)
+## Step 2 — Load best-practices references
 
-Before writing any code, run targeted web searches in parallel:
+Before writing any code, check whether the tech-architect has already generated best-practices files for this stack:
+
+```bash
+ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+```
+
+**If `best-practices/` exists:**
+
+1. List the files: `ls ./best-practices/`
+2. Read every file relevant to backend work (e.g. `backend-*.md`, `testing-*.md`)
+3. Treat the contents as your authoritative guide — apply every convention, pattern, and anti-pattern listed
+
+Do **not** run web searches if the files are present. The architect already did this research.
+
+**If `best-practices/` is missing (standalone run without tech-architect):**
+
+Fall back to targeted web searches in parallel:
 
 1. **Framework conventions**: `"{framework} {version} best practices {year}"` — read top 2 results
 2. **API design**: `"{framework} REST API structure {year}"` — read top 1–2 results
@@ -79,7 +95,7 @@ Before writing any code, run targeted web searches in parallel:
 4. **Security**: `"OWASP {framework} security best practices {year}"` — read top 1 result
 5. **Testing**: `"{framework} {test_runner} integration testing {year}"` — read top 1 result
 
-Synthesise findings into an internal note you will apply throughout implementation. Cite specific sources when they inform a non-obvious decision.
+Synthesise findings into an internal note you will apply throughout implementation.
 
 ---
 

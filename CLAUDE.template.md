@@ -10,7 +10,7 @@ This file is the runtime context for the pocket-it agent pipeline. Copy it to `~
 |------|-------|--------------|--------|
 | 1 | `/business-analyst` | Turns a feature description into a structured Business Analysis Document | `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` |
 | — | 👤 Review BAD | Read and approve the BAD before proceeding | — |
-| 2 | `/tech-architect` | Turns the BAD into a full Technical Architecture Document | `tech-analysis/{NAME}_TECH_ANALYSIS.md` |
+| 2 | `/tech-architect` | Turns the BAD into a full Technical Architecture Document; generates per-technology best-practices files | `tech-analysis/{NAME}_TECH_ANALYSIS.md`, `best-practices/*.md` |
 | — | 👤 Review TAD | Read and approve the TAD before proceeding | — |
 | 3 | `/implementation-planner` | Breaks the TAD into Epics, Stories, and Tasks; pushes issues to Linear; writes a dependency graph | `implementation-plans/{NAME}_IMPLEMENTATION_PLAN.md`, `implementation-plans/{NAME}_DEPS.json` |
 | — | 👤 Review Linear board | Edit or remove issues if needed | — |
