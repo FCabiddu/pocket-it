@@ -93,12 +93,20 @@ Each agent: marks Linear issues **In Progress** when starting, **Done** when com
 
 ### Install
 
-Clone the repo into your project root (or copy the `.claude/` folder into any existing project):
+Clone the repo, then copy the `.claude/` folder into your target project:
 
 ```bash
 git clone https://github.com/FCabiddu/pocket-it
 cp -r pocket-it/.claude /your/project/root/
 ```
+
+Copy the pipeline config to your global Claude Code settings so the agents have context in every project:
+
+```bash
+cp pocket-it/CLAUDE.template.md ~/.claude/CLAUDE.md
+```
+
+> If you already have a `~/.claude/CLAUDE.md`, append the contents of `CLAUDE.template.md` to it rather than overwriting.
 
 Then install the security hook (blocks pushes containing secrets or API keys):
 

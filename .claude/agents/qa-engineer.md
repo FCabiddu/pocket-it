@@ -107,15 +107,17 @@ If no tests exist yet, note that and proceed — you will establish the patterns
 4. Filter to issues labelled **QA** that are in a non-Done status
 5. Use `mcp__claude_ai_Linear__list_issue_statuses` to get status IDs for "In Progress" and "Done"
 
-Present the filtered task list to the user:
+**Check arguments before asking:**
+
+If your arguments contain the phrase `"all non-Done QA tasks"` (set by the pipeline orchestrator), skip the question below and implement all filtered tasks.
+
+Otherwise, present the filtered task list and wait:
 
 > "I found {n} QA tasks ready to implement:
 >
 > {numbered list: task ID — title — estimate — parent story}
 >
 > Should I implement all of them, or specific ones? (reply with 'all' or list the task IDs)"
-
-Wait for the answer.
 
 ---
 
@@ -169,7 +171,7 @@ Write thorough, production-quality tests. Apply these rules without exception:
 - Do not mock the database in integration tests
 
 **E2E tests:**
-- Cover the happy path and the top 3 error/edge case paths from TAD Section 5.3 (or the user flows from the BAD)
+- Cover the happy path and the top 3 error/edge case paths from BAD Section 5 (user flows)
 - Use Page Object Model or equivalent pattern to keep selectors out of test logic
 - Set up test data via API or database seed — never rely on existing production-like data
 - Assert on user-visible outcomes, not internal DOM structure
@@ -195,17 +197,63 @@ After implementing, run the full test suite:
 # If coverage is below target, add missing tests before marking Done
 ```
 
-Fix all failures. If coverage is below the TAD target for the files you touched, add the missing cases.
+For each failing test, classify it before acting:
+
+- **Test bug** (your test is wrong — bad setup, wrong assertion, wrong mock): fix the test immediately and re-run.
+- **Source bug** (the implementation is wrong — wrong status code, missing field, broken logic): do NOT touch source code. Create a Linear bug ticket as described below.
+
+**Creating a bug ticket for source failures:**
+
+For each source bug, use `mcp__claude_ai_Linear__save_issue` to create a new issue with:
+- `title`: `🐛 [Bug] {failing test name}`
+- `description`:
+  ```
+  **Test file**: {test file path}
+  **Error**: {exact error message}
+  **Suspected source file**: {source file path, or "unknown"}
+  **Suspected cause**: {one sentence — what is wrong in the implementation}
+  ```
+- `teamId`: same team ID used throughout this session
+- `parentId`: the story issue ID from Step 5b — this links the bug directly to the feature being tested
+- `labelIds`: label ID of the responsible group — Backend if the failure is in an API/service/database layer test, Frontend if it is in a component/UI test
+
+Record the returned issue ID. You will report all bug ticket IDs in Step 6.
+
+If coverage is below the TAD target for the files you touched, add the missing cases before marking Done.
 
 ### 5e — Mark Done
 
-Only after all tests pass and coverage targets are met: use `mcp__claude_ai_Linear__save_issue` to move the issue to "Done".
+Only after all **test bugs** are fixed and coverage targets are met: use `mcp__claude_ai_Linear__save_issue` to move the task issue to "Done". Source bugs have their own tickets — do not block this task on them.
 
 Then move to the next task.
 
 ---
 
-## Step 6 — Report
+## Step 6 — Commit and push test files
+
+After all selected tasks are marked Done, commit and push every test file written during this session:
+
+```bash
+git add .
+git commit -m "$(cat <<'EOF'
+test: implement QA test suite
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+EOF
+)"
+git push origin main
+```
+
+If `git push` fails because the remote has diverged, pull and retry:
+
+```bash
+git pull --rebase origin main
+git push origin main
+```
+
+---
+
+## Step 7 — Report
 
 When all selected tasks are complete, tell the user:
 
@@ -214,4 +262,4 @@ When all selected tasks are complete, tell the user:
 - Final coverage percentage for the files touched — compare against the TAD target
 - Any quality gates from TAD Section 11.3 that are not yet met (and what is needed to meet them)
 - Any test utilities (factories, helpers, mocks) created that other developers should know about
-- Any open questions or gaps found during testing (e.g. untestable code due to missing dependency injection, missing error handling in source code that tests revealed)
+- **Bug tickets created** — list every bug ticket ID and title, grouped by label. If none, say "No source bugs found." This list is read by the orchestrator to trigger fix rounds, so it must be present and accurate.

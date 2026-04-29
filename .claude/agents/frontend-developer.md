@@ -98,31 +98,42 @@ If the project is empty (no existing code), note that and proceed — you will e
 
 ---
 
-## Step 4 — Load frontend tasks from Linear
+## Step 3.5 — Create working branch
 
-1. Use `mcp__claude_ai_Linear__list_teams` to get available teams
-2. Use `mcp__claude_ai_Linear__list_projects` to find the relevant project — match it against the project name in the IPD
-3. Use `mcp__claude_ai_Linear__list_issues` to fetch all issues for that project
-4. Filter to issues labelled **Frontend** that are in a non-Done status
-5. Use `mcp__claude_ai_Linear__list_issue_statuses` to get the status IDs for "In Progress" and "Done"
+Parse the branch name from your arguments (format: `Branch: {branch-name}`). Also check whether the arguments include the phrase "ALREADY EXISTS".
 
-Present the filtered task list to the user:
+If the branch does **not** exist:
 
-> "I found {n} frontend tasks ready to implement:
->
-> {numbered list: task ID — title — estimate — parent story}
->
-> Should I implement all of them, or specific ones? (reply with 'all' or list the task IDs)"
+```bash
+git checkout main
+git pull origin main
+git checkout -b {branch-name}
+```
 
-Wait for the answer. Respect the user's selection.
+If the arguments say "ALREADY EXISTS":
+
+```bash
+git checkout {branch-name}
+git pull origin {branch-name}
+```
 
 ---
 
-## Step 5 — Implement tasks
+## Step 4 — Load the assigned issue
 
-Work through the selected tasks **one at a time** in dependency order (check the `Depends On` field in the IPD for each task). Never start a task whose dependency is unresolved.
+Your arguments specify the exact issue to implement (format: `Issue: {issue_id} — {issue_title}`).
 
-For each task, follow this sequence exactly:
+1. Parse the issue ID from your arguments
+2. Use `mcp__claude_ai_Linear__get_issue` to fetch the full issue — description, parent story, labels, and acceptance criteria
+3. Use `mcp__claude_ai_Linear__list_issue_statuses` to get the status IDs for "In Progress" and "Done"
+
+Implement only the single assigned issue — do not fetch or filter the full issue list.
+
+---
+
+## Step 5 — Implement the assigned issue
+
+Follow this sequence:
 
 ### 5a — Mark In Progress
 
@@ -165,8 +176,8 @@ Write production-ready code. Apply these rules without exception:
 After implementing, run the appropriate checks for the detected stack:
 
 ```bash
-# Type checking (if TypeScript)
-npx tsc --noEmit
+# Type checking (if applicable)
+{package_manager} run typecheck
 
 # Linting
 {package_manager} run lint
@@ -184,16 +195,59 @@ If any check fails, fix the issue before proceeding — do not mark the task Don
 
 Only after all checks pass: use `mcp__claude_ai_Linear__save_issue` to move the issue to "Done" status.
 
-Then move to the next task.
+---
+
+### 5f — Commit, push, and open a PR
+
+Stage all changes and commit:
+
+```bash
+git add -A
+git commit -m "$(cat <<'EOF'
+{issue_title}
+
+Linear: {issue_id}
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+EOF
+)"
+```
+
+Push to origin:
+
+```bash
+git push -u origin {branch-name}
+```
+
+Open a pull request:
+
+```bash
+gh pr create \
+  --title "{issue_id}: {issue_title}" \
+  --body "$(cat <<'EOF'
+## Summary
+{one paragraph summarising what was implemented}
+
+## Changes
+{bullet list of files created/modified and what each does}
+
+## Linear
+Closes {issue_id}
+
+🤖 Generated with [Claude Code](https://claude.ai/claude-code)
+EOF
+)"
+```
+
+Record the PR URL printed by the command — include it in your Step 6 report.
 
 ---
 
 ## Step 6 — Report
 
-When all selected tasks are complete, tell the user:
+When the issue is complete, tell the user:
 
-- How many tasks were implemented and marked Done
-- Any tasks skipped and why (unresolved dependency, blocker, ambiguity)
+- The issue implemented and its Linear status (Done)
+- The PR URL opened for this issue
 - Any deviations from the TAD and why they were necessary
 - Any patterns established in this session that future tasks should follow (especially relevant if the project was empty)
 - Any open questions or decisions that came up during implementation that the user should review

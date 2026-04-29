@@ -55,8 +55,8 @@ Record the following — they drive every decision in this session:
 | **Manifest file** | Derived from package manager (package.json, pyproject.toml, Cargo.toml, go.mod) |
 | **Base dependencies** | Section 3 + Section 5 (API layer, ORM, auth, etc.) |
 | **Dev dependencies** | Section 3 (test runner, linter, formatter, type checker) |
-| **Folder structure** | Section 4 |
-| **Environment variables** | Section 6.2 |
+| **Folder structure** | Section 7.1 (frontend) and Section 8.1 (backend) |
+| **Environment variables** | No dedicated section — scan Sections 3.1 (database), 6.1 (auth), and 9.4 (container config) for env var references |
 | **Test runner** | Section 11.1 |
 
 Also note any `> **MVP note:**` callouts — respect intentional shortcuts.
@@ -124,7 +124,7 @@ Use the exact package names and versions specified in the TAD. If the TAD lists 
 
 ## Step 6 — Create folder structure
 
-Create every directory from TAD Section 4:
+Create every directory from TAD Section 7.1 (frontend structure) and Section 8.1 (backend structure):
 
 ```bash
 mkdir -p {dir1} {dir2} {dir3} ...
@@ -150,7 +150,7 @@ Also create standard config files required by the detected stack:
 - IDE directories (`.idea/`, `.vscode/` unless `.vscode/settings.json` is intentional)
 - OS files (`.DS_Store`, `Thumbs.db`)
 
-**`.env.example`** — one line per environment variable from TAD Section 6.2, with empty or placeholder values and a short comment:
+**`.env.example`** — one line per environment variable found in the TAD (no dedicated section — scan Sections 3.1 for database URLs, 6.1 for auth secrets, and 9.4 for container runtime vars), with empty or placeholder values and a short comment:
 ```
 # Database connection
 DATABASE_URL=

@@ -417,10 +417,12 @@ Then use `AskUserQuestion` to present the findings:
 >
 > Reply with the project name to use an existing one, or type **'new'** to create a fresh project named '{Project Name from document}'."
 
-Wait for the answer. If the user selects an existing project, retrieve its ID from the list already fetched — do not call `list_projects` again. If the user says **'new'** (or no match was found and you skipped the question), create a new project using `mcp__claude_ai_Linear__save_project` with:
+Wait for the answer. If the user selects an existing project, retrieve its ID from the list already fetched — do not call `list_projects` again. Record it as `{project_id}`. If the user says **'new'**, create a new project using `mcp__claude_ai_Linear__save_project` with:
 - `name`: {Project Name from document}
 - `description`: Executive Summary from Section 1
 - `teamIds`: [selected team ID]
+
+Record the returned project ID as `{project_id}` — every issue created in Step 6d must include it.
 
 ### 6c — Create Epics as Milestones
 
@@ -432,7 +434,13 @@ For each Epic in Section 3, use `mcp__claude_ai_Linear__save_milestone` to creat
 
 Fetch available statuses with `mcp__claude_ai_Linear__list_issue_statuses`.
 
-Fetch available labels with `mcp__claude_ai_Linear__list_issue_labels`. Build a mapping from task type to label ID using this lookup (case-insensitive, partial match is fine):
+**Label setup — do this entirely before creating any issues.**
+
+The label map must be complete and guaranteed before a single issue is created. Follow these steps in order:
+
+**Step A — Identify required types.** Scan all Tasks in Section 3 and collect the distinct task types present (e.g. Backend, Frontend, DevOps, QA, Design). Only work with types that actually appear in the plan.
+
+**Step B — Fetch existing labels.** Call `mcp__claude_ai_Linear__list_issue_labels`. For each required type, search the returned list for a match using this lookup (case-insensitive, partial match):
 
 | Task Type | Label to match |
 |-----------|---------------|
@@ -442,7 +450,7 @@ Fetch available labels with `mcp__claude_ai_Linear__list_issue_labels`. Build a 
 | QA | `qa` or `testing` |
 | Design | `design` or `ux` |
 
-If no matching label exists for a type, create it using `mcp__claude_ai_Linear__create_issue_label` with the canonical name and a sensible colour:
+**Step C — Create any missing labels.** For every required type that had no match in Step B, call `mcp__claude_ai_Linear__create_issue_label` immediately and record the returned ID:
 
 | Label name | Colour |
 |------------|--------|
@@ -452,22 +460,125 @@ If no matching label exists for a type, create it using `mcp__claude_ai_Linear__
 | `QA` | `#22c55e` (green) |
 | `Design` | `#ec4899` (pink) |
 
-Create only the labels that are actually needed for the issues being pushed — do not create all five upfront.
+Also always check for and create the pipeline workflow label `Auto-merge` (color `#94a3b8`, slate) if it does not already exist. This label is used by the develop agent to skip the human review gate for low-risk issues (e.g. DB migrations, config changes). It is never applied automatically — the user applies it manually in Linear before running `/develop`.
+
+**Step D — Build the final map.** You now have a label ID for every required type. Write it down explicitly before proceeding:
+
+```
+Backend    → <id>
+Frontend   → <id>
+DevOps     → <id>
+QA         → <id>
+Design     → <id>   (if present)
+Auto-merge → <id>
+```
+
+Do not proceed to issue creation until every required type has an ID in this map.
+
+---
 
 For each Story in Section 3, use `mcp__claude_ai_Linear__save_issue` to create a parent issue:
 - `title`: {STORY-n.m: Story Title}
 - `description`: User story text + acceptance criteria formatted as a markdown checklist
 - `teamId`: selected team ID
+- `projectId`: {project_id from Step 6b}
 - `priority`: mapped from MoSCoW (Must Have → Urgent, Should Have → Medium, Could Have → Low)
 
 For each Task under that Story, create a child issue:
 - `title`: {T-n.m.k: Task description}
 - `description`: Task type, estimate, assignee role, dependency
 - `teamId`: selected team ID
+- `projectId`: {project_id from Step 6b}
 - `parentId`: parent story issue ID
-- `labelIds`: [label ID matched from the type mapping above, if found]
+- `labelIds`: [label ID from the map built in Step D — this field is REQUIRED, never omit it]
 
-After all issues are created, report the count: "Created {n} Epics (milestones), {n} Stories, and {n} Tasks in Linear under team {team name}. Labels applied where matched."
+**As each issue is created**, record the returned data in an in-memory tracking map:
+
+```
+STORY-1.1  → { linearId: "<uuid>", linearIdentifier: "LIN-41", title: "..." }
+T-1.1.1    → { linearId: "<uuid>", linearIdentifier: "LIN-42", title: "..." }
+...
+```
+
+You will need this map in Step 6e. Do not discard it.
+
+---
+
+### 6e — Set dependency relations
+
+After all issues are created, use the tracking map from Step 6d and the Blocking Dependencies Table from Section 5 to set blocking relations.
+
+**1. Parse dependencies from Section 5.**
+
+Read the Blocking Dependencies Table. For every row where `Type` is `Internal`, extract the pair:
+- `blocked`: the STORY or EPIC ID in the "Item" column (e.g. `STORY-2.1`, `T-1.2.1`)
+- `blocker`: the STORY or EPIC ID in the "Blocked By" column (e.g. `STORY-1.1`, `T-1.1.2`)
+
+Skip External dependencies — those cannot be set in Linear.
+
+**2. Resolve to Linear data.**
+
+For each pair, look up both IDs in the tracking map built in Step 6d. If either ID is not in the map (e.g. the blocker is an Epic that was created as a milestone, not an issue), skip that pair and note it.
+
+**3. Write the deps JSON file.**
+
+Write `./implementation-plans/{SNAKE_CASE_NAME}_DEPS.json` with this structure:
+
+```json
+{
+  "project": "{SNAKE_CASE_NAME}",
+  "generatedAt": "{today's date}",
+  "issueMap": {
+    "STORY-1.1": { "linearId": "<uuid>", "linearIdentifier": "LIN-41", "title": "..." },
+    "T-1.1.1":   { "linearId": "<uuid>", "linearIdentifier": "LIN-42", "title": "..." }
+  },
+  "dependencies": [
+    {
+      "blockedPlanId": "T-1.2.1",
+      "blockedLinearIdentifier": "LIN-55",
+      "blockedLinearId": "<uuid>",
+      "blockerPlanId": "T-1.1.1",
+      "blockerLinearIdentifier": "LIN-42",
+      "blockerLinearId": "<uuid>"
+    }
+  ]
+}
+```
+
+Include all issues in `issueMap` (stories and tasks). Include only resolved Internal pairs in `dependencies`.
+
+**4. Set native Linear blocking relations (requires `LINEAR_API_TOKEN`).**
+
+Check if the environment variable is available:
+
+```bash
+echo "${LINEAR_API_TOKEN:-NOT_SET}"
+```
+
+If the output is `NOT_SET`, skip to step 5.
+
+If the token is available, for each resolved dependency pair run:
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: ${LINEAR_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data-raw '{
+    "query": "mutation CreateRelation($issueId: String!, $relatedIssueId: String!, $type: IssueRelationTypeInput!) { issueRelationCreate(input: {issueId: $issueId, relatedIssueId: $relatedIssueId, type: $type}) { success } }",
+    "variables": {
+      "issueId": "{blockedLinearId}",
+      "relatedIssueId": "{blockerLinearId}",
+      "type": "blocked_by"
+    }
+  }'
+```
+
+Check each response. If `"success": true`, the native blocking arrow is set on the Linear board. If an error is returned, note it — the deps JSON file is the fallback and the pipeline still works.
+
+**5. Note in the Step 7 report:**
+- How many dependency pairs were found, resolved, and written to the deps file
+- Whether native Linear relations were set (token present / token absent / errors)
+- If token was absent: `"Set LINEAR_API_TOKEN to your Linear personal API key to enable native blocking arrows on the board. The deps file is used by /develop either way."`
 
 ---
 
