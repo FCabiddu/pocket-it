@@ -23,6 +23,8 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Locate context documents
 
+**Check arguments first:** If your arguments contain `TAD: {path}` and/or `IPD: {path}`, use those paths directly with the Read tool and skip the find commands below.
+
 ```bash
 find . -path "*/tech-analysis/*.md" | head -5
 find . -path "*/implementation-plans/*.md" | head -5

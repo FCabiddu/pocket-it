@@ -28,6 +28,8 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Load the TAD
 
+**Check arguments first:** If your arguments contain `TAD: {path}`, use that path directly with the Read tool and skip the find command below.
+
 Find and read the Technical Architecture Document:
 
 ```bash

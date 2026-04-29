@@ -19,6 +19,8 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 1 — Load the TAD and extract the Endpoint Catalogue
 
+**Check arguments first:** If your arguments contain `TAD: {path}`, use that path directly with the Read tool and skip the find command below.
+
 Find and read the TAD:
 
 ```bash

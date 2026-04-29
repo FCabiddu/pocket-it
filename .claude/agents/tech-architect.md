@@ -20,9 +20,17 @@ You are acting as a Principal Software Architect producing a Technical Architect
 
 The user has provided: {{ARGUMENTS}}
 
-## Step 0 — Scope calibration (MANDATORY — ask before anything else)
+## Step 0 — Scope calibration (MANDATORY — check before anything else)
 
-Before ingesting the input or writing a single line of analysis, use `AskUserQuestion` to ask:
+Before ingesting the input or writing a single line of analysis, check if the input is a path to a Business Analysis Document (BAD):
+
+1. If the input looks like a file path, read the file now.
+2. Look for a `| Project Scope |` row in the metadata table near the top of the document.
+3. If found, extract the value (`MVP` or `Full Production`), store it as the **project scope**, and **skip the question below** — proceed directly to Step 1.
+
+Only ask the question below if no `Project Scope` row is found (or if the input is free text, not a BAD file):
+
+Use `AskUserQuestion` to ask:
 
 > "Is this for an **MVP** (ship fast, validate the idea, minimal infrastructure — can scale later) or a **full production project** (complete architecture, scaling strategy, full CI/CD, enterprise-grade setup)?"
 

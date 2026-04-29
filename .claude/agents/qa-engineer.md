@@ -28,6 +28,8 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Locate context documents
 
+**Check arguments first:** If your arguments contain `TAD: {path}` and/or `IPD: {path}`, use those paths directly with the Read tool and skip the find commands below.
+
 Search the current working directory for the TAD and IPD:
 
 ```bash

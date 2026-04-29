@@ -29,7 +29,13 @@ Determine what the input is:
 
 If reading a path fails, treat the input as free text.
 
-After ingesting, if any **critical business dimension** is ambiguous (e.g. who is the primary user, what platform is targeted, whether there is an existing system to integrate with), use `AskUserQuestion` to ask — one question per call, only what is truly blocking. Do not ask about things that can be reasonably inferred.
+After ingesting, use `AskUserQuestion` to ask:
+
+> "Is this an **MVP** (ship fast, minimal scope, validate the idea) or a **full production** project (complete architecture, enterprise-grade)?"
+
+Wait for the answer. Record it as `{project_scope}` — you will include it in the BAD metadata table.
+
+If any **critical business dimension** is also ambiguous (e.g. who is the primary user, what platform is targeted, whether there is an existing system to integrate with), use `AskUserQuestion` to ask — one question per call, only what is truly blocking. Do not ask about things that can be reasonably inferred.
 
 ## Step 2 — Derive the document name
 
@@ -62,6 +68,7 @@ Be thorough. Think like a senior product owner who has already discussed the fea
 | Date | {today's date} |
 | Author | Product Owner |
 | Target Audience | Software Architect, Engineering Team |
+| Project Scope | {MVP / Full Production} |
 
 ---
 
