@@ -63,6 +63,16 @@ If the manifest file does **not** exist, stop immediately and tell the user:
 
 Do not proceed until the project is scaffolded.
 
+**Best-practices check** — after confirming the manifest, check whether the architect generated best-practices files:
+
+```bash
+ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+```
+
+If missing, warn the user (do not block):
+
+> "⚠️ `best-practices/` not found — developer agents will fall back to individual web searches for this stack, which uses more tokens. To pre-generate these files, run `/tech-architect` first."
+
 **Resume check** — if a previous `/develop` run was interrupted, branches and open PRs may already exist. After confirming the manifest is present, run:
 
 ```bash

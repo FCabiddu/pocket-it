@@ -700,7 +700,7 @@ mkdir -p ./best-practices
 
 ### 7c — Research and write one file per group
 
-For each group, run one focused WebSearch (`"{primary technology} {version} best practices {year} production"`), read the top 2 results, then immediately write the file with the Write tool. Do not batch writes.
+Run all group searches **in parallel** in a single message — one WebSearch call per group, do not wait for one to finish before starting the next. Use the query `"{primary technology} {version} best practices {year} production"` for each. Read the top 2 results per group, then write each file with the Write tool immediately after its research completes. Do not batch writes.
 
 **File naming**: `best-practices/{group}-{primary-tech}.md`
 Examples: `best-practices/frontend-nextjs.md`, `best-practices/backend-express.md`, `best-practices/devops-docker-github-actions.md`, `best-practices/testing-vitest-playwright.md`

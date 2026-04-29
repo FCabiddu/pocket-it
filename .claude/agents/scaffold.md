@@ -82,11 +82,27 @@ If no manifest is found, proceed.
 
 ---
 
-## Step 4 — Research current conventions (MANDATORY)
+## Step 4 — Load best-practices references
 
-Run one targeted web search before creating anything:
+Before creating anything, check whether the tech-architect has already generated best-practices files:
 
-`"{framework} {language} project structure best practices 2026"`
+```bash
+ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+```
+
+**If `best-practices/` exists:**
+
+1. List the files: `ls ./best-practices/`
+2. Read all of them — scaffold uses every group's conventions to configure the correct eslint, tsconfig, formatter, and folder structure from the start
+3. Apply every convention, config pattern, and tool setting from the files when writing Step 6 config files
+
+Do **not** run web searches if the files are present. The architect already did this research.
+
+**If `best-practices/` is missing (standalone run without tech-architect):**
+
+Run one targeted web search:
+
+`"{framework} {language} project structure best practices {year}"`
 
 Read the top result. Apply any conventions that differ from naive defaults — especially folder naming, config file locations, and recommended tooling versions.
 

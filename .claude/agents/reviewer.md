@@ -100,6 +100,14 @@ Check the PR diff against TAD-derived binary criteria. A criterion fails only if
 - Any schema change has a corresponding migration file
 - No raw SQL strings where the TAD specifies an ORM or query builder
 
+**Best-practices anti-patterns (runs if `best-practices/` exists):**
+
+```bash
+ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+```
+
+If found, read every file in the folder. For each anti-pattern listed under `## Anti-Patterns` in those files, scan the PR diff for a clear violation. Apply the same bar as the TAD checks — only fail on an evident violation present in the diff, not on absence of evidence or stylistic disagreement.
+
 Record each failing criterion with the exact file and line where the violation occurs.
 
 ### 3c — Acceptance criteria check (full mode only)
