@@ -27,8 +27,7 @@ flowchart TD
     F --> G{{"👤 Review plan & Linear board"}}
     G --> H(["/scaffold"])
     H --> I[("Repo initialized\nDeps installed\nInitial commit")]
-    I --> J{{"👤 Verify scaffold"}}
-    J --> K(["/develop"])
+    I --> K(["/develop"])
     K --> L{Cross-group\ndependencies?}
     L -->|None| M([Parallel dispatch])
     L -->|Frontend needs Backend| N([Phased dispatch])
