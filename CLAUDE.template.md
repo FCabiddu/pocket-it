@@ -6,12 +6,16 @@ This file is the runtime context for the pocket-it agent pipeline. Copy it to `~
 
 ## Pipeline
 
-| Step | Command | What it does | Output |
-|------|---------|--------------|--------|
+| Step | Skill | What it does | Output |
+|------|-------|--------------|--------|
 | 1 | `/business-analyst` | Turns a feature description into a structured Business Analysis Document | `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` |
+| — | 👤 Review BAD | Read and approve the BAD before proceeding | — |
 | 2 | `/tech-architect` | Turns the BAD into a full Technical Architecture Document | `tech-analysis/{NAME}_TECH_ANALYSIS.md` |
+| — | 👤 Review TAD | Read and approve the TAD before proceeding | — |
 | 3 | `/implementation-planner` | Breaks the TAD into Epics, Stories, and Tasks; pushes issues to Linear; writes a dependency graph | `implementation-plans/{NAME}_IMPLEMENTATION_PLAN.md`, `implementation-plans/{NAME}_DEPS.json` |
+| — | 👤 Review Linear board | Edit or remove issues if needed | — |
 | 4 | `/scaffold` | Initialises the project skeleton from the TAD (installs deps, creates folder structure, commits) | project files in the working directory |
+| — | 👤 Verify scaffold | Confirm the project structure looks correct | — |
 | 5 | `/develop` | Full dev cycle — surveys Linear, dispatches developer agents, runs contract validation, reviewer, QA, and documentation | merged PRs on main, docs PR |
 
 Each step reads the output of the previous one. Do not skip steps — `/develop` requires the TAD, IPD, deps JSON, and a scaffolded project.

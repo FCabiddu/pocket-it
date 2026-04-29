@@ -6,42 +6,38 @@ An AI-powered software development pipeline built on [Claude Code](https://claud
 
 ## How it works
 
+### ⚡ Lite path
+
+```mermaid
+flowchart LR
+    A(["/mvp\nDescription + optional stack"]) --> B[("Full-stack MVP\nFrontend + Backend\nModern UI — committed")]
+```
+
+### 🏗️ Full pipeline
+
 ```mermaid
 flowchart TD
-    subgraph lite["⚡ Lite — MVP Builder"]
-        MVP(["/mvp\nDescription + optional stack"])
-        MVP --> MVPOUT[("Full-stack MVP\nFrontend + Backend\nModern UI — committed")]
-    end
-
-    subgraph full["🏗️ Full Pipeline"]
-        A(["/business-analyst"]) --> B[("BAD\nBusiness Analysis Doc")]
-        B --> C(["/tech-architect"])
-        C --> D[("TAD\nTechnical Architecture Doc")]
-        D --> E(["/implementation-planner"])
-        E --> F[("IPD\nImplementation Plan Doc\n+ Linear Issues")]
-
-        F --> G{{"👤 Human checkpoint\nReview plan & Linear board"}}
-
-        G --> H(["/scaffold"])
-        H --> I[("Repo initialized\nDeps installed\nInitial commit")]
-
-        I --> J{{"👤 Human checkpoint\nVerify scaffold"}}
-
-        J --> K(["/develop"])
-
-        K --> L{Cross-group\ndependencies?}
-
-        L -->|None| M([Parallel dispatch])
-        L -->|Frontend needs Backend| N([Phased dispatch])
-
-        M --> FE([Frontend Agent\nOpus])
-        M --> BE([Backend Agent\nOpus])
-        M --> DO([DevOps Agent\nSonnet])
-        M --> QA([QA Agent\nOpus])
-
-        N --> P1([Phase 1\nBackend + DevOps])
-        P1 --> P2([Phase 2\nFrontend + QA])
-    end
+    A(["/business-analyst"]) --> B[("BAD\nBusiness Analysis Doc")]
+    B --> BC{{"👤 Review BAD"}}
+    BC --> C(["/tech-architect"])
+    C --> D[("TAD\nTechnical Architecture Doc")]
+    D --> DC{{"👤 Review TAD"}}
+    DC --> E(["/implementation-planner"])
+    E --> F[("IPD\nImplementation Plan Doc\n+ Linear Issues")]
+    F --> G{{"👤 Review plan & Linear board"}}
+    G --> H(["/scaffold"])
+    H --> I[("Repo initialized\nDeps installed\nInitial commit")]
+    I --> J{{"👤 Verify scaffold"}}
+    J --> K(["/develop"])
+    K --> L{Cross-group\ndependencies?}
+    L -->|None| M([Parallel dispatch])
+    L -->|Frontend needs Backend| N([Phased dispatch])
+    M --> FE([Frontend Agent\nOpus])
+    M --> BE([Backend Agent\nOpus])
+    M --> DO([DevOps Agent\nSonnet])
+    M --> QA([QA Agent\nOpus])
+    N --> P1([Phase 1\nBackend + DevOps])
+    P1 --> P2([Phase 2\nFrontend + QA])
 ```
 
 ---
