@@ -44,6 +44,7 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | `reviewer.md` | Opus | Checks acceptance criteria + TAD constraints against PR diffs |
 | `contract-validator.md` | Sonnet | Diffs API contract: TAD spec vs backend routes vs frontend calls |
 | `documentation-agent.md` | Opus | Writes README, API reference, architecture overview |
+| `mvp-builder.md` | Opus | Builds a full-stack MVP from a plain-English description; no TAD/Linear required |
 
 Model rationale: Opus for open-ended reasoning over an unknown codebase; Sonnet for structured execution from a defined template.
 
@@ -97,3 +98,32 @@ QA and documentation agents receive simpler strings (`"all non-Done QA tasks"`, 
 3. If it is spawned by the orchestrator, add the spawn call to `develop.md` at the right step.
 4. If it reads the TAD, verify it references the correct section numbers from the table above.
 5. Update `CLAUDE.template.md` if the new agent affects the user-facing pipeline flow.
+
+## Adding a new skill
+
+Skills are user-invocable launchers (`/skill-name`) that spawn an agent. Each skill lives in its own directory:
+
+```
+.claude/skills/{name}/SKILL.md
+```
+
+The `SKILL.md` content follows this pattern:
+
+```markdown
+## Launcher
+
+Your only job is to spawn an isolated agent. Follow these steps exactly:
+
+1. Use the Read tool to read `~/.claude/agents/{name}.md`
+2. In the content you just read, replace every occurrence of `{{ARGUMENTS}}` with this exact value: $ARGUMENTS
+3. Call the Agent tool with:
+   - `subagent_type`: `general-purpose`
+   - `model`: `sonnet` or `opus`
+   - `description`: `{Human-readable description}`
+   - `run_in_background`: `false`
+   - `prompt`: the modified content from step 2
+
+Do not do any research, analysis, or writing yourself. Everything happens inside the spawned agent.
+```
+
+Note: `.claude/commands/` is the legacy format — it still works but `.claude/skills/` is the current recommended format.

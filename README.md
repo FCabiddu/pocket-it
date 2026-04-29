@@ -1,51 +1,74 @@
 # pocket-it
 
-An AI-powered software development pipeline built on [Claude Code](https://claude.ai/code) agents. Describe a feature and let a chain of specialized agents plan, scaffold, and implement it — from business requirements all the way to working code.
+An AI-powered software development pipeline built on [Claude Code](https://claude.ai/code) agents. Choose the path that fits your project: a single-command MVP builder for prototypes, or a full structured pipeline for production products.
 
 ---
 
 ## How it works
 
-The pipeline runs in three phases. Each phase is a manual step — you review the output before moving to the next.
-
 ```mermaid
 flowchart TD
-    A(["/business-analyst"]) --> B[("BAD\nBusiness Analysis Doc")]
-    B --> C(["/tech-architect"])
-    C --> D[("TAD\nTechnical Architecture Doc")]
-    D --> E(["/implementation-planner"])
-    E --> F[("IPD\nImplementation Plan Doc\n+ Linear Issues")]
+    subgraph lite["⚡ Lite — MVP Builder"]
+        MVP(["/mvp\nDescription + optional stack"])
+        MVP --> MVPOUT[("Full-stack MVP\nFrontend + Backend\nModern UI — committed")]
+    end
 
-    F --> G{{"👤 Human checkpoint\nReview plan & Linear board"}}
+    subgraph full["🏗️ Full Pipeline"]
+        A(["/business-analyst"]) --> B[("BAD\nBusiness Analysis Doc")]
+        B --> C(["/tech-architect"])
+        C --> D[("TAD\nTechnical Architecture Doc")]
+        D --> E(["/implementation-planner"])
+        E --> F[("IPD\nImplementation Plan Doc\n+ Linear Issues")]
 
-    G --> H(["/scaffold"])
-    H --> I[("Repo initialized\nDeps installed\nInitial commit")]
+        F --> G{{"👤 Human checkpoint\nReview plan & Linear board"}}
 
-    I --> J{{"👤 Human checkpoint\nVerify scaffold"}}
+        G --> H(["/scaffold"])
+        H --> I[("Repo initialized\nDeps installed\nInitial commit")]
 
-    J --> K(["/develop"])
+        I --> J{{"👤 Human checkpoint\nVerify scaffold"}}
 
-    K --> L{Cross-group\ndependencies?}
+        J --> K(["/develop"])
 
-    L -->|None| M([Parallel dispatch])
-    L -->|Frontend needs Backend| N([Phased dispatch])
+        K --> L{Cross-group\ndependencies?}
 
-    M --> FE([Frontend Agent\nOpus])
-    M --> BE([Backend Agent\nOpus])
-    M --> DO([DevOps Agent\nSonnet])
-    M --> QA([QA Agent\nOpus])
+        L -->|None| M([Parallel dispatch])
+        L -->|Frontend needs Backend| N([Phased dispatch])
 
-    N --> P1([Phase 1\nBackend + DevOps])
-    P1 --> P2([Phase 2\nFrontend + QA])
+        M --> FE([Frontend Agent\nOpus])
+        M --> BE([Backend Agent\nOpus])
+        M --> DO([DevOps Agent\nSonnet])
+        M --> QA([QA Agent\nOpus])
+
+        N --> P1([Phase 1\nBackend + DevOps])
+        P1 --> P2([Phase 2\nFrontend + QA])
+    end
 ```
 
 ---
 
-## Pipeline steps
+## Lite path — MVP Builder
+
+| Skill | What it does | Model |
+|---|---|---|
+| `/mvp [description]` | Takes a plain-English description, picks or confirms a stack, builds frontend + backend with a modern production-quality UI, runs checks, and commits. No TAD, no Linear, no pipeline ceremony. | Opus |
+
+```bash
+# Stack auto-selected — agent confirms before building
+/mvp a job board with company profiles and applicant tracking
+
+# Specify your own stack
+/mvp a todo app with auth Stack: Next.js, Supabase
+```
+
+Use the lite path for prototypes, side projects, and one-off tools. Use the full pipeline when you need Linear traceability, TAD-derived quality gates, and code reviews.
+
+---
+
+## Full pipeline steps
 
 ### Phase 1 — Planning
 
-| Command | What it produces | Model |
+| Skill | What it produces | Model |
 |---|---|---|
 | `/business-analyst` | Business Analysis Document (BAD) — user stories, acceptance criteria, scope | Sonnet |
 | `/tech-architect` | Technical Architecture Document (TAD) — stack, structure, API contracts, infra, testing strategy | Opus |
@@ -57,7 +80,7 @@ flowchart TD
 
 ### Phase 2 — Bootstrap
 
-| Command | What it does | Model |
+| Skill | What it does | Model |
 |---|---|---|
 | `/scaffold [git-url]` | Reads the TAD, runs the stack init command, installs deps, creates folder structure, `.gitignore`, `.env.example`, README, then commits. Pushes to `git-url` if provided. | Sonnet |
 
@@ -67,7 +90,7 @@ flowchart TD
 
 ### Phase 3 — Build
 
-| Command | What it does | Model |
+| Skill | What it does | Model |
 |---|---|---|
 | `/develop` | Surveys the Linear board, groups tasks by label, checks cross-group dependencies, presents a dispatch plan, then spawns developer agents in parallel or in phases. | Sonnet |
 
@@ -114,11 +137,23 @@ Then install the security hook (blocks pushes containing secrets or API keys):
 bash .claude/hooks/install.sh
 ```
 
-Restart Claude Code. The commands will appear in your `/` command list.
+Restart Claude Code. The skills will appear in your `/` menu.
 
 ---
 
 ## Usage
+
+### Lite path
+
+```bash
+# Description only — agent picks the stack and confirms
+/mvp a job board with company profiles and applicant tracking
+
+# Specify a stack
+/mvp a real-time chat app Stack: Next.js, Prisma, SQLite
+```
+
+### Full pipeline
 
 ```bash
 # 1. Describe your feature — agent produces the BAD
@@ -147,6 +182,7 @@ Restart Claude Code. The commands will appear in your `/` command list.
 
 | Agent | Model | Why |
 |---|---|---|
+| mvp-builder | **Opus** | Open-ended stack decisions, full-stack design, unknown codebase |
 | business-analyst | Sonnet | Template-driven structured output |
 | tech-architect | **Opus** | Open-ended research, high-stakes irreversible architectural decisions |
 | implementation-planner | Sonnet | Structured breakdown from a defined TAD |
@@ -164,8 +200,8 @@ Restart Claude Code. The commands will appear in your `/` command list.
 ```
 .claude/
   agents/     # Agent definitions
-  commands/   # Command launchers
+  skills/     # Skill launchers
 README.md
 ```
 
-Drop the `.claude/` folder into any project root and the commands appear automatically in Claude Code.
+Drop the `.claude/` folder into any project root and the skills appear automatically in Claude Code.

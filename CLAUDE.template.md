@@ -65,3 +65,4 @@ Each step reads the output of the previous one. Do not skip steps — `/develop`
 | `reviewer` | Opus | Checks acceptance criteria + TAD constraints against PR diffs |
 | `contract-validator` | Sonnet | Diffs API contract: TAD spec vs backend routes vs frontend calls |
 | `documentation-agent` | Opus | Writes README, API reference, architecture overview |
+| `mvp-builder` | Opus | Builds a full-stack MVP from a plain-English description; no TAD/Linear required |
