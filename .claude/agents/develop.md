@@ -26,6 +26,20 @@ The user has provided: {{ARGUMENTS}}
 
 ---
 
+## Spawn Protocol
+
+Every agent spawn follows this pattern. Only the varying parts are listed at each call site.
+
+1. Use the Read tool to read the agent file (e.g. `.claude/agents/backend-developer.md`)
+2. Replace every `{{ARGUMENTS}}` in the file content with the arguments string for that call
+3. Call the Agent tool with:
+   - `subagent_type`: `general-purpose`
+   - `model`: as specified at the call site
+   - `description`: as specified at the call site
+   - `prompt`: the modified agent file content
+
+---
+
 ### Step 0 — Verify project is scaffolded
 
 Before doing anything else, read the TAD to identify the expected manifest file for the stack (e.g. `package.json` for Node.js, `pyproject.toml` for Python, `Cargo.toml` for Rust, `go.mod` for Go).
@@ -108,6 +122,8 @@ If no match was found at all, present the full list of available projects and as
 
 Once the project is confirmed, call `mcp__claude_ai_Linear__list_issues` for that project ID. Filter to non-Done issues only.
 
+Also call `mcp__claude_ai_Linear__list_issue_statuses` for the confirmed team ID. Store the IDs for **In Progress** and **Done** — you will pass them to every child agent so they do not need to re-discover them.
+
 Group the issues by label into four buckets:
 
 | Bucket | Label match |
@@ -136,6 +152,10 @@ If a deps file is found, read it. For each entry in `dependencies`, the `blocked
 Cross-reference against the issues fetched in Step 2b: if the blocker issue is already in a Done state on the Linear board, treat the dependency as resolved.
 
 **If no deps file exists (fallback):**
+
+Tell the user:
+
+> "No DEPS.json found in `implementation-plans/`. Falling back to IPD Section 5 text parsing for dependencies — this may miss complex relationships. If the dependency graph is non-trivial, cancel and re-run `/implementation-planner` to regenerate the deps file."
 
 Read the IPD's Dependency Map (Section 5). For each non-Done Backend / Frontend / DevOps issue, check the "Depends On" field in the IPD.
 
@@ -185,15 +205,11 @@ Dispatch one agent per confirmed ready issue. QA runs separately in Step 7.
 | Backend | `.claude/agents/backend-developer.md` |
 | DevOps / Infrastructure | `.claude/agents/devops-engineer.md` |
 
-**How to spawn each agent:**
-1. Use the Read tool to read the appropriate agent file
-2. Replace every `{{ARGUMENTS}}` with:
-   `"Project: {project_name}. Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name}. Implement this single issue, commit your work, push to origin, and open a PR."`
-3. Call the Agent tool with:
-   - `subagent_type`: `general-purpose`
-   - `model`: `opus` for Frontend and Backend — `sonnet` for DevOps
-   - `description`: `{label} — {issue_id}: {issue_title}`
-   - `prompt`: the modified agent content
+**Spawn each agent** using the [Spawn Protocol](#spawn-protocol):
+- **Agent file**: see label → file mapping above
+- **Model**: `opus` for Frontend and Backend — `sonnet` for DevOps
+- **Description**: `{label} — {issue_id}: {issue_title}`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name}. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. Implement this single issue, commit your work, push to origin, and open a PR."`
 
 **Parallelism rules:**
 - All immediately ready issues: dispatch in a **single message** (true parallel execution)
@@ -217,13 +233,11 @@ gh pr list --state open --json number,title,headRefName,url
 
 Map each PR to its issue ID using the branch name (e.g. `feat/lin-42-...` → `LIN-42`). Cross-reference with the label buckets from Step 2b to identify which PR numbers are Backend and which are Frontend.
 
-2. Read `.claude/agents/contract-validator.md`, replace `{{ARGUMENTS}}` with:
-
-```
-"Project: {project_name}. Backend PRs: {comma-separated backend PR numbers}. Frontend PRs: {comma-separated frontend PR numbers}."
-```
-
-Spawn with `model: sonnet`.
+2. Spawn the contract validator using the [Spawn Protocol](#spawn-protocol):
+   - **Agent file**: `.claude/agents/contract-validator.md`
+   - **Model**: `sonnet`
+   - **Description**: `Contract validation — {project_name}`
+   - **Arguments**: `"Project: {project_name}. Backend PRs: {comma-separated backend PR numbers}. Frontend PRs: {comma-separated frontend PR numbers}."`
 
 3. Read the validator's report and look for the **Result** line.
 
@@ -254,11 +268,11 @@ After Step 5.5 is complete, fetch the open PRs:
 gh pr list --state open --json number,title,headRefName,url
 ```
 
-Spawn the reviewer agent:
-
-1. Read `.claude/agents/reviewer.md`
-2. Replace `{{ARGUMENTS}}` with: `"Project: {project_name}. Review the following open PRs: {comma-separated PR numbers or branch names}."`
-3. Spawn with `model: opus`
+Spawn the reviewer using the [Spawn Protocol](#spawn-protocol):
+- **Agent file**: `.claude/agents/reviewer.md`
+- **Model**: `opus`
+- **Description**: `Reviewer — ${project_name}`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Review the following open PRs: {comma-separated PR numbers}. Mode: full. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}."`
 
 Read the reviewer's final report. Look for the **Needs work** section.
 
@@ -268,7 +282,7 @@ Read the reviewer's final report. Look for the **Needs work** section.
 
 - Tell the user: `"Reviewer sent back {n} issue(s). Re-dispatching agents to fix them."`
 - For each needs-work issue, re-dispatch the responsible developer agent:
-  - Replace `{{ARGUMENTS}}` with: `"Project: {project_name}. Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name} (ALREADY EXISTS — run git checkout {branch_name} && git pull, do not create a new branch). Fix the following reviewer feedback: {paste the full NEEDS WORK comment from the reviewer report}. Push fixes — the PR will auto-update."`
+  - Replace `{{ARGUMENTS}}` with: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name} (ALREADY EXISTS — run git checkout {branch_name} && git pull, do not create a new branch). Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. Fix the following reviewer feedback: {paste the full NEEDS WORK comment from the reviewer report}. Push fixes — the PR will auto-update."`
 - After fix agents complete, re-spawn the reviewer with the same PR list
 - Read the second reviewer report. Whether issues pass or not, proceed to Step 6.5 — do not loop again.
 
@@ -331,11 +345,11 @@ git checkout main
 git pull origin main
 ```
 
-Then spawn the QA agent. QA runs on main.
-
-1. Read `.claude/agents/qa-engineer.md`
-2. Replace `{{ARGUMENTS}}` with: `"Project: {project_name}. Implement and run the full test suite for all non-Done QA tasks."`
-3. Spawn with `model: opus`
+Then spawn the QA agent using the [Spawn Protocol](#spawn-protocol). QA runs on main.
+- **Agent file**: `.claude/agents/qa-engineer.md`
+- **Model**: `opus`
+- **Description**: `QA — {project_name}`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Implement and run the full test suite for all non-Done QA tasks. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}."`
 
 ---
 
@@ -358,12 +372,17 @@ If bug ticket IDs are listed, start a fix round (maximum 2 rounds total across t
 3. Tell the user:
    > "QA found {n} source bug(s) (round {current}/2). Re-dispatching {label list} to fix them."
 
-4. Re-spawn the relevant developer agents (parallel if both labels affected):
-   - Replace `{{ARGUMENTS}}` with: `"Project: {project_name}. Issue: {bug_ticket_id} — {bug_ticket_title}. Branch: fix/{bug_ticket_id_lower}-{bug_title_slug} (CREATE NEW BRANCH from main). Fix the bug described in this ticket. Read each ticket for full details — each is linked to the story it belongs to via parentId. Commit, push to origin, and open a PR."`
+4. Re-spawn the relevant developer agents using the [Spawn Protocol](#spawn-protocol) (parallel if both labels affected):
+   - **Agent file**: see label → file mapping in Step 5
+   - **Model**: `opus` for Backend/Frontend
+   - **Description**: `Fix — {bug_ticket_id}: {bug_ticket_title}`
+   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {bug_ticket_id} — {bug_ticket_title}. Branch: fix/{bug_ticket_id_lower}-{bug_title_slug} (CREATE NEW BRANCH from main). Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. Fix the bug described in this ticket. Read each ticket for full details — each is linked to the story it belongs to via parentId. Commit, push to origin, and open a PR."`
 
-5. After the developer agents complete, run a single reviewer pass on the fix PRs:
-   - Read `.claude/agents/reviewer.md`, replace `{{ARGUMENTS}}` with: `"Project: {project_name}. Review the following fix PRs: {comma-separated fix PR numbers}."`
-   - Spawn with `model: opus`
+5. After the developer agents complete, run a code quality pass on the fix PRs using the [Spawn Protocol](#spawn-protocol):
+   - **Agent file**: `.claude/agents/reviewer.md`
+   - **Model**: `opus`
+   - **Description**: `Code quality review — fix round {current}`
+   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Review the following fix PRs: {comma-separated fix PR numbers}. Mode: code-quality-only. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}."`
    - Read the reviewer report. If any fix PR needs work, re-dispatch the responsible developer agent once more (do not loop further — this is a single safety pass). After the re-dispatch, proceed regardless of outcome.
 
 6. Merge the fix PRs:
@@ -378,8 +397,11 @@ If bug ticket IDs are listed, start a fix round (maximum 2 rounds total across t
    git pull origin main
    ```
 
-7. Re-spawn the QA agent:
-   - Replace `{{ARGUMENTS}}` with: `"Project: {project_name}. Re-run the full test suite to verify the bugs listed below have been fixed: {comma-separated ticket IDs}. Report any remaining source failures as new bug tickets as usual."`
+7. Re-spawn the QA agent using the [Spawn Protocol](#spawn-protocol):
+   - **Agent file**: `.claude/agents/qa-engineer.md`
+   - **Model**: `opus`
+   - **Description**: `QA re-run — round {current}`
+   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Re-run the full test suite to verify the bugs listed below have been fixed: {comma-separated ticket IDs}. Report any remaining source failures as new bug tickets as usual. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}."`
 
 8. Read the new QA report. If it lists new or remaining bug tickets and this was round 1, start round 2 from step 1 above.
 
@@ -391,10 +413,11 @@ If bug ticket IDs are listed, start a fix round (maximum 2 rounds total across t
 
 After the QA loop-back (Step 8) is complete, collect the IDs of all issues that were successfully implemented this run (those that reached Done status, excluding any that were skipped or remain open).
 
-1. Read `.claude/agents/documentation-agent.md`
-2. Replace `{{ARGUMENTS}}` with:
-   `"Project: {project_name}. Completed issues: {comma-separated issue IDs and titles}. Generate documentation from the finished code."`
-3. Spawn with `model: opus`
+Spawn the documentation agent using the [Spawn Protocol](#spawn-protocol):
+- **Agent file**: `.claude/agents/documentation-agent.md`
+- **Model**: `opus`
+- **Description**: `Documentation — {project_name}`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Completed issues: {comma-separated issue IDs and titles}. Generate documentation from the finished code."`
 
 After the documentation agent completes, auto-merge its docs PR:
 
