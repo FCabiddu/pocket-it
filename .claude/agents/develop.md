@@ -63,6 +63,14 @@ If the manifest file does **not** exist, stop immediately and tell the user:
 
 Do not proceed until the project is scaffolded.
 
+**Design spec check** — after confirming the manifest, search for a Design Specification Document:
+
+```bash
+find . -path "*/design-specs/*.md" | head -5
+```
+
+If found, store the path as `{design_spec_path}`. You will pass it to the frontend-developer agent. If not found, set `{design_spec_path}` to empty and the frontend developer will work from the TAD alone.
+
 **Best-practices check** — after confirming the manifest, check whether the architect generated best-practices files:
 
 ```bash
@@ -102,6 +110,12 @@ find . -path "*/implementation-plans/*.md" | head -10
 
 If multiple projects are found, use `AskUserQuestion` to ask the user which one to work on. Read the IPD and reuse the already-read TAD to extract the project name.
 
+**TAD version pin check** — after reading the TAD, scan Section 3 (Stack Matrix) for the string `"latest"` (case-insensitive). If found, warn the user before continuing:
+
+> "⚠️ The TAD contains unpinned versions ('latest') in Section 3. Unpinned dependencies can cause non-reproducible builds across agents. Recommend regenerating the TAD or manually pinning versions before dispatching. Reply `continue` to proceed anyway, or `stop` to abort."
+
+Wait for the user's reply. If `stop`, do not proceed. If `continue`, proceed normally.
+
 ---
 
 ### Step 2 — Survey the Linear board
@@ -132,7 +146,19 @@ If no match was found at all, present the full list of available projects and as
 
 Once the project is confirmed, call `mcp__claude_ai_Linear__list_issues` for that project ID.
 
-Also call `mcp__claude_ai_Linear__list_issue_statuses` for the confirmed team ID. Store the IDs for **In Progress** and **Done** — you will pass them to every child agent so they do not need to re-discover them. Also scan the statuses list for any whose name matches `"Cancelled"`, `"Canceled"`, or `"Won't Do"` (case-insensitive) and store those IDs as Cancelled statuses.
+Also call `mcp__claude_ai_Linear__list_issue_statuses` for the confirmed team ID. Scan the returned list and store IDs as follows:
+
+- **In Progress**: status whose name matches `"In Progress"` (case-insensitive)
+- **Done**: status whose name matches `"Done"` or `"Completed"` (case-insensitive)
+- **Cancelled**: statuses whose name matches `"Cancelled"`, `"Canceled"`, or `"Won't Do"` (case-insensitive)
+
+**Validate** that both In Progress and Done were matched. If either is missing, use `AskUserQuestion` to ask:
+
+> "I couldn't find a status named '{missing name}' in this Linear team. The available statuses are: {list all status names}. Which status should I treat as '{missing name}'?"
+
+Wait for the user's answer, then look up the matching ID from the already-fetched list. Do not call `list_issue_statuses` again.
+
+You will pass the In Progress and Done IDs to every child agent so they do not need to re-discover them.
 
 Filter the issue list to exclude both Done and Cancelled issues.
 
@@ -221,7 +247,9 @@ Dispatch one agent per confirmed ready issue. QA runs separately in Step 7.
 - **Agent file**: see label → file mapping above
 - **Model**: `opus` for Frontend and Backend — `sonnet` for DevOps
 - **Description**: `{label} — {issue_id}: {issue_title}`
-- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name}. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path}. Implement this single issue, commit your work, push to origin, and open a PR."`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name}. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path} | BestPractices: ./best-practices{, DesignSpec: {design_spec_path} — include only for Frontend label issues if design_spec_path is non-empty}. Implement this single issue, commit your work, push to origin, and open a PR."`
+
+  > **Note on DesignSpec**: only append `| DesignSpec: {design_spec_path}` for **Frontend**-labelled issues and only when `{design_spec_path}` is non-empty. Omit it entirely for Backend and DevOps issues.
 
 **Parallelism rules:**
 - All immediately ready issues: dispatch in a **single message** (true parallel execution)
@@ -249,7 +277,7 @@ Map each PR to its issue ID using the branch name (e.g. `feat/lin-42-...` → `L
    - **Agent file**: `.claude/agents/contract-validator.md`
    - **Model**: `sonnet`
    - **Description**: `Contract validation — {project_name}`
-   - **Arguments**: `"Project: {project_name}. Backend PRs: {comma-separated backend PR numbers}. Frontend PRs: {comma-separated frontend PR numbers}. TAD: {tad_path}."`
+   - **Arguments**: `"Project: {project_name}. Backend PRs: {comma-separated backend PR numbers}. Frontend PRs: {comma-separated frontend PR numbers}. TAD: {tad_path} | BestPractices: ./best-practices."`
 
 3. Read the validator's report and look for the **Result** line.
 
@@ -284,7 +312,7 @@ Spawn the reviewer using the [Spawn Protocol](#spawn-protocol):
 - **Agent file**: `.claude/agents/reviewer.md`
 - **Model**: `opus`
 - **Description**: `Reviewer — ${project_name}`
-- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Review the following open PRs: {comma-separated PR numbers}. Mode: full. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path}."`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Review the following open PRs: {comma-separated PR numbers}. Mode: full. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | BestPractices: ./best-practices."`
 
 Read the reviewer's final report. Look for the **Needs work** section.
 
@@ -294,7 +322,7 @@ Read the reviewer's final report. Look for the **Needs work** section.
 
 - Tell the user: `"Reviewer sent back {n} issue(s). Re-dispatching agents to fix them."`
 - For each needs-work issue, re-dispatch the responsible developer agent:
-  - Replace `{{ARGUMENTS}}` with: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name} (ALREADY EXISTS — run git checkout {branch_name} && git pull, do not create a new branch). Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path}. Fix the following reviewer feedback: {paste the full NEEDS WORK comment from the reviewer report}. Push fixes — the PR will auto-update."`
+  - Replace `{{ARGUMENTS}}` with: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {issue_id} — {issue_title}. Branch: feat/{branch_name} (ALREADY EXISTS — run git checkout {branch_name} && git pull, do not create a new branch). Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path} | BestPractices: ./best-practices. Fix the following reviewer feedback: {paste the full NEEDS WORK comment from the reviewer report}. Push fixes — the PR will auto-update."`
 - After fix agents complete, re-spawn the reviewer with the same PR list
 - Read the second reviewer report. Whether issues pass or not, proceed to Step 6.5 — do not loop again.
 
@@ -361,7 +389,7 @@ Then spawn the QA agent using the [Spawn Protocol](#spawn-protocol). QA runs on 
 - **Agent file**: `.claude/agents/qa-engineer.md`
 - **Model**: `opus`
 - **Description**: `QA — {project_name}`
-- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Implement and run the full test suite for all non-Done QA tasks. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path}."`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Implement and run the full test suite for all non-Done QA tasks. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path} | BestPractices: ./best-practices."`
 
 ---
 
@@ -388,13 +416,13 @@ If bug ticket IDs are listed, start a fix round (maximum 2 rounds total across t
    - **Agent file**: see label → file mapping in Step 5
    - **Model**: `opus` for Backend/Frontend
    - **Description**: `Fix — {bug_ticket_id}: {bug_ticket_title}`
-   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {bug_ticket_id} — {bug_ticket_title}. Branch: fix/{bug_ticket_id_lower}-{bug_title_slug} (CREATE NEW BRANCH from main). Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path}. Fix the bug described in this ticket. Read each ticket for full details — each is linked to the story it belongs to via parentId. Commit, push to origin, and open a PR."`
+   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Issue: {bug_ticket_id} — {bug_ticket_title}. Branch: fix/{bug_ticket_id_lower}-{bug_title_slug} (CREATE NEW BRANCH from main). Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path} | BestPractices: ./best-practices. Fix the bug described in this ticket. Read each ticket for full details — each is linked to the story it belongs to via parentId. Commit, push to origin, and open a PR."`
 
 5. After the developer agents complete, run a code quality pass on the fix PRs using the [Spawn Protocol](#spawn-protocol):
    - **Agent file**: `.claude/agents/reviewer.md`
    - **Model**: `opus`
    - **Description**: `Code quality review — fix round {current}`
-   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Review the following fix PRs: {comma-separated fix PR numbers}. Mode: code-quality-only. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path}."`
+   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Review the following fix PRs: {comma-separated fix PR numbers}. Mode: code-quality-only. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | BestPractices: ./best-practices."`
    - Read the reviewer report. If any fix PR needs work, re-dispatch the responsible developer agent once more (do not loop further — this is a single safety pass). After the re-dispatch, proceed regardless of outcome.
 
 6. Merge the fix PRs:
@@ -413,7 +441,7 @@ If bug ticket IDs are listed, start a fix round (maximum 2 rounds total across t
    - **Agent file**: `.claude/agents/qa-engineer.md`
    - **Model**: `opus`
    - **Description**: `QA re-run — round {current}`
-   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Re-run the full test suite to verify the bugs listed below have been fixed: {comma-separated ticket IDs}. Report any remaining source failures as new bug tickets as usual. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path}."`
+   - **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Re-run the full test suite to verify the bugs listed below have been fixed: {comma-separated ticket IDs}. Report any remaining source failures as new bug tickets as usual. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path} | BestPractices: ./best-practices."`
 
 8. Read the new QA report. If it lists new or remaining bug tickets and this was round 1, start round 2 from step 1 above.
 
@@ -429,7 +457,7 @@ Spawn the documentation agent using the [Spawn Protocol](#spawn-protocol):
 - **Agent file**: `.claude/agents/documentation-agent.md`
 - **Model**: `opus`
 - **Description**: `Documentation — {project_name}`
-- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Completed issues: {comma-separated issue IDs and titles}. TAD: {tad_path} | IPD: {ipd_path}. Generate documentation from the finished code."`
+- **Arguments**: `"Project: {project_name} (Linear project ID: {project_id}, team ID: {team_id}). Completed issues: {comma-separated issue IDs and titles}. Status IDs: In Progress = {in_progress_status_id}, Done = {done_status_id}. TAD: {tad_path} | IPD: {ipd_path} | BestPractices: ./best-practices. Generate documentation from the finished code."`
 
 After the documentation agent completes, auto-merge its docs PR:
 
@@ -451,7 +479,11 @@ Record the docs PR URL for the Step 9 report.
 Once all agents have completed, tell the user:
 
 - Which agents ran (list each issue ID and title) and their completion status
-- **Contract validation result**: PASS / FAIL (with mismatch count) / SKIPPED (no TAD spec) — if FAIL and the user chose `skip`, list the unresolved mismatches
+- **Contract validation result**: write exactly one of:
+  - `PASS` — validator ran and found no blocking mismatches
+  - `FAIL — {n} blocking mismatch(es)` — if the user chose `skip`, paste the unresolved mismatch list here
+  - `SKIPPED — no Endpoint Catalogue in TAD` — if the validator reported SKIPPED in Step 5.5
+  - `NOT RUN — only one side (backend or frontend) was dispatched` — if Step 5.5 was skipped entirely
 - Whether the reviewer approved all issues or sent any back (and whether the fix round resolved them)
 - Any PRs skipped by the user during human review — include issue IDs and PR URLs for manual follow-up
 - How many QA fix rounds were needed (0, 1, or 2)

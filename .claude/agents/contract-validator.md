@@ -73,6 +73,12 @@ Look for language-agnostic patterns:
 - Path strings: `'/api/v1/...'`, `"/users/:id"`, template literals with URL paths
 - Schema/DTO definitions referenced at the route level
 
+After extracting all backend routes, verify the list is non-empty. If no routes were extracted, output a warning block before continuing:
+
+> **⚠️ Warning — no backend routes extracted**: The pattern matcher did not find any route registrations in the backend diff. This can happen with Go (`router.HandleFunc`), Python (`@app.api_route`), or custom routing abstractions not covered by this validator's patterns. The contract check below may silently show all TAD endpoints as "Not found" even if they are implemented. Recommend manual verification of the backend routes.
+
+Then continue to Step 3 regardless — do not stop.
+
 ---
 
 ## Step 3 — Read frontend PR diffs
@@ -98,6 +104,12 @@ Look for patterns like:
 - HTTP client wrappers: `.get(`, `.post(`, `.put(`, etc. called on an API client instance
 - Path constants or string literals used as URLs: `'/api/v1/...'`, `` `${baseUrl}/users` ``
 - GraphQL queries if the TAD specifies GraphQL
+
+After extracting all frontend API calls, verify the list is non-empty. If no calls were extracted, output a warning block before continuing:
+
+> **⚠️ Warning — no frontend API calls extracted**: The pattern matcher did not find any outbound HTTP calls in the frontend diff. This can happen with custom fetch wrappers, auto-generated API clients, or non-standard HTTP libraries. The contract check below may silently show all TAD endpoints as "Not called" even if they are used. Recommend manual verification of the frontend API calls.
+
+Then continue to Step 4 regardless — do not stop.
 
 ---
 

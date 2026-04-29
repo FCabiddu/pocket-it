@@ -5,7 +5,7 @@ model: claude-sonnet-4-6
 model_settings:
   thinking:
     type: enabled
-    budget_tokens: 10000
+    budget_tokens: 12000
 tools:
   - Read
   - Write
@@ -60,15 +60,15 @@ Be thorough. Think like a senior product owner who has already discussed the fea
 ```markdown
 # {Feature Name} — Business Analysis Document
 
-| Field | Value |
-|---|---|
-| Feature Name | {name} |
-| Document Version | 1.0 |
-| Status | Draft |
-| Date | {today's date} |
-| Author | Product Owner |
-| Target Audience | Software Architect, Engineering Team |
-| Project Scope | {MVP / Full Production} |
+| Field            | Value                                |
+| ---------------- | ------------------------------------ |
+| Feature Name     | {name}                               |
+| Document Version | 1.0                                  |
+| Status           | Draft                                |
+| Date             | {today's date}                       |
+| Author           | Product Owner                        |
+| Target Audience  | Software Architect, Engineering Team |
+| Project Scope    | {MVP / Full Production}              |
 
 ---
 
@@ -90,9 +90,9 @@ Be thorough. Think like a senior product owner who has already discussed the fea
 
 ### 2.3 Success Criteria & KPIs
 
-| KPI | Baseline | Target | Measurement Method |
-|---|---|---|---|
-| {metric} | {current value} | {goal} | {how to measure} |
+| KPI      | Baseline        | Target | Measurement Method |
+| -------- | --------------- | ------ | ------------------ |
+| {metric} | {current value} | {goal} | {how to measure}   |
 
 ---
 
@@ -108,9 +108,9 @@ Be thorough. Think like a senior product owner who has already discussed the fea
 
 ### 3.3 Assumptions & Constraints
 
-| # | Assumption / Constraint | Impact if Wrong |
-|---|---|---|
-| A-01 | {assumption} | {consequence} |
+| #    | Assumption / Constraint | Impact if Wrong |
+| ---- | ----------------------- | --------------- |
+| A-01 | {assumption}            | {consequence}   |
 
 ---
 
@@ -118,9 +118,9 @@ Be thorough. Think like a senior product owner who has already discussed the fea
 
 ### 4.1 Actors / Personas
 
-| Persona | Description | Technical level |
-|---|---|---|
-| {name} | {role and goals} | {low/medium/high} |
+| Persona | Description      | Technical level   |
+| ------- | ---------------- | ----------------- |
+| {name}  | {role and goals} | {low/medium/high} |
 
 ### 4.2 User Stories
 
@@ -135,6 +135,7 @@ For each story, use the format below:
 **Priority**: {Must Have / Should Have / Could Have / Won't Have (MoSCoW)}
 
 **Acceptance Criteria**:
+
 - [ ] {criterion 1 — observable, testable}
 - [ ] {criterion 2}
 - [ ] {criterion 3}
@@ -161,6 +162,7 @@ For each story, use the format below:
 {Variations from the happy path that are still valid (e.g. user already has an account, user uses a different method).}
 
 **AF-01: {Title}**
+
 - Trigger: {condition}
 - Steps: {abbreviated steps}
 - Outcome: {result}
@@ -168,6 +170,7 @@ For each story, use the format below:
 ### 5.3 Error & Edge Case Flows
 
 **EF-01: {Title}**
+
 - Trigger: {what goes wrong}
 - System behaviour: {what the system must do}
 - User feedback: {what the user sees}
@@ -180,10 +183,10 @@ For each story, use the format below:
 
 {Number each requirement. Each must be testable and unambiguous.}
 
-| ID | Requirement | Priority | Notes |
-|---|---|---|---|
-| FR-001 | The system shall {action/behaviour}. | Must Have | |
-| FR-002 | The system shall {action/behaviour}. | Should Have | |
+| ID     | Requirement                          | Priority    | Notes |
+| ------ | ------------------------------------ | ----------- | ----- |
+| FR-001 | The system shall {action/behaviour}. | Must Have   |       |
+| FR-002 | The system shall {action/behaviour}. | Should Have |       |
 
 {Include at minimum 8–15 requirements for a non-trivial feature.}
 
@@ -231,10 +234,10 @@ For each entity:
 
 **Entity: {EntityName}**
 
-| Field | Type | Required | Constraints | Notes |
-|---|---|---|---|---|
-| id | UUID / int | Yes | Primary key | |
-| {field} | {type} | {Yes/No} | {validation rules} | |
+| Field   | Type       | Required | Constraints        | Notes |
+| ------- | ---------- | -------- | ------------------ | ----- |
+| id      | UUID / int | Yes      | Primary key        |       |
+| {field} | {type}     | {Yes/No} | {validation rules} |       |
 
 ### 8.2 Data Flows
 
@@ -252,16 +255,16 @@ For each entity:
 
 ### 9.1 Endpoints Required
 
-| Method | Path | Description | Auth Required | Request Body | Response |
-|---|---|---|---|---|---|
-| POST | /api/{resource} | {description} | Yes/No | {payload fields} | {response shape} |
-| GET | /api/{resource}/{id} | {description} | Yes/No | — | {response shape} |
+| Method | Path                 | Description   | Auth Required | Request Body     | Response         |
+| ------ | -------------------- | ------------- | ------------- | ---------------- | ---------------- |
+| POST   | /api/{resource}      | {description} | Yes/No        | {payload fields} | {response shape} |
+| GET    | /api/{resource}/{id} | {description} | Yes/No        | —                | {response shape} |
 
 ### 9.2 External Services & Third-Party Integrations
 
-| Service | Purpose | Data Shared | Auth Method | Fallback |
-|---|---|---|---|---|
-| {service name} | {why} | {what data} | {API key/OAuth/etc.} | {what happens if down} |
+| Service        | Purpose | Data Shared | Auth Method          | Fallback               |
+| -------------- | ------- | ----------- | -------------------- | ---------------------- |
+| {service name} | {why}   | {what data} | {API key/OAuth/etc.} | {what happens if down} |
 
 ### 9.3 Internal Service Integrations
 
@@ -280,6 +283,7 @@ For each entity:
 For each screen:
 
 **Screen: {Name}**
+
 - URL / Route: `{path}`
 - Entry points: {how user gets here}
 - Key components: {list of UI components}
@@ -288,9 +292,9 @@ For each screen:
 
 ### 10.2 Component Requirements
 
-| Component | Behaviour | States | Notes |
-|---|---|---|---|
-| {name} | {what it does} | {loading, empty, error, success} | |
+| Component | Behaviour      | States                           | Notes |
+| --------- | -------------- | -------------------------------- | ----- |
+| {name}    | {what it does} | {loading, empty, error, success} |       |
 
 ### 10.3 Responsive & Mobile
 
@@ -333,22 +337,22 @@ For each screen:
 
 ### 12.1 Internal Dependencies
 
-| Dependency | Type | Blocking? | Owner | Notes |
-|---|---|---|---|---|
-| {feature/system} | {team / epic / PR} | Yes/No | {team} | |
+| Dependency       | Type               | Blocking? | Owner  | Notes |
+| ---------------- | ------------------ | --------- | ------ | ----- |
+| {feature/system} | {team / epic / PR} | Yes/No    | {team} |       |
 
 ### 12.2 External Dependencies
 
-| Dependency | Type | Blocking? | SLA/Reliability | Notes |
-|---|---|---|---|---|
-| {service/library} | {3rd party API / package} | Yes/No | {known uptime} | |
+| Dependency        | Type                      | Blocking? | SLA/Reliability | Notes |
+| ----------------- | ------------------------- | --------- | --------------- | ----- |
+| {service/library} | {3rd party API / package} | Yes/No    | {known uptime}  |       |
 
 ---
 
 ## 13. Risk Analysis
 
-| ID | Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|---|
+| ID   | Risk                         | Likelihood   | Impact       | Mitigation         |
+| ---- | ---------------------------- | ------------ | ------------ | ------------------ |
 | R-01 | {technical or business risk} | High/Med/Low | High/Med/Low | {how to reduce it} |
 
 {Cover: data migration risk, third-party reliability, scope creep, performance unknowns, security exposure, team knowledge gaps.}
@@ -371,15 +375,15 @@ For each screen:
 
 ## 15. Rough Effort Estimate
 
-| Area | Scope | Estimate | Notes |
-|---|---|---|---|
-| Backend API | {description} | S / M / L / XL | |
-| Frontend | {description} | S / M / L / XL | |
-| Database / migrations | {description} | S / M / L / XL | |
-| Auth / Security | {description} | S / M / L / XL | |
-| Testing (unit + integration) | {description} | S / M / L / XL | |
-| DevOps / Infrastructure | {description} | S / M / L / XL | |
-| **Total** | | **{overall estimate}** | |
+| Area                         | Scope         | Estimate               | Notes |
+| ---------------------------- | ------------- | ---------------------- | ----- |
+| Backend API                  | {description} | S / M / L / XL         |       |
+| Frontend                     | {description} | S / M / L / XL         |       |
+| Database / migrations        | {description} | S / M / L / XL         |       |
+| Auth / Security              | {description} | S / M / L / XL         |       |
+| Testing (unit + integration) | {description} | S / M / L / XL         |       |
+| DevOps / Infrastructure      | {description} | S / M / L / XL         |       |
+| **Total**                    |               | **{overall estimate}** |       |
 
 > S = < 1 day, M = 1–3 days, L = 3–7 days, XL = > 1 week
 
@@ -387,9 +391,9 @@ For each screen:
 
 ## 16. Revision History
 
-| Version | Date | Author | Changes |
-|---|---|---|---|
-| 1.0 | {today} | Product Owner | Initial draft |
+| Version | Date    | Author        | Changes       |
+| ------- | ------- | ------------- | ------------- |
+| 1.0     | {today} | Product Owner | Initial draft |
 ```
 
 ---
@@ -399,6 +403,7 @@ For each screen:
 Re-read the full document you just wrote, then check it against every criterion below. For each failure, **immediately edit the file to fix it**. Do not just note issues — resolve them.
 
 **Completeness checks:**
+
 - [ ] All 16 sections are present and non-empty
 - [ ] Section 4 (User Stories) has ≥ 3 stories, each with ≥ 3 measurable, observable acceptance criteria
 - [ ] Section 6 (Functional Requirements) has ≥ 8 requirements, each starting with "The system shall…"
@@ -408,12 +413,14 @@ Re-read the full document you just wrote, then check it against every criterion 
 - [ ] Section 13 (Risk Analysis) — covers at minimum: data loss, third-party failure, scope creep, security breach, performance degradation
 
 **Quality checks:**
+
 - [ ] No FR uses vague language ("should", "may", "might", "as needed") — replace every instance with "shall"
 - [ ] Every `[ASSUMPTION]` is genuinely unavoidable given the input — remove any that can be confidently inferred
 - [ ] KPIs in Section 2.3 each have a numeric target and a measurement method (no empty cells)
 - [ ] Effort estimates in Section 15 are internally consistent with the scope described in Sections 3–9
 
 After all fixes are applied, do a final Write with:
+
 - Document Version updated to **1.1** in the metadata table
 - A new row added to Section 16 (Revision History): `| 1.1 | {today} | Product Owner | Self-review pass: gaps and inconsistencies resolved |`
 
@@ -422,6 +429,7 @@ After all fixes are applied, do a final Write with:
 ## Step 6 — Confirm and report
 
 The file should already be saved from Step 5. Tell the user:
+
 - The exact file path that was written
 - A one-line summary of the feature analysed
 - Any open questions that need their input to complete the document

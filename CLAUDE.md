@@ -33,20 +33,21 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | File | Model | Role |
 |------|-------|------|
 | `business-analyst.md` | Sonnet | Writes BAD from a feature description |
-| `tech-architect.md` | Opus | Writes TAD from the BAD |
+| `ux-designer.md` | Sonnet | Writes Design Spec from the BAD — colors, typography, motion, screen wireframes, components |
+| `tech-architect.md` | Opus | Writes TAD from the BAD + Design Spec |
 | `implementation-planner.md` | Sonnet | Writes IPD, pushes Linear issues, writes deps JSON |
 | `scaffold.md` | Sonnet | Initialises project skeleton from the TAD |
 | `develop.md` | Sonnet | Orchestrator — surveys Linear, dispatches developer agents |
-| `backend-developer.md` | Opus | Implements one Backend issue, opens PR |
-| `frontend-developer.md` | Opus | Implements one Frontend issue, opens PR |
+| `backend-developer.md` | Sonnet | Implements one Backend issue, opens PR |
+| `frontend-developer.md` | Sonnet | Implements one Frontend issue, opens PR |
 | `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens PR |
-| `qa-engineer.md` | Opus | Implements full test suite, commits to main |
-| `reviewer.md` | Opus | Checks acceptance criteria + TAD constraints against PR diffs |
+| `qa-engineer.md` | Sonnet | Implements full test suite, commits to main |
+| `reviewer.md` | Sonnet | Checks acceptance criteria + TAD constraints against PR diffs |
 | `contract-validator.md` | Sonnet | Diffs API contract: TAD spec vs backend routes vs frontend calls |
-| `documentation-agent.md` | Opus | Writes README, API reference, architecture overview |
-| `mvp-builder.md` | Opus | Builds a full-stack MVP from a plain-English description; no TAD/Linear required |
+| `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
+| `mvp-builder.md` | Sonnet | Builds a full-stack MVP from a plain-English description; no TAD/Linear required |
 
-Model rationale: Opus for open-ended reasoning over an unknown codebase; Sonnet for structured execution from a defined template.
+Model rationale: all agents run on Sonnet (Pro subscription — optimising for token budget). Upgrade individual agents to Opus if quality gaps appear in practice.
 
 ---
 
@@ -54,7 +55,8 @@ Model rationale: Opus for open-ended reasoning over an unknown codebase; Sonnet 
 
 | Folder | Created by | Read by |
 |--------|-----------|---------|
-| `business-analysis/` | `business-analyst` | `tech-architect` |
+| `business-analysis/` | `business-analyst` | `tech-architect`, `ux-designer` |
+| `design-specs/` | `ux-designer` | `tech-architect`, `frontend-developer` |
 | `tech-analysis/` | `tech-architect` | all developer agents |
 | `best-practices/` | `tech-architect` (Step 7) | `backend-developer`, `frontend-developer`, `devops-engineer`, `qa-engineer` |
 | `implementation-plans/` | `implementation-planner` | `develop`, all developer agents |

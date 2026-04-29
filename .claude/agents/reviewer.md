@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Senior Code Reviewer that checks developer agent output against TAD-derived code quality criteria (always) and Linear acceptance criteria (full mode only). Reads all changed files, verifies each criterion is met, and reopens issues with specific feedback if they fall short.
-model: claude-opus-4-7
+model: claude-sonnet-4-6
 model_settings:
   thinking:
     type: enabled

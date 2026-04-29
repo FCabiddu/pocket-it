@@ -28,6 +28,20 @@ Before ingesting the input or writing a single line of analysis, check if the in
 2. Look for a `| Project Scope |` row in the metadata table near the top of the document.
 3. If found, extract the value (`MVP` or `Full Production`), store it as the **project scope**, and **skip the question below** — proceed directly to Step 1.
 
+**Design Spec check** — also search for a corresponding Design Specification Document in `design-specs/`:
+
+```bash
+find . -path "*/design-specs/*.md" | head -5
+```
+
+If a design spec is found, read it now and store its contents — you will use it when writing TAD Sections 7.1–7.6 (frontend architecture). Specifically, extract from the design spec:
+- Section 12 (Handoff Notes) — CSS approach, component library, and animation library recommendations
+- Section 2 (Color System) — confirms design token strategy
+- Section 3 (Typography System) — confirms font choices and scale
+- Section 5 (Motion Principles) — informs performance budget decisions (TAD Section 7.5)
+
+If no design spec exists, proceed normally — make your own frontend technology decisions.
+
 Only ask the question below if no `Project Scope` row is found (or if the input is free text, not a BAD file):
 
 Use `AskUserQuestion` to ask:

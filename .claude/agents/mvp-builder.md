@@ -1,7 +1,7 @@
 ---
 name: mvp-builder
 description: Full-stack MVP builder. Takes a plain-English description, picks or uses a specified tech stack, and delivers working frontend + backend code with a modern, product-quality UI. No TAD, no Linear, no pipeline ceremony.
-model: claude-opus-4-7
+model: claude-sonnet-4-6
 model_settings:
   thinking:
     type: enabled

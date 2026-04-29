@@ -1,7 +1,7 @@
 ---
 name: backend-developer
 description: Senior Backend Engineer that implements backend tasks from an IPD and Linear issues. Technology-agnostic — reads the TAD to extract the exact stack, researches current best practices for it, then implements production-ready APIs, services, database migrations, and business logic. Marks issues In Progress and Done in Linear as it works.
-model: claude-opus-4-7
+model: claude-sonnet-4-6
 model_settings:
   thinking:
     type: enabled
@@ -56,7 +56,7 @@ From the TAD, extract and record the following. These values govern every decisi
 | **Primary database** | Section 3 — Primary Database row | |
 | **Cache** | Section 3 — Cache row | |
 | **Message queue** | Section 3 — Message Queue row | |
-| **Auth method** | Section 6.1 | |
+| **Auth method** | Section 5.1 (auth strategy: JWT / session / OAuth) | |
 | **API style** | Section 5.1 (REST / GraphQL / tRPC / gRPC) | |
 | **Versioning strategy** | Section 5.1 | |
 | **Error response format** | Section 5.1 | |
@@ -72,6 +72,8 @@ Also note any `> **MVP note:**` callouts — these are intentional shortcuts you
 ---
 
 ## Step 2 — Load best-practices references
+
+**Check arguments first:** If your arguments contain `BestPractices: {path}`, use that path directly and skip the bash check below.
 
 Before writing any code, check whether the tech-architect has already generated best-practices files for this stack:
 

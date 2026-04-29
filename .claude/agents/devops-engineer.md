@@ -62,12 +62,15 @@ From the TAD, extract and record the following. These govern every decision in t
 | **Disaster recovery targets** | Section 9.6 (RTO / RPO) | |
 | **Scaling strategy** | Section 10.1 | |
 | **Infrastructure diagram** | Section 9.1 | |
+| **CI/CD pipeline tool** | Section 11.1 (Testing Pyramid — also specifies the CI runner used for test execution) | |
 
 Also note any `> **MVP note:**` callouts — these are intentional shortcuts you must respect. For an MVP, prefer managed platforms over self-hosted infrastructure.
 
 ---
 
 ## Step 2 — Load best-practices references
+
+**Check arguments first:** If your arguments contain `BestPractices: {path}`, use that path directly and skip the bash check below.
 
 Before writing any configuration, check whether the tech-architect has already generated best-practices files for this stack:
 
