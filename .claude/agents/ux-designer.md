@@ -33,10 +33,62 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Ingest the input
 
+### 0a — Check for an existing design
+
+**Before doing anything else**, scan the arguments for a pre-existing design artifact. An existing design is indicated by any of:
+
+- A **folder path** containing images, screenshots, or design files (e.g. `./designs/`, `./mockups/`)
+- An **image file path** (`.png`, `.jpg`, `.webp`, `.svg`, `.pdf`)
+- A **Figma URL** (`figma.com/...`)
+- A **live site URL** (`https://...`) described as "existing design", "current site", or "reference"
+- A **design system document** (`.md`, `.pdf`, `.json`) that is not a BAD
+- The phrases `Design:`, `ExistingDesign:`, or `Figma:` in the arguments
+
+**If an existing design is detected → jump directly to Step 0b. Skip Steps 1 and the `AskUserQuestion` direction confirmation entirely.**
+
+If no existing design is detected, continue with the normal flow below (Step 0c → Step 1 → ...).
+
+---
+
+### 0b — Extract design system from existing design (EXISTING DESIGN PATH)
+
+Your job is not to invent a design — it is to document what already exists in the standard spec format so the tech architect and frontend developer can consume it.
+
+1. **Read / fetch all provided materials:**
+   - Folder: use `find {path} -type f | head -30` to list files, then Read each image and document
+   - Image files: Read them directly (Claude is multimodal — extract colours, typography, layout, spacing visually)
+   - Figma URL / live site URL: use WebFetch to retrieve the page; extract CSS custom properties, font-family values, colour values, and layout patterns from the source
+   - Design document: Read it and map its content to the 13-section spec format
+
+2. **Extract the following from the materials:**
+   - Colour palette (hex values, roles — primary, secondary, neutrals, semantic)
+   - Typefaces (names, weights, sources)
+   - Spacing rhythm (base unit, common values)
+   - Layout patterns (grid columns, max-width, section padding)
+   - Motion approach (if any animations are visible or described)
+   - Component inventory (buttons, cards, forms, nav — whatever is visible)
+   - Screen list (every distinct screen or view present in the materials)
+
+3. **Infer reasonable defaults** for anything not present in the materials — mark each with `[INFERRED FROM EXISTING DESIGN]`.
+
+4. **Derive the product name** from the materials or arguments. Produce the `SNAKE_CASE` document identifier (Step 2 logic applies here).
+
+5. **Resolve the output path** (Step 3 logic applies here).
+
+6. **Write the full 13-section Design Specification** (Step 4) and **prompts file** (Step 4.5) using the extracted values. Use `[INFERRED FROM EXISTING DESIGN]` instead of `[DESIGN CHOICE]` for gaps.
+
+7. **Skip Step 5 self-review items that require creative decisions** — only check completeness and that no `{placeholder}` text remains.
+
+8. **Report** (Step 6), noting: *"Design extracted from existing materials — no creative direction was invented. Review `[INFERRED FROM EXISTING DESIGN]` items for accuracy."*
+
+---
+
+### 0c — Ingest a BAD or free-text description (NORMAL PATH)
+
 Determine what the input is:
 
 - **File path**: use the Read tool to read the full content of the BAD.
-- **Empty / no argument**: use `AskUserQuestion` to ask: "Please provide the path to a Business Analysis Document (BAD), or describe the product you need a design for."
+- **Empty / no argument**: use `AskUserQuestion` to ask: "Please provide the path to a Business Analysis Document (BAD), a description of the product, or an existing design (folder, URL, or image files)."
 - **Free text**: treat it as a product description and proceed.
 
 From the BAD (or description), extract and record:
