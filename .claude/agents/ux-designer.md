@@ -607,6 +607,133 @@ Key points to communicate:
 
 ---
 
+## Step 4.5 — Generate visual tool prompts
+
+Save a second file: `./design-specs/{SNAKE_CASE_NAME}_PROMPTS.md`
+
+This file gives the team ready-to-paste prompts for both Claude Design and Google Stitch so they can visualise the design system without reading the full spec. Write it in full, then use the Write tool to save it.
+
+````markdown
+# {Feature Name} — Visual Tool Prompts
+
+> **Workflow:** Try Claude Design first (claude.ai/design). If you hit the token limit mid-project, switch to Google Stitch (stitch.withgoogle.com) — Section 2 prompts are formatted for it. Both tools accept the CSS tokens from the design spec directly.
+
+---
+
+## Section 1 — Claude Design Brief
+
+Paste the block below as your opening message in Claude Design. It gives it the full design system in one shot.
+
+```
+Design system for {Feature Name}.
+
+AESTHETIC: {confirmed design direction from Step 1}
+
+COLOUR TOKENS:
+--color-primary: {hex}          /* {name} — {usage} */
+--color-primary-dark: {hex}     /* {name} — hover/pressed */
+--color-primary-light: {hex}    /* {name} — subtle tints */
+--color-secondary: {hex}        /* {name} — {usage} */
+--color-neutral-900: {hex}      /* {name} — page background */
+--color-neutral-700: {hex}      /* {name} — body text */
+--color-neutral-500: {hex}      /* {name} — secondary text */
+--color-neutral-300: {hex}      /* {name} — borders */
+--color-neutral-100: {hex}      /* {name} — card fills */
+--color-neutral-50: {hex}       /* {name} — page background (light) */
+
+TYPOGRAPHY:
+Display: {typeface} {weights} — {source}
+Body: {typeface} {weights} — {source}
+
+SPACING: Base-{4 or 8}px scale. Section padding min {value}px desktop.
+
+DESIGN PRINCIPLES:
+{bullet list of 3–5 key principles from Section 1 of the spec, one line each}
+
+Apply this system to every screen I ask you to design.
+```
+
+Then send one message per screen (copy from Section 2 below).
+
+---
+
+## Section 2 — Per-Screen Prompts (Claude Design + Stitch)
+
+Each prompt below works in both tools. For Stitch: paste the prompt directly into the Stitch canvas input. For Claude Design: send as a follow-up message after the design system brief above.
+
+{For every screen specified in Section 6 of the design spec, write one prompt block:}
+
+### {Screen Name} — `{route}`
+
+**Claude Design message:**
+```
+Design the {Screen Name} screen ({route}).
+
+Layout (top to bottom):
+{summarise the ASCII wireframe from Section 6 in 4–6 plain-English lines}
+
+Key content:
+{list the Content Specifications table rows as "Zone: content description"}
+
+States to include: default, loading (skeleton), empty, error, mobile (< 768px).
+
+Key interactions:
+{list the Key Interactions from Section 6, one line each}
+
+Use the design system I gave you at the start of this session.
+```
+
+**Stitch prompt (standalone — includes style context):**
+```
+{Screen Name} screen for {Feature Name}. Aesthetic: {confirmed direction}. 
+Primary colour {hex} ({name}), background {hex} ({name}), text {hex} ({name}).
+Font: {display typeface} for headings, {body typeface} for body.
+
+{summarise layout in 3–4 lines}
+{list 2–3 key interactions}
+Include loading skeleton, empty state, and mobile layout.
+```
+
+---
+
+{Repeat the prompt block for every screen}
+
+---
+
+## Section 3 — Component Prompts
+
+For designing individual components in isolation. Useful when a specific component needs iteration after the full screen is generated.
+
+{For every component in Section 7 of the design spec, write one prompt:}
+
+### {ComponentName}
+
+```
+Design a {ComponentName} component. Aesthetic: {confirmed direction}.
+Colours: primary {hex}, background {surface-card hex}, text {neutral-700 hex}.
+Font: {body typeface}.
+
+Variants: {list variants from Section 7}
+States: default, hover, focus, active, disabled, loading.
+Sizes: sm ({height}px), md ({height}px), lg ({height}px).
+
+{any special anatomy or accessibility notes from Section 7}
+```
+
+---
+
+## Section 4 — Export & Handoff Notes
+
+- **Claude Design exports**: PDF, shareable URL, PPTX, or send to Canva (fully editable)
+- **Stitch exports**: HTML/CSS code export, Figma paste
+- **If Claude Design hits its token limit**: switch to Stitch for remaining screens using the prompts in Section 2. The design system tokens are embedded in each Stitch prompt so results stay consistent.
+- **CSS tokens**: copy Section 2.2 from the design spec directly into your codebase as a `:root` stylesheet — these are the same values used in all prompts above.
+````
+
+Save the file, then continue to Step 5.
+
+---
+
 ## Step 5 — Self-review pass
 
 Re-read the full document and check every criterion below. For each failure, immediately edit the file to fix it.
@@ -633,8 +760,9 @@ After all fixes, do a final Write with:
 
 ## Step 6 — Confirm and report
 
-The file is already saved. Tell the user:
-- The exact file path written
+Both files are already saved. Tell the user:
+- The exact paths of both files written (design spec + prompts file)
 - The confirmed design direction and primary palette
 - The typefaces chosen and why
+- **How to visualise the design**: open the prompts file, paste the Claude Design brief into claude.ai/design, then send one screen prompt at a time. If Claude Design hits its token limit, switch to stitch.withgoogle.com using the Stitch prompts in Section 2 of the prompts file — the design tokens are embedded so results stay consistent across tools.
 - Any open questions the tech architect or product team should resolve before frontend implementation begins
