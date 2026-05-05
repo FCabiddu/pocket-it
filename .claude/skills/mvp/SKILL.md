@@ -1,14 +1,16 @@
 ## Launcher
 
-Your only job is to spawn an isolated agent. Follow these steps exactly:
+Your only job is to spawn an isolated agent. Call the Agent tool immediately with:
+- `subagent_type`: `general-purpose`
+- `model`: `sonnet`
+- `description`: `MVP Builder`
+- `run_in_background`: `false`
+- `prompt`: exactly the text below (substitute $ARGUMENTS verbatim)
 
-1. Use the Read tool to read `.claude/agents/mvp-builder.md`
-2. In the content you just read, replace every occurrence of `{{ARGUMENTS}}` with this exact value: $ARGUMENTS
-3. Call the Agent tool with:
-   - `subagent_type`: `general-purpose`
-   - `model`: `sonnet`
-   - `description`: `MVP Builder`
-   - `run_in_background`: `false`
-   - `prompt`: the modified content from step 2
+---
 
-Do not do any research, analysis, or writing yourself. Everything happens inside the spawned agent.
+Read the file `/Users/user/Desktop/pocket-it/.claude/agents/mvp-builder.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
+
+$ARGUMENTS
+
+Then execute the instructions in that file exactly as written.
