@@ -29,6 +29,13 @@ Extract from the arguments:
 
 If the description is missing or too vague to act on, use `AskUserQuestion` to ask for it. One question only.
 
+Derive a **project slug** from the description:
+- Take the first 3–5 significant words (skip articles, prepositions, conjunctions)
+- Lowercase, replace spaces and special characters with hyphens, strip anything non-alphanumeric
+- Example: "A portfolio site for tattoo artist Marco" → `portfolio-tattoo-artist-marco`
+
+The output directory is `/Users/user/Desktop/clients/{slug}/`. Create it with `mkdir -p` before writing any file.
+
 ---
 
 ## Design Reference — Layout, Typography & Colour
@@ -214,29 +221,50 @@ Do not write this plan to a file. Hold it in context and execute against it.
 
 ---
 
-## Step 2 — Build the single file
+## Step 2 — Build the files
 
-Create `index.html` at the output path specified in the arguments (default: current working directory). Structure:
+Create the following file structure inside `/Users/user/Desktop/clients/{slug}/` (slug derived in Step 0):
+
+```
+{slug}/
+  ├─ index.html
+  └─ css/
+       ├─ base.css          ← :root tokens, reset, typography, global utilities
+       ├─ nav.css           ← navigation / header
+       ├─ hero.css          ← hero / above-the-fold section
+       ├─ {section-name}.css  ← one file per remaining section (use the section's semantic name)
+       ├─ footer.css        ← footer
+       └─ animations.css    ← all @keyframes blocks and animation/transition utilities
+```
+
+`index.html` structure:
 
 ```
 index.html
   └─ <head>
        ├─ meta charset, viewport, title, description
        ├─ <link> Google Fonts
-       └─ <style> … all CSS … </style>
+       ├─ <link href="css/base.css" rel="stylesheet">
+       ├─ <link href="css/animations.css" rel="stylesheet">
+       ├─ <link href="css/nav.css" rel="stylesheet">
+       ├─ <link href="css/hero.css" rel="stylesheet">
+       ├─ … one <link> per remaining section CSS file …
+       └─ <link href="css/footer.css" rel="stylesheet">
   └─ <body>
        └─ … semantic HTML …
        └─ <script> … minimal JS … </script>
 ```
 
+Write each CSS file separately with the Write tool. Do not embed any CSS in `<style>` tags inside `index.html`.
+
 ### CSS rules
 
 - Write the minimum CSS needed. Before writing each rule ask: "does removing this break anything?" If no, don't write it.
-- All design tokens in `:root` as CSS custom properties — colours, spacing steps, type sizes, radius, transition duration.
+- All design tokens in `:root` go in `base.css` as CSS custom properties — colours, spacing steps, type sizes, radius, transition duration.
 - `clamp()` for all fluid type and spacing. No media-query-based font-size changes.
-- One `<link>` for Google Fonts in `<head>` — never `@import` inside `<style>`, never base64.
+- One `<link>` for Google Fonts in `<head>` — never `@import` inside any CSS file, never base64.
 - Layout: CSS Grid and Flexbox only.
-- `@keyframes`: one block per effect, reused across selectors. Never duplicated.
+- All `@keyframes` blocks go in `animations.css`. Never duplicate a keyframe block across files.
 - No framework, no Tailwind, no utility classes.
 
 ### JS rules
@@ -260,6 +288,8 @@ index.html
 Before reporting done, verify every item:
 
 - [ ] Opens in browser with no console errors
+- [ ] No inline `<style>` tags in `index.html` — all CSS lives in `css/` files
+- [ ] Each section has its own CSS file; `@keyframes` are consolidated in `animations.css`
 - [ ] No rule, declaration, or JS statement that could be deleted without breaking something
 - [ ] No Lorem ipsum anywhere
 - [ ] All images resolve (real Unsplash URLs or inline SVG)
@@ -278,5 +308,5 @@ Tell the user:
 
 - What was built: layout archetype, colour palette, font pair
 - The 3–5 animations used, which catalogue entry each maps to, and whether it's CSS-only or uses JS
-- How to open it: `open index.html` — zero setup
+- How to open it: `open /Users/user/Desktop/clients/{slug}/index.html` — zero setup
 - What to add for production (real backend, CMS, domain, analytics)
