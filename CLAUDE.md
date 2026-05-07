@@ -37,15 +37,13 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | `tech-architect.md` | Opus | Writes TAD from the BAD + Design Spec |
 | `implementation-planner.md` | Sonnet | Writes IPD, pushes Linear issues, writes deps JSON |
 | `scaffold.md` | Sonnet | Initialises project skeleton from the TAD |
-| `develop.md` | Sonnet | Orchestrator — surveys Linear, dispatches developer agents |
-| `backend-developer.md` | Sonnet | Implements one Backend issue, opens PR |
-| `frontend-developer.md` | Sonnet | Implements one Frontend issue, opens PR |
+| `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens PR |
 | `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens PR |
 | `qa-engineer.md` | Sonnet | Implements full test suite, commits to main |
 | `reviewer.md` | Sonnet | Checks acceptance criteria + TAD constraints against PR diffs |
-| `contract-validator.md` | Sonnet | Diffs API contract: TAD spec vs backend routes vs frontend calls |
 | `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
 | `mvp-builder.md` | Sonnet | Builds a full-stack MVP from a plain-English description; no TAD/Linear required |
+| `css-animator.md` | Sonnet | CSS animation specialist — matches requests to Animate.css catalogue or searches the web for custom keyframes |
 
 Model rationale: all agents run on Sonnet (Pro subscription — optimising for token budget). Upgrade individual agents to Opus if quality gaps appear in practice.
 
@@ -56,10 +54,10 @@ Model rationale: all agents run on Sonnet (Pro subscription — optimising for t
 | Folder | Created by | Read by |
 |--------|-----------|---------|
 | `business-analysis/` | `business-analyst` | `tech-architect`, `ux-designer` |
-| `design-specs/` | `ux-designer` | `tech-architect`, `frontend-developer` |
+| `design-specs/` | `ux-designer` | `tech-architect`, `developer` |
 | `tech-analysis/` | `tech-architect` | all developer agents |
-| `best-practices/` | `tech-architect` (Step 7) | `backend-developer`, `frontend-developer`, `devops-engineer`, `qa-engineer` |
-| `implementation-plans/` | `implementation-planner` | `develop`, all developer agents |
+| `best-practices/` | `tech-architect` (Step 7) | `developer`, `devops-engineer`, `qa-engineer` |
+| `implementation-plans/` | `implementation-planner` | all developer agents |
 
 Developer agents check for `best-practices/` at Step 2. If present they read the relevant files instead of web-searching; if absent they fall back to web searches. This makes them fully standalone while saving tokens in the full pipeline.
 
@@ -94,15 +92,26 @@ Agents reference TAD sections by number. These are fixed — if the tech-archite
 
 ## Arguments protocol
 
-The orchestrator (`develop.md`) passes arguments to developer agents in this format:
+Pass arguments to skills as plain text when invoking them. Recommended formats:
 
+**`/developer`**
+```
+Issue: {issue_id} — {issue_title}
+Label: Backend | Frontend
+Branch: {branch-name}
+```
+
+**`/devops-engineer`**
 ```
 Issue: {issue_id} — {issue_title}
 Branch: {branch-name}
-[ALREADY EXISTS]        ← present only if the branch was created by a prior phase
 ```
 
-QA and documentation agents receive simpler strings (`"all non-Done QA tasks"`, project slug, etc.). Check the relevant spawn call in `develop.md` for the exact format.
+**`/qa-engineer`** — pass a project description or `"all non-Done QA tasks"`
+
+**`/reviewer`** — pass PR numbers: `Review the following open PRs: 12, 13`
+
+**`/documentation-agent`** — pass a project slug or leave empty to auto-detect
 
 ---
 
@@ -110,7 +119,7 @@ QA and documentation agents receive simpler strings (`"all non-Done QA tasks"`, 
 
 1. Create `.claude/agents/{name}.md` with the frontmatter above.
 2. Add it to the roster table in this file.
-3. If it is spawned by the orchestrator, add the spawn call to `develop.md` at the right step.
+3. Create a matching skill in `.claude/skills/{name}/SKILL.md` so it is user-invocable.
 4. If it reads the TAD, verify it references the correct section numbers from the table above.
 5. Update `CLAUDE.template.md` if the new agent affects the user-facing pipeline flow.
 
