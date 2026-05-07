@@ -5,7 +5,7 @@ model: claude-sonnet-4-6
 model_settings:
   thinking:
     type: enabled
-    budget_tokens: 10000
+    budget_tokens: 5000
 tools:
   - Read
   - Write

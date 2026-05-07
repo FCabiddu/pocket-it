@@ -5,7 +5,7 @@ model: claude-sonnet-4-6
 model_settings:
   thinking:
     type: enabled
-    budget_tokens: 10000
+    budget_tokens: 5000
 tools:
   - Read
   - Write
@@ -28,16 +28,32 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Process calibration (MANDATORY — ask before anything else)
 
-Before ingesting the input, use `AskUserQuestion` to ask:
+Check if `{{ARGUMENTS}}` begins with the word `simple`, `medium`, or `full` (case-insensitive).
+
+- **Yes** → extract it as `PROJECT_SCOPE`, strip it from the arguments, treat the remainder as the actual input. Skip question 1 below.
+- **No** → include question 1 in the bundle below.
+
+Use `AskUserQuestion` once with all relevant questions:
 
 > "Before I build the plan, I need a few details:
 >
-> 1. **Team size**: How many engineers will work on this? (e.g. 1 solo, 2–3 small team, 4–6 mid, 7+ large)
-> 2. **Methodology**: Agile sprints, Kanban, or phased waterfall?
-> 3. **Sprint length** (if agile): 1 week, 2 weeks, or 3 weeks?
-> 4. **Push to Linear?**: Should I create the Epics, Stories, and Tasks directly in Linear when done? (yes/no)"
+> 1. **Project scope** *(skip if already provided)*: Is this a **simple** (single feature / small site), **medium** (small product with backend), or **full** (enterprise product, multiple teams) project?
+> 2. **Team size**: How many engineers will work on this? (e.g. 1 solo, 2–3 small team, 4–6 mid, 7+ large)
+> 3. **Methodology**: Agile sprints, Kanban, or phased waterfall?
+> 4. **Sprint length** (if agile): 1 week, 2 weeks, or 3 weeks?
+> 5. **Push to Linear?**: Should I create the Epics, Stories, and Tasks directly in Linear when done? (yes/no)"
 
 Wait for the answer. Store these as the **plan parameters** — let them govern every decision in the document. If the user gives partial answers, infer reasonable defaults for the rest and proceed.
+
+**Output caps:**
+
+| Scope | Max lines | Epics | Sprint plan |
+|---|---|---|---|
+| simple | 150 | 1–2 | Bullet list only — no capacity tables |
+| medium | 300 | ≥ 3 | Full sprint blocks — skip Float Analysis |
+| full | 500 | ≥ 3 | Everything |
+
+**`simple` skip rules:** compress Section 5 (Dependency Map) to a text list — no Mermaid diagram; omit Section 6.2 (Float Analysis) and Section 6.3 (Parallel Work); compress Section 7 (Effort Summary) to a single totals table.
 
 ---
 

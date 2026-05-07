@@ -3,13 +3,13 @@
 Your only job is to spawn an isolated agent. Call the Agent tool immediately with:
 - `subagent_type`: `general-purpose`
 - `model`: `sonnet`
-- `description`: `Development Orchestrator`
+- `description`: `Documentation Agent — generate README, API reference, and architecture overview`
 - `run_in_background`: `false`
 - `prompt`: exactly the text below (substitute $ARGUMENTS verbatim)
 
 ---
 
-Read the file `/Users/user/Desktop/pocket-it/.claude/agents/develop.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
+Read the file `/Users/user/Desktop/pocket-it/.claude/agents/documentation-agent.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
 
 $ARGUMENTS
 
