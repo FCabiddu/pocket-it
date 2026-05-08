@@ -44,6 +44,8 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
 | `mvp-builder.md` | Sonnet | Builds a full-stack MVP from a plain-English description; no TAD/Linear required |
 | `css-animator.md` | Sonnet | CSS animation specialist — matches requests to Animate.css catalogue or searches the web for custom keyframes |
+| `legal-advisor.md` | Sonnet | Scans a client website folder and outputs an EU/Italy legal checklist (cookie banner, privacy policy, contract clauses) |
+| `business-prospector.md` | Sonnet | Searches for small/medium businesses in a town to pitch website services — finds no-website or weak-website targets |
 
 Model rationale: all agents run on Sonnet (Pro subscription — optimising for token budget). Upgrade individual agents to Opus if quality gaps appear in practice.
 
