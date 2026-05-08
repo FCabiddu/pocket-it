@@ -13,6 +13,15 @@ flowchart LR
     A(["/mvp\nDescription + optional stack"]) --> B[("Full-stack MVP\nFrontend + Backend\nModern UI — committed")]
 ```
 
+### 🛠️ Standalone tools
+
+```mermaid
+flowchart LR
+    A(["/business-prospector\nTown + category"]) --> B[("Prospect table\n+ pitch tips")]
+    C(["/legal-advisor\nWebsite folder"]) --> D[("GDPR checklist\n+ contract clauses")]
+    E(["/css-animator\nAnimation description"]) --> F[("Ready-to-paste\nCSS keyframes")]
+```
+
 ### 🏗️ Full pipeline
 
 ```mermaid
