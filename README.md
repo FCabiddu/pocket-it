@@ -1,27 +1,10 @@
 # pocket-it
 
-An AI-powered agent toolkit built on [Claude Code](https://claude.ai/code). Two independent pipelines: a client landing-page workflow for freelance work, and a full structured pipeline for production software products.
+An AI-powered agent toolkit built on [Claude Code](https://claude.ai/code) for end-to-end software product delivery — from business analysis to production code.
 
 ---
 
 ## How it works
-
-### Flow A — Client landing page
-
-```mermaid
-flowchart LR
-    A(["/business-prospector\nTown + category"]) --> B[("Prospect list")]
-    B --> BB(["/pitch-generator"])
-    BB --> BC{{"👤 Contact prospects\nUpdate Stato"}}
-    BC --> C(["/scraper\nBusiness name"])
-    C --> D[("brief.md")]
-    D --> E(["/mvp-builder\nDescription + brief"])
-    E --> F[("Landing page\nindex.html + css/")]
-    F --> G(["/legal-advisor\nSite folder"])
-    G --> H[("Legal checklist")]
-```
-
-### Flow B — Full engineering pipeline
 
 ```mermaid
 flowchart TD
@@ -42,30 +25,9 @@ flowchart TD
     K --> L(["/documentation-agent"])
 ```
 
-### Standalone tools
-
-```mermaid
-flowchart LR
-    A(["/mvp-builder\nDescription"]) --> B[("Landing page\nindex.html + css/")]
-    C(["/legal-advisor\nWebsite folder"]) --> D[("GDPR checklist\n+ contract clauses")]
-    E(["/css-animator\nAnimation description"]) --> F[("Ready-to-paste\nCSS keyframes")]
-```
-
 ---
 
-## Flow A — Client pipeline
-
-| Skill | What it does | Model |
-|---|---|---|
-| `/business-prospector [town] [category?]` | Finds small businesses in a town with no or weak website — outputs a prospect table + interactive HTML CRM | Sonnet |
-| `/pitch-generator [prospects-file?]` | Reads the prospect list and drafts personalised cold email, WhatsApp follow-up, and phone script for each unchecked prospect | Sonnet |
-| `/scraper [business name]` | Searches online for all public info (address, phone, services, colours, social) and saves `brief.md` to `~/Desktop/clients/{slug}/` | Sonnet |
-| `/mvp-builder [description]` | Builds an award-quality landing page from a plain-English description and optional brief — outputs `index.html` + split CSS files | Sonnet |
-| `/legal-advisor [folder-path]` | Scans a client site folder and outputs an EU/Italy GDPR compliance checklist — cookie banner, privacy policy, contract clauses | Sonnet |
-
----
-
-## Flow B — Full pipeline
+## Agents
 
 ### Phase 1 — Planning
 
@@ -99,7 +61,7 @@ Run `/developer` and `/devops-engineer` in parallel where Linear issues are unbl
 ### Prerequisites
 
 - [Claude Code](https://claude.ai/code) installed
-- A [Linear](https://linear.app) account with the Claude AI Linear MCP connected (Flow B only)
+- A [Linear](https://linear.app) account with the Claude AI Linear MCP connected
 
 ### Install
 
@@ -121,29 +83,6 @@ Restart Claude Code. The skills will appear in your `/` menu.
 ---
 
 ## Usage
-
-### Flow A — Client landing page
-
-```bash
-# Find prospects in a town
-/business-prospector Milano ristoranti
-
-# Draft outreach for all unchecked prospects in the list
-/pitch-generator
-
-# (Contact prospects, update Stato in the file manually)
-
-# Scrape an interested prospect to build a brief
-/scraper Ristorante da Mario Milano
-
-# Build the landing page
-/mvp-builder Ristorante tradizionale siciliano nel centro di Milano
-
-# Check legal compliance before delivery
-/legal-advisor ~/Desktop/clients/ristorante-da-mario
-```
-
-### Flow B — Full pipeline
 
 ```bash
 # 1. Describe your feature — agent produces the BAD
@@ -167,13 +106,6 @@ Restart Claude Code. The skills will appear in your `/` menu.
 /documentation-agent
 ```
 
-### Standalone
-
-```bash
-# CSS animation on demand
-/css-animator a smooth slide-in from the left on scroll
-```
-
 ---
 
 ## Repository structure
@@ -183,8 +115,5 @@ Restart Claude Code. The skills will appear in your `/` menu.
   agents/     # Agent definitions (one .md per agent)
   skills/     # Skill launchers (one folder per skill)
 README.md
-CLAUDE.md               # Maintenance guide for working on the agents
-CLAUDE.template.md      # Copy this to ~/.claude/CLAUDE.md for your projects
+CLAUDE.md     # Maintenance guide for working on the agents
 ```
-
-Drop the `.claude/` folder into any project root and the skills appear automatically in Claude Code.

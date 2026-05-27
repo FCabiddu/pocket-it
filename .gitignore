@@ -11,10 +11,14 @@ PIPELINE_TODO.md
 .claude/agents/pitch-generator.md
 .claude/agents/scraper.md
 .claude/agents/legal-advisor.md
+.claude/agents/mvp-builder.md
+.claude/agents/css-animator.md
 .claude/skills/business-prospector/
 .claude/skills/pitch-generator/
 .claude/skills/scraper/
 .claude/skills/legal-advisor/
+.claude/skills/mvp-builder/
+.claude/skills/css-animator/
 
 # Flow C — Creative writing (not versioned)
 .claude/agents/fantasy-writer.md
