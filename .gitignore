@@ -5,3 +5,20 @@
 .claude/projects/
 .DS_Store
 PIPELINE_TODO.md
+
+# Flow A — Client landing page pipeline (not versioned)
+.claude/agents/business-prospector.md
+.claude/agents/pitch-generator.md
+.claude/agents/scraper.md
+.claude/agents/legal-advisor.md
+.claude/skills/business-prospector/
+.claude/skills/pitch-generator/
+.claude/skills/scraper/
+.claude/skills/legal-advisor/
+
+# Flow C — Creative writing (not versioned)
+.claude/agents/fantasy-writer.md
+.claude/agents/proofreader.md
+.claude/skills/fantasy-writer/
+.claude/skills/proofreader/
+Fantasy books/

@@ -30,22 +30,36 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 
 ## Agent roster
 
+**Flow C — Creative writing**
+
+| File | Model | Role |
+|------|-------|------|
+| `fantasy-writer.md` | Sonnet | Fantasy fiction in a Sanderson-primary / Tolkien-accent voice. Five modes: `Prose` (scenes/chapters), `World` (lore/magic/geography), `Character` (backgrounds/voice), `Outline` (plot structure), `Campaign` (D&D notes → novel map). All output in Italian. Saves to `~/Desktop/pocket-it/Fantasy books/{story-slug}/{slug}/` |
+| `proofreader.md` | Sonnet | Italian proofreader for fantasy fiction. Checks grammar, spelling, punctuation, typography, style (Sanderson/Tolkien voice rules), POV, tense, and world-name consistency. Saves a `{slug}-revisione.md` report alongside the original. |
+
+**Flow A — Client landing page pipeline**
+
+| File | Model | Role |
+|------|-------|------|
+| `business-prospector.md` | Sonnet | Searches for small/medium businesses in a town to pitch website services — finds no-website or weak-website targets |
+| `pitch-generator.md` | Sonnet | Drafts personalised cold email, WhatsApp follow-up, and phone script for each prospect |
+| `scraper.md` | Sonnet | Given a business name, scrapes all public info (address, phone, services, photos, colours) and saves a `brief.md` to `~/Desktop/prospect/{slug}/` for the mvp-builder |
+| `mvp-builder.md` | Sonnet | Builds an award-quality landing page from a plain-English description; no TAD/Linear required |
+| `legal-advisor.md` | Sonnet | Scans a client website folder and outputs an EU/Italy legal checklist (cookie banner, privacy policy, contract clauses) |
+| `css-animator.md` | Sonnet | CSS animation specialist — matches requests to Animate.css catalogue or searches the web for custom keyframes |
+
+**Flow B — Full software engineering pipeline**
+
 | File | Model | Role |
 |------|-------|------|
 | `business-analyst.md` | Sonnet | Writes BAD from a feature description |
-| `ux-designer.md` | Sonnet | Writes Design Spec from the BAD — colors, typography, motion, screen wireframes, components |
-| `tech-architect.md` | Opus | Writes TAD from the BAD + Design Spec |
+| `tech-architect.md` | Opus | Writes TAD from the BAD (reads Design Spec from `design-specs/` if present, otherwise BAD alone) |
 | `implementation-planner.md` | Sonnet | Writes IPD, pushes Linear issues, writes deps JSON |
-| `scaffold.md` | Sonnet | Initialises project skeleton from the TAD |
 | `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens PR |
 | `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens PR |
 | `qa-engineer.md` | Sonnet | Implements full test suite, commits to main |
 | `reviewer.md` | Sonnet | Checks acceptance criteria + TAD constraints against PR diffs |
 | `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
-| `mvp-builder.md` | Sonnet | Builds a full-stack MVP from a plain-English description; no TAD/Linear required |
-| `css-animator.md` | Sonnet | CSS animation specialist — matches requests to Animate.css catalogue or searches the web for custom keyframes |
-| `legal-advisor.md` | Sonnet | Scans a client website folder and outputs an EU/Italy legal checklist (cookie banner, privacy policy, contract clauses) |
-| `business-prospector.md` | Sonnet | Searches for small/medium businesses in a town to pitch website services — finds no-website or weak-website targets |
 
 Model rationale: all agents run on Sonnet (Pro subscription — optimising for token budget). Upgrade individual agents to Opus if quality gaps appear in practice.
 
@@ -55,8 +69,7 @@ Model rationale: all agents run on Sonnet (Pro subscription — optimising for t
 
 | Folder | Created by | Read by |
 |--------|-----------|---------|
-| `business-analysis/` | `business-analyst` | `tech-architect`, `ux-designer` |
-| `design-specs/` | `ux-designer` | `tech-architect`, `developer` |
+| `business-analysis/` | `business-analyst` | `tech-architect` |
 | `tech-analysis/` | `tech-architect` | all developer agents |
 | `best-practices/` | `tech-architect` (Step 7) | `developer`, `devops-engineer`, `qa-engineer` |
 | `implementation-plans/` | `implementation-planner` | all developer agents |
@@ -117,13 +130,25 @@ Branch: {branch-name}
 
 ---
 
+## Flow B conventions
+
+| Convention | Format | Example |
+|---|---|---|
+| Feature branch | `feat/{issue-id-lower}-{title-slug}` | `feat/lin-42-user-auth-api` |
+| QA fix branch | `fix/{bug-ticket-id-lower}-{slug}` | `fix/lin-87-login-500` |
+| Docs branch | `docs/{project-slug}-{YYYY-MM-DD}` | `docs/recipe-app-2026-05-21` |
+| Auto-merge label | Linear label `Auto-merge`, colour `#94a3b8` (slate) | Apply manually to skip human review gate |
+| Dependency file | `implementation-plans/{NAME}_DEPS.json` | Written by `/implementation-planner`; read by developer agents for ordering |
+
+---
+
 ## Adding a new agent
 
 1. Create `.claude/agents/{name}.md` with the frontmatter above.
 2. Add it to the roster table in this file.
 3. Create a matching skill in `.claude/skills/{name}/SKILL.md` so it is user-invocable.
 4. If it reads the TAD, verify it references the correct section numbers from the table above.
-5. Update `CLAUDE.template.md` if the new agent affects the user-facing pipeline flow.
+5. Update the README if the new agent affects a user-facing flow.
 
 ## Adding a new skill
 

@@ -1,28 +1,27 @@
 # pocket-it
 
-An AI-powered software development pipeline built on [Claude Code](https://claude.ai/code) agents. Choose the path that fits your project: a single-command MVP builder for prototypes, or a full structured pipeline for production products.
+An AI-powered agent toolkit built on [Claude Code](https://claude.ai/code). Two independent pipelines: a client landing-page workflow for freelance work, and a full structured pipeline for production software products.
 
 ---
 
 ## How it works
 
-### ⚡ Lite path
+### Flow A — Client landing page
 
 ```mermaid
 flowchart LR
-    A(["/mvp\nDescription + optional stack"]) --> B[("Full-stack MVP\nFrontend + Backend\nModern UI — committed")]
+    A(["/business-prospector\nTown + category"]) --> B[("Prospect list")]
+    B --> BB(["/pitch-generator"])
+    BB --> BC{{"👤 Contact prospects\nUpdate Stato"}}
+    BC --> C(["/scraper\nBusiness name"])
+    C --> D[("brief.md")]
+    D --> E(["/mvp-builder\nDescription + brief"])
+    E --> F[("Landing page\nindex.html + css/")]
+    F --> G(["/legal-advisor\nSite folder"])
+    G --> H[("Legal checklist")]
 ```
 
-### 🛠️ Standalone tools
-
-```mermaid
-flowchart LR
-    A(["/business-prospector\nTown + category"]) --> B[("Prospect table\n+ pitch tips")]
-    C(["/legal-advisor\nWebsite folder"]) --> D[("GDPR checklist\n+ contract clauses")]
-    E(["/css-animator\nAnimation description"]) --> F[("Ready-to-paste\nCSS keyframes")]
-```
-
-### 🏗️ Full pipeline
+### Flow B — Full engineering pipeline
 
 ```mermaid
 flowchart TD
@@ -32,46 +31,53 @@ flowchart TD
     C --> D[("TAD\nTechnical Architecture Doc")]
     D --> DC{{"👤 Review TAD"}}
     DC --> E(["/implementation-planner"])
-    E --> F[("IPD\nImplementation Plan Doc\n+ Linear Issues")]
-    F --> G{{"👤 Review plan & Linear board"}}
-    G --> H(["/scaffold"])
-    H --> I[("Repo initialized\nDeps installed\nInitial commit")]
-    I --> J(["/developer — one per issue\nLabel: Backend or Frontend"])
-    I --> K(["/devops-engineer — one per issue"])
-    I --> L(["/qa-engineer"])
-    J --> M(["/reviewer"])
-    K --> M
-    L --> M
-    M --> N(["/documentation-agent"])
+    E --> F[("IPD\nImplementation Plan\n+ Linear Issues")]
+    F --> G{{"👤 Review Linear board"}}
+    G --> H(["/developer — one per issue\nLabel: Backend or Frontend"])
+    G --> I(["/devops-engineer — one per issue"])
+    G --> J(["/qa-engineer"])
+    H --> K(["/reviewer"])
+    I --> K
+    J --> K
+    K --> L(["/documentation-agent"])
+```
+
+### Standalone tools
+
+```mermaid
+flowchart LR
+    A(["/mvp-builder\nDescription"]) --> B[("Landing page\nindex.html + css/")]
+    C(["/legal-advisor\nWebsite folder"]) --> D[("GDPR checklist\n+ contract clauses")]
+    E(["/css-animator\nAnimation description"]) --> F[("Ready-to-paste\nCSS keyframes")]
 ```
 
 ---
 
-## Pipeline steps
+## Flow A — Client pipeline
+
+| Skill | What it does | Model |
+|---|---|---|
+| `/business-prospector [town] [category?]` | Finds small businesses in a town with no or weak website — outputs a prospect table + interactive HTML CRM | Sonnet |
+| `/pitch-generator [prospects-file?]` | Reads the prospect list and drafts personalised cold email, WhatsApp follow-up, and phone script for each unchecked prospect | Sonnet |
+| `/scraper [business name]` | Searches online for all public info (address, phone, services, colours, social) and saves `brief.md` to `~/Desktop/clients/{slug}/` | Sonnet |
+| `/mvp-builder [description]` | Builds an award-quality landing page from a plain-English description and optional brief — outputs `index.html` + split CSS files | Sonnet |
+| `/legal-advisor [folder-path]` | Scans a client site folder and outputs an EU/Italy GDPR compliance checklist — cookie banner, privacy policy, contract clauses | Sonnet |
+
+---
+
+## Flow B — Full pipeline
 
 ### Phase 1 — Planning
 
 | Skill | What it produces | Model |
 |---|---|---|
 | `/business-analyst` | Business Analysis Document (BAD) — user stories, acceptance criteria, scope | Sonnet |
-| `/tech-architect` | Technical Architecture Document (TAD) — stack, structure, API contracts, infra, testing strategy | Sonnet |
-| `/implementation-planner` | Implementation Plan Document (IPD) — epics, stories, tasks with estimates + Linear issues with labels | Sonnet |
+| `/tech-architect` | Technical Architecture Document (TAD) — stack, structure, API contracts, infra, testing strategy | Opus |
+| `/implementation-planner` | Implementation Plan Document (IPD) — epics, stories, tasks with estimates + Linear issues | Sonnet |
 
 **Output:** three Markdown documents in `./business-analysis/`, `./tech-analysis/`, `./implementation-plans/` and a fully populated Linear project.
 
----
-
-### Phase 2 — Bootstrap
-
-| Skill | What it does | Model |
-|---|---|---|
-| `/scaffold [git-url]` | Reads the TAD, runs the stack init command, installs deps, creates folder structure, `.gitignore`, `.env.example`, README, then commits. Pushes to `git-url` if provided. | Sonnet |
-
-Run `/developer` and `/devops-engineer` before `/qa-engineer` — QA needs the backend to be implemented first.
-
----
-
-### Phase 3 — Build
+### Phase 2 — Build
 
 Run one skill per Linear issue. Each agent reads the TAD and IPD, marks the issue **In Progress**, implements, and marks it **Done**.
 
@@ -93,7 +99,7 @@ Run `/developer` and `/devops-engineer` in parallel where Linear issues are unbl
 ### Prerequisites
 
 - [Claude Code](https://claude.ai/code) installed
-- A [Linear](https://linear.app) account with the Claude AI Linear MCP connected
+- A [Linear](https://linear.app) account with the Claude AI Linear MCP connected (Flow B only)
 
 ### Install
 
@@ -103,14 +109,6 @@ Clone the repo, then copy the `.claude/` folder into your target project:
 git clone https://github.com/FCabiddu/pocket-it
 cp -r pocket-it/.claude /your/project/root/
 ```
-
-Copy the pipeline config to your global Claude Code settings so the agents have context in every project:
-
-```bash
-cp pocket-it/CLAUDE.template.md ~/.claude/CLAUDE.md
-```
-
-> If you already have a `~/.claude/CLAUDE.md`, append the contents of `CLAUDE.template.md` to it rather than overwriting.
 
 Then install the security hook (blocks pushes containing secrets or API keys):
 
@@ -124,20 +122,28 @@ Restart Claude Code. The skills will appear in your `/` menu.
 
 ## Usage
 
-### Quick start
+### Flow A — Client landing page
 
 ```bash
-# MVP in one shot
-/mvp a job board with company profiles and applicant tracking
-
 # Find prospects in a town
 /business-prospector Milano ristoranti
 
-# Legal checklist for a client site
-/legal-advisor /path/to/client-website
+# Draft outreach for all unchecked prospects in the list
+/pitch-generator
+
+# (Contact prospects, update Stato in the file manually)
+
+# Scrape an interested prospect to build a brief
+/scraper Ristorante da Mario Milano
+
+# Build the landing page
+/mvp-builder Ristorante tradizionale siciliano nel centro di Milano
+
+# Check legal compliance before delivery
+/legal-advisor ~/Desktop/clients/ristorante-da-mario
 ```
 
-### Full pipeline
+### Flow B — Full pipeline
 
 ```bash
 # 1. Describe your feature — agent produces the BAD
@@ -149,56 +155,24 @@ Restart Claude Code. The skills will appear in your `/` menu.
 # 3. Review the TAD, then generate the implementation plan + Linear issues
 /implementation-planner
 
-# Review the Linear board. Edit or remove issues if needed.
-
-# 4. Scaffold the project (optionally push to a remote)
-/scaffold
-# or
-/scaffold https://github.com/you/your-project
-
-# 5. Run one agent per Linear issue (parallel where unblocked)
+# 4. Review the Linear board. Edit or remove issues if needed.
+#    Then run one agent per issue (parallel where unblocked):
 /developer Issue: LIN-42 — User auth API Label: Backend
 /developer Issue: LIN-43 — Login page Label: Frontend
 /devops-engineer Issue: LIN-44 — Docker setup
 
-# 6. Run QA after backend issues are merged, then review and document
+# 5. Run QA after backend issues are merged, then review and document
 /qa-engineer
 /reviewer
 /documentation-agent
 ```
 
----
+### Standalone
 
-## Standalone tools
-
-These skills are independent utilities — they don't require a TAD or Linear project.
-
-| Skill | What it does | Model |
-|---|---|---|
-| `/mvp [description]` | Full-stack MVP in one shot — no pipeline ceremony | Sonnet |
-| `/business-prospector [town] [category?]` | Finds small businesses in a town with no or weak website — outputs a prospect table and pitch tips | Sonnet |
-| `/legal-advisor [folder-path]` | Scans a client website folder and outputs an EU/Italy GDPR compliance checklist — cookie banner, privacy policy, contract clauses | Sonnet |
-| `/css-animator [description]` | Returns ready-to-paste CSS animation code — matches Animate.css or writes custom keyframes | Sonnet |
-
----
-
-## Model choices
-
-| Agent | Model | Why |
-|---|---|---|
-| mvp-builder | Sonnet | Full-stack from plain English; Sonnet handles open-ended stack decisions well |
-| business-analyst | Sonnet | Template-driven structured output |
-| ux-designer | Sonnet | Design spec from BAD — structured creative output |
-| tech-architect | Sonnet | TAD from BAD — research-heavy but well-structured |
-| implementation-planner | Sonnet | Structured breakdown from a defined TAD |
-| developer | Sonnet | Implements one issue from TAD + IPD |
-| qa-engineer | Sonnet | Test suite from TAD testing pyramid |
-| devops-engineer | Sonnet | Structured config files, well-defined patterns |
-| reviewer | Sonnet | Diff-based checklist against TAD constraints |
-| scaffold | Sonnet | Structured execution from TAD, no open-ended reasoning |
-| documentation-agent | Sonnet | Writes docs from finished codebase |
-| business-prospector | Sonnet | Web search + table output |
-| legal-advisor | Sonnet | Checklist output from code scan |
+```bash
+# CSS animation on demand
+/css-animator a smooth slide-in from the left on scroll
+```
 
 ---
 
@@ -206,9 +180,11 @@ These skills are independent utilities — they don't require a TAD or Linear pr
 
 ```
 .claude/
-  agents/     # Agent definitions
-  skills/     # Skill launchers
+  agents/     # Agent definitions (one .md per agent)
+  skills/     # Skill launchers (one folder per skill)
 README.md
+CLAUDE.md               # Maintenance guide for working on the agents
+CLAUDE.template.md      # Copy this to ~/.claude/CLAUDE.md for your projects
 ```
 
 Drop the `.claude/` folder into any project root and the skills appear automatically in Claude Code.
