@@ -55,9 +55,9 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | `business-analyst.md` | Sonnet | Writes BAD from a feature description |
 | `tech-architect.md` | Opus | Writes TAD from the BAD (reads Design Spec from `design-specs/` if present, otherwise BAD alone) |
 | `implementation-planner.md` | Sonnet | Writes IPD, pushes Linear issues, writes deps JSON |
-| `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens PR |
-| `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens PR |
-| `qa-engineer.md` | Sonnet | Implements full test suite, commits to main |
+| `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens a draft PR |
+| `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens a draft PR |
+| `qa-engineer.md` | Sonnet | Implements full test suite on a branch, opens a draft PR |
 | `reviewer.md` | Sonnet | Checks acceptance criteria + TAD constraints against PR diffs |
 | `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
 
@@ -124,7 +124,7 @@ Branch: {branch-name}
 
 **`/qa-engineer`** — pass a project description or `"all non-Done QA tasks"`
 
-**`/reviewer`** — pass PR numbers: `Review the following open PRs: 12, 13`
+**`/reviewer`** — pass PR numbers or branch names: `Review the following PRs: 12, 13` (or branch names if the PR isn't known yet)
 
 **`/documentation-agent`** — pass a project slug or leave empty to auto-detect
 
@@ -139,6 +139,18 @@ Branch: {branch-name}
 | Docs branch | `docs/{project-slug}-{YYYY-MM-DD}` | `docs/recipe-app-2026-05-21` |
 | Auto-merge label | Linear label `Auto-merge`, colour `#94a3b8` (slate) | Apply manually to skip human review gate |
 | Dependency file | `implementation-plans/{NAME}_DEPS.json` | Written by `/implementation-planner`; read by developer agents for ordering |
+
+### Merge gate (developer → reviewer → user)
+
+Code reaches GitHub as a **draft PR** (so CI runs and work is backed up), but nothing lands on `main` automatically. The merge is the gate, and only the user triggers it:
+
+1. **`/developer`** — creates a task branch, implements, commits, pushes, and opens a **draft** PR. It never marks the PR ready-for-review and never merges. Reports the branch, commit SHA, and PR URL.
+2. **`/reviewer`** — reviews the draft PR diff (`gh pr diff {n}`). Feedback posts to the PR (`gh pr review --request-changes`) and mirrors to Linear. On pass it marks the PR **ready for review** (`gh pr ready`) and approves — but does **not** merge.
+3. **Merge** — `gh pr merge` happens only after reviewer approval **and** an explicit user instruction (e.g. "merge LIN-42" / "ship it"). This is a manual, user-triggered step — no agent does it on its own.
+
+Why draft-PR-then-gate-the-merge instead of withholding the push: a draft PR runs CI, backs the work up to the remote, and gives line-anchored review — while the not-ready/unmerged state is the actual safety gate. Withholding the push only changes the definition of "on GitHub"; it doesn't add real safety and it loses CI + backup.
+
+**Same gate applies to `devops-engineer` and `qa-engineer`:** both now commit on a branch, push, and open a **draft** PR — never pushing to `main` or merging directly. `qa-engineer` puts its test suite on a `test/qa-suite-{YYYY-MM-DD}` branch instead of committing to `main`. The merge stays user-triggered for all four implementing agents.
 
 ---
 

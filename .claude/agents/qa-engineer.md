@@ -258,27 +258,38 @@ Then move to the next task.
 
 ---
 
-## Step 6 — Commit and push test files
+## Step 6 — Commit on a branch and open a DRAFT PR (NO push to main, NO merge)
 
-After all selected tasks are marked Done, commit and push every test file written during this session:
+Test files never go straight to `main`. After all selected tasks are marked Done, put the work on a dedicated branch, push it, and open a **draft** PR — so CI runs and the work is backed up, but nothing lands on `main` until the user authorises the merge.
+
+Create the branch off the latest `main` (slug: `test/qa-suite-{YYYY-MM-DD}`), commit, push, and open the draft PR:
 
 ```bash
+git checkout main && git pull origin main
+git checkout -b test/qa-suite-$(date +%Y-%m-%d)
 git add .
 git commit -m "$(cat <<'EOF'
 test: implement QA test suite
 
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 EOF
 )"
-git push origin main
+git push -u origin test/qa-suite-$(date +%Y-%m-%d)
+gh pr create --draft \
+  --title "test: QA test suite" \
+  --body "$(cat <<'EOF'
+## Summary
+Implements the QA test suite for the selected tasks.
+
+## Changes
+{bullet list of test files added and what each covers}
+
+🤖 Generated with [Claude Code](https://claude.ai/claude-code)
+EOF
+)"
 ```
 
-If `git push` fails because the remote has diverged, pull and retry:
-
-```bash
-git pull --rebase origin main
-git push origin main
-```
+**Never run `git push origin main` and never `gh pr merge`.** This is a hard rule. The draft PR exists so CI can run and the diff is reviewable, but the merge to `main` is a separate gate the user triggers explicitly. Record the branch name and draft PR URL for your Step 7 report.
 
 ---
 
@@ -286,6 +297,7 @@ git push origin main
 
 When all selected tasks are complete, tell the user:
 
+- The branch name and **draft PR URL** for the test suite (draft — not merged, awaiting user authorisation to merge; never pushed to `main` directly)
 - How many tasks were implemented and marked Done
 - Any tasks skipped and why
 - Final coverage percentage for the files touched — compare against the TAD target

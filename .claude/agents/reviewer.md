@@ -42,27 +42,35 @@ Read it in full. Extract and note:
 - Migration and database conventions (Section 8) — ORM/query builder requirements, migration file conventions
 - Non-functional constraints (rate limits, pagination, caching, validation rules)
 
-You will use these specifics in Step 3b to check TAD-derived code quality criteria against the PR diff.
+You will use these specifics in Step 3b to check TAD-derived code quality criteria against the branch diff.
 
 ---
 
-## Step 1 — Load the PRs to review
+## Step 1 — Load the draft PRs to review
 
-Your arguments specify which PRs to review (format: `Review the following open PRs: {comma-separated PR numbers or branch names}`).
+Developer agents push their work and open a **draft** pull request per task. You review those PRs. Approving one marks it ready-for-review (out of draft) — it does **not** merge. Merging is a separate, user-authorised gate that you never trigger.
 
-Fetch the full list of open PRs:
+Your arguments specify which PRs to review (format: `Review the following PRs: {comma-separated PR numbers or branch names}`).
+
+List open PRs (including drafts) to confirm they exist and capture their numbers:
 
 ```bash
-gh pr list --state open --json number,title,headRefName,url,body
+gh pr list --state open --draft --json number,title,headRefName,isDraft
 ```
 
-Filter to only the PRs specified in your arguments. For each PR, fetch its full diff:
+For each PR specified in your arguments, fetch its full diff:
 
 ```bash
 gh pr diff {pr-number}
 ```
 
-If a diff is large, use `gh pr view {pr-number} --json files` to get the file list and read each file directly using the Read tool. You need to understand the full shape of the implementation for each PR before evaluating any issue.
+If a diff is large, list the changed files and read each directly with the Read tool:
+
+```bash
+gh pr diff {pr-number} --name-only
+```
+
+You need to understand the full shape of the implementation in each PR before evaluating any issue.
 
 ---
 
@@ -70,7 +78,7 @@ If a diff is large, use `gh pr view {pr-number} --json files` to get the file li
 
 1. Parse the Linear project ID, team ID, and status IDs from your arguments (format: `Linear project ID: {id}, team ID: {id}`, `Status IDs: In Progress = {id}, Done = {id}`)
 2. Use `mcp__claude_ai_Linear__list_issues` with the project ID to fetch all issues for that project.
-3. For each PR to review, identify the corresponding Linear issue by matching the issue ID embedded in the branch name (e.g. `feat/lin-42-user-auth` → issue `LIN-42`) or in the PR title.
+3. For each PR to review, identify the corresponding Linear issue by matching the issue ID embedded in the PR's branch name (`headRefName`, e.g. `feat/lin-42-user-auth` → issue `LIN-42`).
 
 ---
 
@@ -80,7 +88,7 @@ Parse the review mode from your arguments (`Mode: full` or `Mode: code-quality-o
 
 ### 3a — Identify the issue
 
-Identify the Linear issue ID from the PR branch name or title (e.g. `feat/lin-42-user-auth` → `LIN-42`). Use `mcp__claude_ai_Linear__get_issue` to fetch the issue.
+Identify the Linear issue ID from the PR's branch name (e.g. `feat/lin-42-user-auth` → `LIN-42`). Use `mcp__claude_ai_Linear__get_issue` to fetch the issue.
 
 - **Full mode**: also fetch the parent story to extract the **acceptance criteria** checklist — these are the checklist items that define done.
 - **Code-quality-only mode**: you only need the issue for commenting — skip the parent story lookup.
@@ -124,20 +132,32 @@ Do not fail an issue for style, minor naming differences, or improvements not in
 
 ### 3d — Decision
 
-Combine results from 3b (and 3c in full mode):
+Combine results from 3b (and 3c in full mode).
 
-- **APPROVED**: all checks pass → leave the issue as Done, post an approval comment on the PR, and record it in your approved list:
+- **APPROVED**: all checks pass → leave the issue as Done, post an approval comment, and mark the PR **ready for review** (out of draft). Do **not** merge.
   ```bash
-  gh pr comment {pr-number} --body "✅ **Approved** — all checks passed."
+  gh pr ready {pr-number}
+  gh pr review {pr-number} --approve --body "✅ Review approved — all checks passed. Marked ready for review. Awaiting user authorisation to merge."
   ```
+  Also mirror the approval to Linear:
+  ```
+  mcp__claude_ai_Linear__save_comment → "✅ **Review approved** — all checks passed. PR #{pr-number} marked ready for review. Awaiting user authorisation to merge."
+  ```
+  **Do not run `gh pr merge`.** Approval only clears the PR for merging — the user triggers the actual merge as a separate gated step. Record the PR in your approved list.
 - **NEEDS WORK**: any check fails → proceed to Step 3e.
 
-### 3e — Reopen and comment (NEEDS WORK only)
+### 3e — Request changes and comment (NEEDS WORK only)
 
-1. Use `mcp__claude_ai_Linear__save_comment` to add a review comment to the issue. Format it as:
+1. Post the review on the PR with the changes requested, and keep the PR in **draft**:
+
+```bash
+gh pr review {pr-number} --request-changes --body "{review summary, see format below}"
+```
+
+2. Use `mcp__claude_ai_Linear__save_comment` to mirror the same review comment to the issue. Format it as:
 
 ```
-**Review: NEEDS WORK**
+**Review: NEEDS WORK** (PR #{pr-number}, branch: {branch-name})
 
 Code quality issues:
 - [ ] {criterion} — {file:line} — {explanation}
@@ -149,30 +169,25 @@ Passed:
 - [x] {criterion or criterion text}
 ```
 
-2. Use `mcp__claude_ai_Linear__save_issue` to move the issue back to **In Progress**.
+3. Use `mcp__claude_ai_Linear__save_issue` to move the issue back to **In Progress**.
 
-3. Post a changes-requested comment on the PR:
-   ```bash
-   gh pr comment {pr-number} --body "🔴 **Changes requested** — see Linear issue {issue_id} for detailed feedback."
-   ```
-
-4. Record the issue ID, title, and its label (Backend / Frontend / DevOps) in your needs-work list.
+4. Record the issue ID, title, PR number, branch name, and its label (Backend / Frontend / DevOps) in your needs-work list.
 
 ---
 
 ## Step 4 — Report
 
-When all issues have been reviewed, report:
+When all PRs have been reviewed, report:
 
-**Approved ({n}):**
-- {issue ID} — {title}
+**Approved ({n}) — marked ready for review, awaiting user authorisation to merge:**
+- {issue ID} — {title} — PR #{pr-number} (`{branch-name}`)
 
 **Needs work ({n}):**
-- {issue ID} — {title} — {label} — {one-line summary of what is missing}
+- {issue ID} — {title} — {label} — PR #{pr-number} (`{branch-name}`) — {one-line summary of what is missing}
 
 **Summary for orchestrator:**
-APPROVED: {comma-separated IDs}
+APPROVED: {comma-separated IDs with PR numbers}
 NEEDS WORK: {comma-separated IDs with label in brackets, e.g. "LIN-42 [Backend], LIN-51 [Frontend]"}
 
-If all issues are approved, end with: "All issues approved. Ready for QA." (full mode) or "All fix PRs passed code quality check. Ready to merge." (code-quality-only mode)
+If all PRs are approved, end with: "All PRs approved and marked ready for review. Nothing has been merged — awaiting your go-ahead to merge." (full mode) or "All fix PRs passed code quality check. Awaiting your go-ahead to merge." (code-quality-only mode)
 If any need work, end with: "Returning {n} issue(s) to developers."

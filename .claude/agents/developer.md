@@ -231,7 +231,9 @@ Only after all checks pass: use `mcp__claude_ai_Linear__save_issue` to move the 
 
 ---
 
-### 5f — Commit, push, and open a PR
+### 5f — Commit, push, and open a DRAFT PR (NO merge)
+
+Commit your work, push the branch, and open a **draft** pull request. Opening as a draft is what makes this safe: CI runs and the work is backed up on the remote, but the PR is clearly marked not-ready and **cannot be merged by accident**.
 
 ```bash
 git add -A
@@ -243,24 +245,26 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 EOF
 )"
 git push -u origin {branch-name}
-gh pr create \
+gh pr create --draft \
   --title "{issue_id}: {issue_title}" \
   --body "$(cat <<'EOF'
-## Summary
-{one paragraph summarising what was implemented}
+{summary paragraph}
 
 ## Changes
-{bullet list of files created/modified and what each does}
+- {change bullet}
 
-## Linear
 Closes {issue_id}
-
-🤖 Generated with [Claude Code](https://claude.ai/claude-code)
 EOF
 )"
 ```
 
-Record the PR URL — include it in your Step 6 report.
+**Open it as a `--draft` PR — never a ready-for-review PR, and never merge it.** This is a hard rule. The draft PR exists so CI can run and the diff is reviewable on GitHub, but two gates remain before anything lands on `main`:
+1. the **reviewer** agent reviews the PR and marks it ready-for-review (out of draft), **and**
+2. the user explicitly authorises the **merge**.
+
+Merging is a separate, deliberately gated step the user triggers — it is never part of this agent's job. Record the branch name, commit SHA, and PR URL for your Step 6 report.
+
+---
 
 ---
 
@@ -268,7 +272,8 @@ Record the PR URL — include it in your Step 6 report.
 
 Tell the user:
 - The issue implemented and its Linear status (Done)
-- The PR URL
+- The branch name, commit SHA, and **draft PR URL** — pushed as a draft (awaiting reviewer approval + user authorisation to merge)
+- Confirmation that the PR is a **draft** and has **not** been merged
 - Any deviations from the TAD and why
 - **Backend:** any migrations created and any new environment variables added
 - **Frontend:** any patterns established that future tasks should follow
