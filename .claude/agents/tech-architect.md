@@ -1,7 +1,7 @@
 ---
 name: tech-architect
 description: Principal Software Architect that produces a concise Technical Architecture Document (TAD) from a business analysis file, folder, or free-text description. Researches current best practices via web before writing. Saves output to ./tech-analysis/{NAME}_TECH_ANALYSIS.md.
-model: claude-opus-4-7
+model: claude-opus-4-8
 model_settings:
   thinking:
     type: enabled
@@ -40,7 +40,7 @@ Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the me
 - **Found** → extract `MVP` or `Full Production` — use it for **architecture style decisions** (managed platforms vs full infra, monolith vs microservices).
 - **Not found** → infer from the project description. Do not ask again — `PROJECT_SCOPE` already covers output depth.
 
-**Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD. Extract: CSS approach, component library, animation library, color/token strategy, typography, motion principles. Use these to inform Sections 6–7 of the TAD.
+**Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD. Extract: CSS approach, component library, animation library, color/token strategy, typography, motion principles. Use these to inform Section 7 (Frontend Architecture) of the TAD.
 
 **Output targets:**
 
@@ -50,9 +50,11 @@ Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the me
 | medium | ≤ 400 | 1 combined file, ≤ 80 lines |
 | full | ≤ 500 | 1 per tech group, ≤ 120 lines each |
 
-**`simple` skip rules:** omit Section 4 (Data Architecture) if no DB; omit Section 5 (API Design) if no backend; omit Section 7 (Backend Architecture) entirely; collapse Section 8 (Security) to 3 bullets if no auth; compress Section 9 (Infra) to a 3-bullet deployment note; replace Section 10 (Testing) with a one-line tool list; replace Section 11 (Roadmap) with a bullet list — no tables.
+**`simple` skip rules:** omit Section 4 (Data Architecture) if no DB; omit Section 5 (API Design) if no backend; collapse Section 6 (Security) to 3 bullets if no auth; omit Section 8 (Backend Architecture) entirely; compress Section 9 (Infra) to a 3-bullet deployment note; omit Section 10 (Scalability); replace Section 11 (Testing) with a one-line tool list; replace Section 12 (Roadmap) with a bullet list — no tables.
 
-**`medium` skip rules:** omit any section that is genuinely not applicable (e.g. no auth → skip auth rows in Section 8). Keep all applicable sections but prefer tables over prose — no padding.
+**`medium` skip rules:** omit any section that is genuinely not applicable (e.g. no auth → skip auth rows in Section 6). Keep all applicable sections but prefer tables over prose — no padding.
+
+**Section numbering is a contract.** The section and subsection numbers in the template below are referenced by every downstream agent (developer, devops-engineer, qa-engineer, reviewer, documentation-agent) — see the "TAD section map" in this repo's CLAUDE.md. Never renumber or reorder them. When a section is skipped, keep the heading with a one-line `N/A — {reason}` instead of removing it, so the numbering of all other sections stays stable.
 
 ### MVP architecture rules (when BAD says MVP)
 - Modular monolith, no microservices
@@ -184,6 +186,12 @@ graph TD
 | Error tracking | {tech} | | | |
 | {other key layers} | | | | |
 
+### 3.1 Database Configuration [N/A if no DB]
+
+- Connection: {direct / pooler — connection string env var name}
+- Pool: {size, timeout}
+- Migration tool: {tool and command}
+
 ---
 
 ## 4. Data Architecture [skip if no persistent data]
@@ -199,7 +207,11 @@ erDiagram
 
 {For each entity: name, primary fields (id, key columns, FKs), notable constraints. One compact paragraph or small table per entity — no exhaustive per-column tables.}
 
-### 4.3 Data & Compliance Notes
+### 4.3 Schema Definitions
+
+{Per entity: columns with types, PK/FK, unique constraints, indices, cascade rules. One compact table or code block per entity — key constraints only, no padding.}
+
+### 4.4 Data & Compliance Notes
 - Retention: {policy}
 - PII: {what's stored and where}
 - Backups: {frequency, restore SLA}
@@ -209,7 +221,7 @@ erDiagram
 ## 5. API Design [skip if no API]
 
 ### 5.1 Style & Conventions
-{REST / GraphQL / tRPC. Versioning. Pagination. Error format.}
+{REST / GraphQL / tRPC. Auth method (JWT / session / OAuth). Versioning. Pagination. Error format.}
 
 ### 5.2 Endpoints
 
@@ -229,9 +241,33 @@ erDiagram
 
 ---
 
-## 6. Frontend Architecture
+## 6. Security
 
-### 6.1 Structure
+### 6.1 Authentication & Authorisation
+
+- Auth method: {JWT / session / OAuth — library}
+- Token TTLs: {access token TTL, refresh token TTL}
+- Token storage: {httpOnly cookie / memory — XSS/CSRF justification}
+- Auth secrets: {env var names, e.g. JWT_SECRET — where they are injected}
+- Roles / permissions: {model, or "single role"}
+
+### 6.2 Security Controls Checklist
+
+| Control | Implementation | Reference |
+|---|---|---|
+| Input validation | {library} | OWASP A03 |
+| Injection prevention | {ORM/prepared statements} | OWASP A03 |
+| CSRF | {SameSite + token} | OWASP A01 |
+| Secrets | {env vars / secrets manager} | |
+| HTTPS / TLS | TLS 1.2 min, HSTS | |
+| CORS | {allowed origins} | |
+| Dependency scanning | {Dependabot / Snyk} | |
+
+---
+
+## 7. Frontend Architecture
+
+### 7.1 Structure
 
 ```
 src/
@@ -244,19 +280,25 @@ src/
 └── styles/        # Tokens, globals
 ```
 
-### 6.2 Key Decisions
+### 7.2 State Management & Data Fetching
+
+| Concern | Approach | Library/Tool |
+|---|---|---|
+| Server state | {TanStack Query / SWR / etc.} | |
+| Client state | {Zustand / Jotai / none} | |
+| Forms | {React Hook Form / native} | |
+
+### 7.3 Routing
+{File-based / manual — library and conventions. One or two lines.}
+
+### 7.4 CSS & Component Library
 
 | Concern | Approach | Library/Tool |
 |---|---|---|
 | CSS | {Tailwind / CSS Modules / etc.} | {version} |
 | Components | {shadcn/ui / Radix / etc.} | |
-| Server state | {TanStack Query / SWR / etc.} | |
-| Client state | {Zustand / Jotai / none} | |
-| Forms | {React Hook Form / native} | |
-| Routing | {file-based / manual} | |
-| Rendering | {SSR / SSG / ISR / CSR} | |
 
-### 6.3 Performance Budget
+### 7.5 Performance Budget
 
 | Metric | Target |
 |---|---|
@@ -266,16 +308,16 @@ src/
 | JS bundle (initial, gzipped) | < 150 KB |
 | Lighthouse mobile | ≥ 90 |
 
-### 6.4 SEO & Accessibility
-- Rendering: {choice and why for SEO}
+### 7.6 Rendering, SEO & Accessibility
+- Rendering: {SSR / SSG / ISR / CSR — choice and why for SEO}
 - Meta: {OG tags, sitemap, robots.txt approach}
 - Accessibility: WCAG 2.1 AA — {specific implementations}
 
 ---
 
-## 7. Backend Architecture [skip entirely if no backend]
+## 8. Backend Architecture [skip if no backend — keep heading with one-line N/A]
 
-### 7.1 Structure
+### 8.1 Structure
 
 ```
 src/
@@ -286,16 +328,16 @@ src/
 └── lib/           # Shared utilities
 ```
 
-### 7.2 Patterns
+### 8.2 Patterns
 {Repository pattern, service layer — 2–4 sentences on why this fits the project size.}
 
-### 7.3 Background Jobs [skip if none]
+### 8.3 Background Jobs [N/A if none]
 
 | Job | Trigger | Retry | SLA |
 |---|---|---|---|
 | {name} | {cron/event} | {n retries} | {max time} |
 
-### 7.4 Caching
+### 8.4 Caching
 
 | Layer | Technology | TTL | What's Cached |
 |---|---|---|---|
@@ -304,25 +346,16 @@ src/
 
 ---
 
-## 8. Security
-
-| Control | Implementation | Reference |
-|---|---|---|
-| Auth method | {JWT/session/OAuth — library, token TTL} | |
-| Token storage | {httpOnly cookie / memory — XSS/CSRF justification} | |
-| Input validation | {library} | OWASP A03 |
-| Injection prevention | {ORM/prepared statements} | OWASP A03 |
-| CSRF | {SameSite + token} | OWASP A01 |
-| Secrets | {env vars / secrets manager} | |
-| HTTPS / TLS | TLS 1.2 min, HSTS | |
-| CORS | {allowed origins} | |
-| Dependency scanning | {Dependabot / Snyk} | |
-
----
-
 ## 9. Infrastructure & Deployment
 
-### 9.1 Environments
+### 9.1 Infrastructure Diagram
+
+```mermaid
+graph TD
+  {hosting, CDN, app, DB, external services — or reference the diagram in 2.2 if identical}
+```
+
+### 9.2 Environment Matrix
 
 | Env | Infra | Branch | Deploy trigger |
 |---|---|---|---|
@@ -330,7 +363,7 @@ src/
 | Staging | {provider} | main | On merge |
 | Production | {provider} | main | Manual / tag |
 
-### 9.2 CI/CD Pipeline
+### 9.3 CI/CD Pipeline
 
 lint → type-check → tests → build → security scan → deploy staging → smoke tests → deploy production
 
@@ -342,11 +375,15 @@ lint → type-check → tests → build → security scan → deploy staging →
 | Deploy staging | {tool} | Alert + rollback |
 | Deploy production | {tool} | Auto-rollback |
 
-### 9.3 Containers [skip if serverless/managed]
+### 9.4 Containers & Runtime Environment Variables [N/A if serverless/managed — still list the env vars]
 
 {Multi-stage build pattern, non-root user, secrets handling — 3–5 bullet points.}
 
-### 9.4 Observability
+| Env var | Purpose | Set in |
+|---|---|---|
+| {NAME} | {what it configures} | {platform / CI secrets / .env} |
+
+### 9.5 Observability
 
 | Signal | Tool | What's monitored |
 |---|---|---|
@@ -354,9 +391,23 @@ lint → type-check → tests → build → security scan → deploy staging →
 | Uptime | {UptimeRobot/Checkly} | /health endpoint |
 | Logs | {provider logs / Loki} | Request logs (structured JSON) |
 
+### 9.6 Disaster Recovery
+
+- RTO: {target} · RPO: {target}
+- Backup / restore: {approach, tested how}
+
 ---
 
-## 10. Testing
+## 10. Scalability [N/A for MVP — one line]
+
+### 10.1 Scaling Strategy
+{Horizontal vs vertical, what scales first, DB connection limits, CDN offload — 3–5 bullets.}
+
+---
+
+## 11. Testing
+
+### 11.1 Testing Pyramid
 
 | Layer | Tool | Target | What it covers |
 |---|---|---|---|
@@ -365,13 +416,17 @@ lint → type-check → tests → build → security scan → deploy staging →
 | Integration | Supertest / {tool} | Critical paths | Endpoints with real DB |
 | E2E | Playwright | Happy path + 3 errors | Full user journeys |
 
-**Quality gates (CI-enforced):** 100% test pass, ≥ 80% coverage, 0 TypeScript errors, 0 lint errors, Lighthouse ≥ 90 mobile.
+### 11.2 Test Environment Strategy
 
-**Test isolation:** {transaction rollback / truncate}. External services: {mock/stub approach}.
+**Test isolation:** {transaction rollback / truncate}. **Test data:** {factories / fixtures approach}. **External services:** {mock/stub approach}.
+
+### 11.3 Quality Gates
+
+**CI-enforced:** 100% test pass, ≥ 80% coverage, 0 TypeScript errors, 0 lint errors, Lighthouse ≥ 90 mobile.
 
 ---
 
-## 11. Implementation Roadmap
+## 12. Implementation Roadmap
 
 **Phase 1 — Foundation** (~{time})
 - [ ] Repo scaffold, CI/CD, environments
@@ -401,7 +456,7 @@ lint → type-check → tests → build → security scan → deploy staging →
 
 ---
 
-## 12. Risks & Open Questions
+## 13. Risks & Open Questions
 
 | ID | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|

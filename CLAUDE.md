@@ -1,6 +1,6 @@
 # pocket-it — Agent Maintenance Guide
 
-This file is for working on the agents themselves. If you are using the agents in a target project, see `CLAUDE.template.md` — copy that file to `~/.claude/CLAUDE.md` instead.
+This file is for working on the agents themselves. (The old `CLAUDE.template.md` for target projects was removed from versioning together with Flow A — recover it from git history at `72bd240^` if you need it.)
 
 ---
 
@@ -12,7 +12,7 @@ Each agent is a Markdown file in `.claude/agents/` with a YAML frontmatter block
 ---
 name: agent-name          # matches the filename without .md
 description: ...          # shown in the agent picker; also used by the orchestrator
-model: claude-sonnet-4-6  # or claude-opus-4-7 / claude-haiku-4-5-20251001
+model: claude-sonnet-5  # or claude-opus-4-8 / claude-haiku-4-5-20251001
 model_settings:
   thinking:
     type: enabled
@@ -30,23 +30,13 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 
 ## Agent roster
 
-**Flow C — Creative writing**
+**Standalone tools**
 
 | File | Model | Role |
 |------|-------|------|
-| `fantasy-writer.md` | Sonnet | Fantasy fiction in a Sanderson-primary / Tolkien-accent voice. Five modes: `Prose` (scenes/chapters), `World` (lore/magic/geography), `Character` (backgrounds/voice), `Outline` (plot structure), `Campaign` (D&D notes → novel map). All output in Italian. Saves to `~/Desktop/pocket-it/Fantasy books/{story-slug}/{slug}/` |
-| `proofreader.md` | Sonnet | Italian proofreader for fantasy fiction. Checks grammar, spelling, punctuation, typography, style (Sanderson/Tolkien voice rules), POV, tense, and world-name consistency. Saves a `{slug}-revisione.md` report alongside the original. |
+| `mvp-builder.md` | Sonnet | Builds an award-quality static site (index.html + css/ folder, vanilla JS) from a plain-English description; no TAD/Linear required. Output to `~/Desktop/clients/{slug}/` |
 
-**Flow A — Client landing page pipeline**
-
-| File | Model | Role |
-|------|-------|------|
-| `business-prospector.md` | Sonnet | Searches for small/medium businesses in a town to pitch website services — finds no-website or weak-website targets |
-| `pitch-generator.md` | Sonnet | Drafts personalised cold email, WhatsApp follow-up, and phone script for each prospect |
-| `scraper.md` | Sonnet | Given a business name, scrapes all public info (address, phone, services, photos, colours) and saves a `brief.md` to `~/Desktop/prospect/{slug}/` for the mvp-builder |
-| `mvp-builder.md` | Sonnet | Builds an award-quality landing page from a plain-English description; no TAD/Linear required |
-| `legal-advisor.md` | Sonnet | Scans a client website folder and outputs an EU/Italy legal checklist (cookie banner, privacy policy, contract clauses) |
-| `css-animator.md` | Sonnet | CSS animation specialist — matches requests to Animate.css catalogue or searches the web for custom keyframes |
+(The other Flow A agents — business-prospector, pitch-generator, scraper, legal-advisor, css-animator — and the Flow C creative-writing agents were removed from this repo; recover them from git history before `72bd240` if needed.)
 
 **Flow B — Full software engineering pipeline**
 
@@ -55,9 +45,9 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | `business-analyst.md` | Sonnet | Writes BAD from a feature description |
 | `tech-architect.md` | Opus | Writes TAD from the BAD (reads Design Spec from `design-specs/` if present, otherwise BAD alone) |
 | `implementation-planner.md` | Sonnet | Writes IPD, pushes Linear issues, writes deps JSON |
-| `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens PR |
-| `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens PR |
-| `qa-engineer.md` | Sonnet | Implements full test suite, commits to main |
+| `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens a draft PR |
+| `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens a draft PR |
+| `qa-engineer.md` | Sonnet | Implements full test suite on a branch, opens a draft PR |
 | `reviewer.md` | Sonnet | Checks acceptance criteria + TAD constraints against PR diffs |
 | `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
 
@@ -71,7 +61,7 @@ Model rationale: all agents run on Sonnet (Pro subscription — optimising for t
 |--------|-----------|---------|
 | `business-analysis/` | `business-analyst` | `tech-architect` |
 | `tech-analysis/` | `tech-architect` | all developer agents |
-| `best-practices/` | `tech-architect` (Step 7) | `developer`, `devops-engineer`, `qa-engineer` |
+| `best-practices/` | `tech-architect` (Step 6) | `developer`, `devops-engineer`, `qa-engineer` |
 | `implementation-plans/` | `implementation-planner` | all developer agents |
 
 Developer agents check for `best-practices/` at Step 2. If present they read the relevant files instead of web-searching; if absent they fall back to web searches. This makes them fully standalone while saving tokens in the full pipeline.
@@ -87,7 +77,8 @@ Agents reference TAD sections by number. These are fixed — if the tech-archite
 | 3 | Stack Matrix (language, framework, package manager, runtime version) |
 | 3.1 | Database config (connection strings, pool settings) |
 | 4 | Data Architecture (ERD, schema, data flow) — NOT folder structure |
-| 5.1 | API style (REST / GraphQL / tRPC) |
+| 4.3 | Schema Definitions (constraints, indices, foreign keys) |
+| 5.1 | API style (REST / GraphQL / tRPC) + auth method |
 | 5.2 | API contract (endpoint shapes, request/response schemas) |
 | 6.1 | Auth secrets (JWT_SECRET, token TTLs) |
 | 6.2 | Security Controls Checklist (OWASP table) — NOT env vars |
@@ -98,10 +89,21 @@ Agents reference TAD sections by number. These are fixed — if the tech-archite
 | 7.5 | Performance budget |
 | 7.6 | Rendering strategy (SSR/SSG/ISR/CSR) + accessibility target |
 | 8.1 | Backend Application Layer Structure (directory tree) |
+| 8.2 | Backend design patterns (Repository, service layer) |
+| 8.3 | Background jobs |
+| 8.4 | Caching strategy |
+| 9.1 | Infrastructure diagram |
+| 9.2 | Environment matrix |
+| 9.3 | CI/CD pipeline steps |
 | 9.4 | Container configuration + runtime environment variables |
+| 9.5 | Observability stack |
+| 9.6 | Disaster recovery (RTO / RPO) |
+| 10.1 | Scaling strategy |
 | 11.1 | Testing Pyramid (unit/component/integration/E2E tools) |
 | 11.2 | Test environment strategy (isolation, factories, mocking) |
 | 11.3 | Quality gates + coverage targets |
+
+The `tech-architect` template enforces this: skipped sections keep their heading with a one-line `N/A` so numbering never shifts.
 
 ---
 
@@ -124,7 +126,7 @@ Branch: {branch-name}
 
 **`/qa-engineer`** — pass a project description or `"all non-Done QA tasks"`
 
-**`/reviewer`** — pass PR numbers: `Review the following open PRs: 12, 13`
+**`/reviewer`** — pass PR numbers or branch names: `Review the following PRs: 12, 13` (or branch names if the PR isn't known yet)
 
 **`/documentation-agent`** — pass a project slug or leave empty to auto-detect
 
@@ -137,8 +139,22 @@ Branch: {branch-name}
 | Feature branch | `feat/{issue-id-lower}-{title-slug}` | `feat/lin-42-user-auth-api` |
 | QA fix branch | `fix/{bug-ticket-id-lower}-{slug}` | `fix/lin-87-login-500` |
 | Docs branch | `docs/{project-slug}-{YYYY-MM-DD}` | `docs/recipe-app-2026-05-21` |
-| Auto-merge label | Linear label `Auto-merge`, colour `#94a3b8` (slate) | Apply manually to skip human review gate |
+| Auto-merge label | GitHub PR label `Auto-merge`, colour `#94a3b8` (slate); mirrored in Linear by `/implementation-planner` | Applied by implementing agents when the session preference is Auto-merge; acted on by `.github/workflows/auto-merge.yml` (created by `/devops-engineer`) |
 | Dependency file | `implementation-plans/{NAME}_DEPS.json` | Written by `/implementation-planner`; read by developer agents for ordering |
+
+### Merge gate (developer → reviewer → user)
+
+Code reaches GitHub as a **draft PR** (so CI runs and work is backed up), but nothing lands on `main` automatically. The merge is the gate, and only the user triggers it:
+
+1. **`/developer`** — creates a task branch, implements, commits, pushes, and opens a **draft** PR. It never marks the PR ready-for-review and never merges. Reports the branch, commit SHA, and PR URL.
+2. **`/reviewer`** — reviews the draft PR diff (`gh pr diff {n}`). Feedback posts to the PR (`gh pr review --request-changes`) and mirrors to Linear. On pass it marks the PR **ready for review** (`gh pr ready`) and approves — but does **not** merge.
+3. **Merge** — the merge happens only after reviewer approval **and** user authorisation. Authorisation takes one of two forms: an explicit per-PR instruction (e.g. "merge LIN-42" / "ship it"), or the session auto-merge preference below. No agent ever runs `gh pr merge` on its own initiative.
+
+**Session auto-merge preference (Step 0a):** the first implementing agent of a session asks once — "How should PRs be handled this session?" — and records the answer in `/tmp/{repo-name}-automerge`. If the user chose **Auto-merge**, implementing agents apply the `Auto-merge` label at PR creation and the target project's `.github/workflows/auto-merge.yml` (created by `/devops-engineer` alongside the CI pipeline; requires "Allow auto-merge" + branch protection on `main` in repo settings) merges once CI is green and the reviewer has approved — the user's gate is exercised once per session instead of per PR. If **Manual approval**, every merge stays per-PR. Delete the file to be asked again. `developer`, `devops-engineer`, and `qa-engineer` all read this preference; the `reviewer` reports whether an approved PR will auto-merge or awaits authorisation.
+
+Why draft-PR-then-gate-the-merge instead of withholding the push: a draft PR runs CI, backs the work up to the remote, and gives line-anchored review — while the not-ready/unmerged state is the actual safety gate. Withholding the push only changes the definition of "on GitHub"; it doesn't add real safety and it loses CI + backup.
+
+**Same gate applies to `devops-engineer` and `qa-engineer`:** both now commit on a branch, push, and open a **draft** PR — never pushing to `main` or merging directly. `qa-engineer` puts its test suite on a `test/qa-suite-{YYYY-MM-DD}` branch instead of committing to `main`. The merge stays user-triggered for all four implementing agents.
 
 ---
 
@@ -163,18 +179,20 @@ The `SKILL.md` content follows this pattern:
 ```markdown
 ## Launcher
 
-Your only job is to spawn an isolated agent. Follow these steps exactly:
+Your only job is to spawn an isolated agent. Call the Agent tool immediately with:
+- `subagent_type`: `general-purpose`
+- `model`: `sonnet` or `opus`   ← must match the agent's frontmatter model
+- `description`: `{Human-readable description}`
+- `run_in_background`: `false`
+- `prompt`: exactly the text below (substitute $ARGUMENTS verbatim)
 
-1. Use the Read tool to read `~/.claude/agents/{name}.md`
-2. In the content you just read, replace every occurrence of `{{ARGUMENTS}}` with this exact value: $ARGUMENTS
-3. Call the Agent tool with:
-   - `subagent_type`: `general-purpose`
-   - `model`: `sonnet` or `opus`
-   - `description`: `{Human-readable description}`
-   - `run_in_background`: `false`
-   - `prompt`: the modified content from step 2
+---
 
-Do not do any research, analysis, or writing yourself. Everything happens inside the spawned agent.
+Read the file `/Users/user/Desktop/pocket-it/.claude/agents/{name}.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
+
+$ARGUMENTS
+
+Then execute the instructions in that file exactly as written.
 ```
 
 Note: `.claude/commands/` is the legacy format — it still works but `.claude/skills/` is the current recommended format.
