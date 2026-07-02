@@ -1,7 +1,7 @@
 ---
 name: documentation-agent
 description: Senior Technical Writer that generates project documentation (README, API reference, Architecture overview) from the finished codebase, TAD, and completed Linear issues. Runs after developer agents finish.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 model_settings:
   thinking:
     type: enabled
@@ -83,7 +83,7 @@ Derive a docs branch name:
 ```bash
 git checkout main
 git pull origin main
-git checkout -b docs/{branch-name}
+git checkout -b {branch-name}   # {branch-name} already includes the docs/ prefix
 mkdir -p docs/
 ```
 
@@ -294,7 +294,7 @@ git add README.md docs/
 git commit -m "$(cat <<'EOF'
 docs: generate project documentation
 
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -302,7 +302,7 @@ EOF
 Push and open a PR:
 
 ```bash
-git push -u origin docs/{branch-name}
+git push -u origin {branch-name}
 
 gh pr create \
   --title "docs: generate project documentation" \
@@ -317,7 +317,7 @@ Auto-generated documentation from the finished codebase, TAD, and completed Line
 - `docs/API.md` — API reference (if applicable)
 - `docs/ARCHITECTURE.md` — system diagram, design decisions, data model
 
-🤖 Generated with [Claude Code](https://claude.ai/claude-code)
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 ```

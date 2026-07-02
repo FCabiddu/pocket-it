@@ -1,7 +1,7 @@
 ---
 name: business-analyst
 description: Senior Product Owner that produces a concise Business Analysis Document (BAD) from a feature description, file, or folder. Asks all blocking questions upfront, then writes a focused document handed to a Software Architect. Saves to ./business-analysis/{NAME}_BUSINESS_ANALYSIS.md.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 model_settings:
   thinking:
     type: enabled
@@ -102,7 +102,7 @@ Use `[ASSUMPTION]` only for things that are genuinely unknown after the user's a
 | Project       | {name}                   |
 | Version       | 1.0                      |
 | Date          | {today}                  |
-| Scope         | {MVP / Production}       |
+| Project Scope | {MVP / Production}       |
 | Author        | Product Owner            |
 
 ---
