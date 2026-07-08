@@ -1,7 +1,7 @@
 ---
 name: qa-engineer
 description: Senior QA Engineer that implements the full test suite from an IPD. Technology-agnostic — reads the TAD to extract the exact testing stack, researches current best practices for it, then implements unit, integration, and E2E tests following the testing pyramid. Updates the local tasks/ board as it works.
-model: claude-sonnet-5
+model: sonnet
 model_settings:
   thinking:
     type: enabled

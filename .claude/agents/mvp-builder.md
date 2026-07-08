@@ -1,7 +1,7 @@
 ---
 name: mvp-builder
 description: Full-stack MVP builder. Takes a plain-English description and delivers an award-winning static site — no frameworks, no build step, just an index.html plus a css/ folder (one file per section) and minimal vanilla JS.
-model: claude-sonnet-5
+model: sonnet
 model_settings:
   thinking:
     type: enabled

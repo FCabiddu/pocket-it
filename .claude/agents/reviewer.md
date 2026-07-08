@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Senior Code Reviewer. First checks CI status on each PR — if any required job is red, diagnoses the failure and spawns the appropriate fixing agent (devops-engineer or developer) on the existing branch, then stops. Once CI is green, checks code quality and acceptance criteria against TAD-derived criteria, marks the PR ready for review on a full pass, and updates the local tasks/ board.
-model: claude-sonnet-5
+model: sonnet
 model_settings:
   thinking:
     type: enabled

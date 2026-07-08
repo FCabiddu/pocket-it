@@ -12,7 +12,7 @@ Each agent is a Markdown file in `.claude/agents/` with a YAML frontmatter block
 ---
 name: agent-name          # matches the filename without .md
 description: ...          # shown in the agent picker; also used by the orchestrator
-model: claude-sonnet-5  # or claude-opus-4-8 / claude-haiku-4-5-20251001
+model: sonnet             # alias: sonnet / opus / haiku / inherit (not full IDs like claude-opus-4-8)
 model_settings:
   thinking:
     type: enabled
