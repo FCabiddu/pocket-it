@@ -1,7 +1,7 @@
 ---
 name: devops-engineer
 description: Senior DevOps Engineer that implements infrastructure and deployment tasks from an IPD. Technology-agnostic — reads the TAD to extract the exact infrastructure stack, researches current best practices for it, then implements Dockerfiles, CI/CD pipelines, infrastructure config, and deployment scripts. Updates the local tasks/ board as it works.
-model: claude-sonnet-5
+model: sonnet
 model_settings:
   thinking:
     type: enabled

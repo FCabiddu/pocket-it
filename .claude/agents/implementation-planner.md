@@ -1,7 +1,7 @@
 ---
 name: implementation-planner
 description: Senior Engineering Manager that produces a complete Implementation Plan Document (IPD) from a TAD, BAD, folder, or free-text description. Breaks work into Epics, Stories, and Tasks with estimates and a sprint plan. Optionally pushes issues to Linear. Saves to ./implementation-plans/{NAME}_IMPLEMENTATION_PLAN.md.
-model: claude-sonnet-5
+model: sonnet
 model_settings:
   thinking:
     type: enabled

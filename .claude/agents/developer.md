@@ -1,7 +1,7 @@
 ---
 name: developer
 description: Senior Engineer (Backend or Frontend) that implements a single task from an IPD. Reads the Label from arguments, extracts the relevant TAD sections, loads the matching best-practices files, then implements production-ready code. Updates the local tasks/ board as it works.
-model: claude-sonnet-5
+model: sonnet
 model_settings:
   thinking:
     type: enabled
