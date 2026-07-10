@@ -66,6 +66,21 @@ Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the me
 ### Full Production architecture rules (when BAD says Full Production)
 - Apply full depth on every applicable section
 
+### CI/CD & Actions-budget sizing (MANDATORY — applies to §9.3 and §11.3)
+
+Match the pipeline you spec to the delivery answer from Step 1. Never spec more CI than the runner budget can sustain.
+
+| Delivery reality | CI/CD to spec in §9.3 | Quality gate in §11.3 |
+|---|---|---|
+| **Local-only / no hosted CI**, or **solo + pre-deploy** on a **Free private repo** | **No per-PR hosted pipeline.** Validation runs **locally** (`lint → type-check → unit/component tests → build`); the developer runs it before each PR. State this explicitly and note migrations are applied manually (`supabase db push` or equivalent). | Gates are **locally enforced**, not CI-enforced. |
+| **Solo/small team, Free private repo, has a deploy** | **Minimal hosted CI**: `lint → type-check → unit/component tests → build` only. Keep **heavy jobs off the per-PR path** — run the real-DB integration suite and E2E **on merge-to-main only**, or manually (`workflow_dispatch`), never on every PR. | Fast gates block merge; heavy suites are advisory or main-only. |
+| **Small/multi-team, public repo / paid CI / self-hosted** | Full pipeline (the §9.3 template as written), heavy jobs included per-PR. | Full CI-enforced gates. |
+
+Rules that always hold, regardless of budget:
+- **A real-DB integration job and a browser-E2E job are the two most expensive things you can put in CI.** Only put them on the per-PR path when the runner budget is explicitly unlimited or paid. Otherwise gate them (main-only / manual / local).
+- If you spec any hosted CI on a **Free private repo**, add a one-line `> **Budget note:**` stating the ~2,000 min/month cap and which jobs are kept off the per-PR path to stay under it.
+- Do **not** invent a deploy pipeline (staging/production steps) when the Step 1 answer is "no deploy target yet" — mark §9.3 deploy rows `N/A — no deploy target yet` and revisit when one exists.
+
 ---
 
 ## Step 1 — Ingest
@@ -75,7 +90,18 @@ Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the me
 - **Free text**: Use directly.
 - **Empty**: Ask "What would you like me to architect?" and wait.
 
-After ingesting, only ask blocking questions (cloud provider preference, hard constraints) that you cannot infer. One `AskUserQuestion` call, bundled.
+After ingesting, only ask blocking questions (cloud provider preference, hard constraints) that you cannot infer. One `AskUserQuestion` call, bundled. **This bundle MUST include the delivery-budget question below** unless the answer is already stated in the input.
+
+### Delivery & CI budget (MANDATORY question — drives Step 4's §9.3 and §11.3)
+
+A production-grade CI/CD pipeline is **not free** and is often **premature**. Before speccing one, you must know the delivery reality. Ask (bundled into the Step 1 call):
+
+> "Delivery context — pick what applies:
+> - **Team size:** solo / small team / multi-team
+> - **Is there a deploy target yet?** none yet (pre-deploy) / staging only / production
+> - **CI runner budget:** GitHub **Free private repo** (~2,000 Actions min/month — a hard cap) / GitHub public repo (unlimited) / paid CI / self-hosted / **local-only (no hosted CI)**"
+
+Why this is blocking: on a **Free private repo**, heavy per-PR jobs — a real-DB integration suite (`supabase start`/Docker ≈ 3 min each) and browser E2E (Playwright ≈ 2–4 min each) — burn the monthly minute cap in a few dozen PRs, after which **all** Actions stop (CI, auto-merge, and any DB-migrate step included). For a solo, pre-deploy project this pipeline mostly **duplicates local validation** the developer already runs. Size the CI to the budget; do not default to the full pipeline.
 
 ---
 
@@ -365,13 +391,17 @@ graph TD
 
 ### 9.3 CI/CD Pipeline
 
-lint → type-check → tests → build → security scan → deploy staging → smoke tests → deploy production
+**Size this to the "CI/CD & Actions-budget sizing" rule above — do not paste the full pipeline by default.** For local-only / solo+pre-deploy / Free-private-repo cases, replace the table with a short note: validation is local (`lint → type-check → tests → build`), no hosted per-PR pipeline, migrations applied manually. Only use the full flow below when the runner budget is unlimited/paid. Add a `> **Budget note:**` line whenever any hosted CI runs on a Free private repo, and mark deploy rows `N/A — no deploy target yet` when there is none.
+
+Full flow (paid/public/self-hosted budget only): lint → type-check → tests → build → security scan → deploy staging → smoke tests → deploy production
 
 | Step | Tool | Failure action |
 |---|---|---|
 | Lint & types | ESLint + tsc | Block merge |
 | Tests | {Vitest/Jest} | Block merge |
 | Build | {Vite/Next} | Block merge |
+| Integration (real DB) | {tool} | **Off per-PR path unless budget is unlimited/paid — main-only or manual** |
+| E2E (browser) | {Playwright} | **Off per-PR path unless budget is unlimited/paid — main-only or manual** |
 | Deploy staging | {tool} | Alert + rollback |
 | Deploy production | {tool} | Auto-rollback |
 
@@ -422,7 +452,9 @@ lint → type-check → tests → build → security scan → deploy staging →
 
 ### 11.3 Quality Gates
 
-**CI-enforced:** 100% test pass, ≥ 80% coverage, 0 TypeScript errors, 0 lint errors, Lighthouse ≥ 90 mobile.
+State **where** the gate runs per the CI-budget rule: **CI-enforced** only when a hosted per-PR pipeline exists; otherwise **locally enforced** (developer runs `lint → type-check → tests → build` before each PR). Real-DB integration and browser-E2E gates are advisory/main-only/local unless the runner budget is unlimited or paid — never a per-PR blocker on a Free private repo.
+
+**Gates:** 100% test pass, ≥ 80% coverage, 0 TypeScript errors, 0 lint errors, Lighthouse ≥ 90 mobile.
 
 ---
 

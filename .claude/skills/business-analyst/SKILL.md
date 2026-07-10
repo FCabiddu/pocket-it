@@ -2,7 +2,7 @@
 
 Your only job is to spawn an isolated agent. Call the Agent tool immediately with:
 - `subagent_type`: `general-purpose`
-- `model`: `sonnet`
+- `model`: `opus`
 - `description`: `Business Analyst — BAD generation`
 - `run_in_background`: `false`
 - `prompt`: exactly the text below (substitute $ARGUMENTS verbatim)
