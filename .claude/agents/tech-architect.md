@@ -40,7 +40,12 @@ Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the me
 - **Found** → extract `MVP` or `Full Production` — use it for **architecture style decisions** (managed platforms vs full infra, monolith vs microservices).
 - **Not found** → infer from the project description. Do not ask again — `PROJECT_SCOPE` already covers output depth.
 
-**Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD. Extract: CSS approach, component library, animation library, color/token strategy, typography, motion principles. Use these to inform Section 7 (Frontend Architecture) of the TAD.
+**Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD (produced by `/ux-ui-designer` in Enterprise Design Spec mode). **The Design Spec is the authoritative source of the UI/design (tokens, component contracts, screens, accessibility depth) — do NOT copy that content into the TAD.** Your job is to make the *engineering* decisions that let the frontend **realize** the spec, and to **reference** it. Section 7 stays engineering-only:
+- **Take the spec into account** when choosing the stack: pick a CSS approach and a component-library technology that can implement the spec's tokens and component contracts; pick a rendering strategy and performance budget that meet the spec's screens; pick a routing approach that fits its information architecture. Record these as engineering decisions in 7.1–7.6.
+- **Ratify, don't reproduce**: in **7.4** name the CSS approach + the component-library *technology* and add a pointer "design tokens & component visual/behavioural contracts → see Design Spec (authoritative)". Do not paste the token values or per-component specs.
+- **Accessibility (7.6)**: carry the conformance **target** (min WCAG 2.1 AA — see the mandatory baseline; never `N/A`) and reference the spec's verification plan into **Section 11** so `/qa-engineer` builds a11y tests.
+- If **no** Design Spec exists (MVP/static scope): Section 7 still records the engineering frontend decisions and 7.6 still carries the WCAG 2.1 AA target — the floor applies regardless.
+Treat the Design Spec's library/CSS recommendations as inputs to ratify, not mandates — you own the final stack decision. For a lightweight/static Design Spec, extract only what applies.
 
 **Output targets:**
 
@@ -324,6 +329,8 @@ src/
 | CSS | {Tailwind / CSS Modules / etc.} | {version} |
 | Components | {shadcn/ui / Radix / etc.} | |
 
+> Design tokens (colour/type/spacing/radius/elevation) and per-component visual & behavioural contracts are **not** duplicated here — the Design Spec in `design-specs/` is authoritative. This subsection records only the *engineering* choice of CSS approach + component-library technology that realizes them. If no Design Spec exists, state the tokens/approach inline at minimum.
+
 ### 7.5 Performance Budget
 
 | Metric | Target |
@@ -337,7 +344,7 @@ src/
 ### 7.6 Rendering, SEO & Accessibility
 - Rendering: {SSR / SSG / ISR / CSR — choice and why for SEO}
 - Meta: {OG tags, sitemap, robots.txt approach}
-- Accessibility: WCAG 2.1 AA — {specific implementations}
+- Accessibility: **WCAG 2.1 AA — mandatory, never `N/A` even for MVP/static.** State the target and the engineering means to meet + verify it (semantic structure, keyboard, focus management, automated a11y checks in CI). Per-component contracts live in the Design Spec; reference it. Feed the verification approach into Section 11.
 
 ---
 

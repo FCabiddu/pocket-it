@@ -35,6 +35,7 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | File | Model | Role |
 |------|-------|------|
 | `mvp-builder.md` | Sonnet | Builds an award-quality static site (index.html + css/ folder, vanilla JS) from a plain-English description; no TAD/Linear required. Output to `~/Desktop/clients/{slug}/` |
+| `ux-ui-designer.md` | Opus | **Three modes.** Standalone: (A) audits an existing static site against the shared compass → `{target-dir}/UX_UI_REVIEW.md`; (B) gives a lightweight static-site design direction for `mvp-builder`. Also runs **in Flow B** (see below) as mode (C). Keeps 28 inspiration galleries as a manual compass-refresh channel (not a runtime fetch). Critiques and directs; does not build. |
 
 (The other Flow A agents — business-prospector, pitch-generator, scraper, legal-advisor, css-animator — and the Flow C creative-writing agents were removed from this repo; recover them from git history before `72bd240` if needed.)
 
@@ -43,7 +44,8 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | File | Model | Role |
 |------|-------|------|
 | `business-analyst.md` | Sonnet | Writes BAD from a feature description |
-| `tech-architect.md` | Opus | Writes TAD from the BAD (reads Design Spec from `design-specs/` if present, otherwise BAD alone) |
+| `ux-ui-designer.md` (mode C) | Opus | Acts as a pure UX/UI designer: reads the BAD, writes an enterprise Design Spec (design tokens, component specs with accessibility contracts, page/screen specs, IA, WCAG 2.1 AA) to `design-specs/{NAME}_DESIGN_SPEC.md`. Runs after `business-analyst`, before `tech-architect`. **Scope-conditioned: a default step for `Production`/enterprise BADs, optional for `MVP`/simple/static.** `business-analyst` recommends it (or not) based on `PROJECT_SCOPE` in its closing report |
+| `tech-architect.md` | Opus | Writes TAD from the BAD (reads the Design Spec from `design-specs/` if present — folds it into TAD Section 7 per the spec's §8 handoff table — otherwise BAD alone) |
 | `implementation-planner.md` | Sonnet | Writes IPD, pushes Linear issues, writes deps JSON |
 | `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens a draft PR |
 | `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens a draft PR |
@@ -51,7 +53,24 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | `reviewer.md` | Sonnet | Checks acceptance criteria + TAD constraints against PR diffs |
 | `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
 
-Model rationale: all agents run on Sonnet (Pro subscription — optimising for token budget). Upgrade individual agents to Opus if quality gaps appear in practice.
+Model rationale: agents run on Sonnet by default (Pro subscription — optimising for token budget). Exceptions on Opus where judgement quality dominates: `tech-architect` (architecture) and `ux-ui-designer` (design taste + accessibility depth). Upgrade others to Opus if quality gaps appear in practice.
+
+### Shared design compass
+
+`mvp-builder` and `ux-ui-designer` share one design knowledge base: `.claude/agents/shared/design-compass.md` (layout archetypes, typography, colour, Industry Design DNA, decorative elements, full animation catalogue). Both agents `Read` it at runtime instead of embedding it — the builder to make design decisions, the designer to judge/design against the same standard. **Edit the compass once; never copy its content back into either agent.** Each agent keeps only its own framing on top: the builder's anti-repetition + build rules; the designer's three modes (audit rubric, static direction, and the enterprise Design Spec whose component/accessibility/WCAG knowledge lives in the agent file, not the compass — the compass is the shared *visual language*, deliberately builder-focused and not bloated with app-UI concerns).
+
+The designer's 28-gallery inspiration library is a **manual** refresh channel, not a runtime tool — those galleries are JS-heavy SPAs that return only site names to a fetch (verified), so the agent never fetches them during an audit. A human browses them and distils new trends into the compass.
+
+### Accessibility floor — WCAG 2.1 AA (mandatory, no opt-out)
+
+Accessibility is decoupled from the optional Design Spec: a **WCAG 2.1 AA baseline is a hard floor on every output**, standalone or Flow B, MVP or enterprise. It lives in the shared `design-compass.md` (so `mvp-builder` static sites meet it too) and is enforced end-to-end:
+- **Compass** — defines the baseline checklist; `mvp-builder` and `ux-ui-designer` both read it.
+- **Design Spec** (`ux-ui-designer` mode C) — *adds depth* (per-component ARIA/keyboard contracts + verification plan); never lowers the floor.
+- **TAD 7.6** — accessibility target is never `N/A`; minimum AA even for MVP/static.
+- **qa-engineer** — builds mandatory a11y tests (axe + keyboard/focus) from the target.
+- **reviewer** — treats the AA baseline as a code-quality gate on frontend diffs.
+
+The *depth* of the design (tokens, component library, screens) scales with scope; the *accessibility floor* does not. Editing the compass is the only way to change the baseline — there is deliberately no per-project switch.
 
 ---
 
@@ -59,7 +78,8 @@ Model rationale: all agents run on Sonnet (Pro subscription — optimising for t
 
 | Folder | Created by | Read by |
 |--------|-----------|---------|
-| `business-analysis/` | `business-analyst` | `tech-architect` |
+| `business-analysis/` | `business-analyst` | `ux-ui-designer` (mode C), `tech-architect` |
+| `design-specs/` | `ux-ui-designer` (mode C) | `tech-architect` (→ TAD Section 7); `developer` (Frontend — read directly, overrides TAD §7) |
 | `tech-analysis/` | `tech-architect` | all developer agents |
 | `best-practices/` | `tech-architect` (Step 6) | `developer`, `devops-engineer`, `qa-engineer` |
 | `implementation-plans/` | `implementation-planner` | all developer agents |
@@ -85,9 +105,9 @@ Agents reference TAD sections by number. These are fixed — if the tech-archite
 | 7.1 | Frontend Application Structure (directory tree) |
 | 7.2 | State management + data fetching |
 | 7.3 | Routing strategy |
-| 7.4 | CSS approach + component library |
+| 7.4 | CSS approach + component-library **technology** (engineering choice). Design tokens & per-component visual/behavioural contracts are NOT here — the Design Spec in `design-specs/` is authoritative; 7.4 references it |
 | 7.5 | Performance budget |
-| 7.6 | Rendering strategy (SSR/SSG/ISR/CSR) + accessibility target |
+| 7.6 | Rendering strategy (SSR/SSG/ISR/CSR) + accessibility target. **The accessibility target is never `N/A`: minimum WCAG 2.1 AA always** (see the a11y floor policy below); per-component a11y depth lives in the Design Spec |
 | 8.1 | Backend Application Layer Structure (directory tree) |
 | 8.2 | Backend design patterns (Repository, service layer) |
 | 8.3 | Background jobs |
@@ -111,12 +131,19 @@ The `tech-architect` template enforces this: skipped sections keep their heading
 
 Pass arguments to skills as plain text when invoking them. Recommended formats:
 
+**`/ux-ui-designer`** — mode is inferred from what you pass:
+- Enterprise Design Spec (Flow B): pass the BAD path — `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` (or run it right after `/business-analyst`)
+- Audit: pass a built-site path or URL — `~/Desktop/clients/{slug}` or `https://…`
+- Static direction: pass a plain brief — `Design direction for a coffee-bar landing page`
+
 **`/developer`**
 ```
 Issue: {issue_id} — {issue_title}
 Label: Backend | Frontend
 Branch: {branch-name}
+DesignSpec: design-specs/{NAME}_DESIGN_SPEC.md   # optional; Frontend only
 ```
+`DesignSpec:` is optional — a `Frontend` developer auto-discovers `design-specs/*.md` if the line is omitted. Pass it explicitly to disambiguate when several specs exist. It is the authoritative source for visual/component/accessibility decisions and overrides TAD Section 7 where they conflict (the length-capped TAD carries only a summary of it).
 
 **`/devops-engineer`**
 ```

@@ -224,3 +224,6 @@ Save the final file with the Write tool, then tell the user:
 - The exact file path written
 - A one-line summary of what was analysed
 - Any remaining open questions (from Section 10)
+- **Recommended next step**, conditioned on `PROJECT_SCOPE`:
+  - **Production / enterprise** → the design foundation is a default step here. Recommend running `/ux-ui-designer {BAD path}` next (it writes an enterprise Design Spec — tokens, component specs with accessibility contracts, page/screen specs, WCAG 2.1 AA — that `/tech-architect` folds into TAD Section 7). Skipping it means the architect improvises the frontend from the BAD alone, with no component or accessibility contract for the developers.
+  - **MVP / simple / static** → note that `/ux-ui-designer` is available but optional at this scale; the user can go straight to `/tech-architect`.
