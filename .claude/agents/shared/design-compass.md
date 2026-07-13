@@ -180,3 +180,31 @@ Study all of these. A page should use **3–5** that serve its specific personal
 - `transform` and `opacity` only — never animate `width`, `height`, `top`, `left`, `margin`, or `padding`.
 - No dead `@keyframes` blocks — every block must be referenced by at least one selector. Prefer CSS transitions for single-element effects.
 - Do NOT reflexively pair the marquee ticker (#8) + scroll progress bar (#6). That combo is overused. Consider #14 (cursor glow) for dark backgrounds and #15 (staggered grid entrance) whenever there is a card/grid section.
+
+---
+
+## Accessibility baseline — WCAG 2.1 AA (mandatory floor)
+
+This is not optional and does not scale down. **Every** output — an `mvp-builder` static site, every Flow B frontend — meets WCAG 2.1 Level AA as a floor (a superset of WCAG 2.0 A/AA). The `ux-ui-designer` Design Spec *adds depth* on top (per-component ARIA/keyboard contracts for complex widgets); it never replaces this floor, and its absence never lowers it. There is no per-project opt-out — accessibility here is baseline engineering, and in many jurisdictions a legal requirement.
+
+**Perceivable**
+- Text contrast ≥ **4.5:1** (≥ 3:1 for large text ≥ 24px, or ≥ 18.66px bold); non-text UI/graphical contrast ≥ **3:1**. Check every text/background and control/adjacent pair.
+- Never signal meaning by **colour alone** — pair with text, icon, or shape.
+- Real, descriptive `alt` on informative images; `alt=""` on decorative ones. Captions/transcripts for media.
+- Usable at **200% zoom** and reflow to **320px** width without loss of content or 2-D scrolling.
+
+**Operable**
+- **Fully keyboard-operable**, in a logical focus order, with **no keyboard traps**.
+- A **visible focus indicator** on every interactive element (`:focus-visible`) — never `outline: none` without a replacement.
+- Skip-to-content link on multi-section pages; interactive target size ≥ 24×24 CSS px (≥ 44×44 for primary touch targets).
+- Honour `prefers-reduced-motion`; no content flashing more than 3×/second; provide pause/stop for auto-moving content.
+
+**Understandable**
+- Visible labels (or accessible names) and instructions on all controls; inputs use `<label>`, not placeholder-as-label.
+- Clear error identification and correction guidance on forms; consistent, predictable navigation; `lang` set on the document.
+
+**Robust**
+- **Semantic HTML first** (`<button>`, `<nav>`, `<main>`, `<h1>`…) before ARIA; only reach for ARIA when no native element fits, and keep it valid.
+- Icon-only controls carry an accessible name (`aria-label`). Async status changes announced via `aria-live` / appropriate roles.
+
+Treat this list as a hard checklist: a page that fails any item is not done.

@@ -249,6 +249,14 @@ Check the PR diff against TAD-derived binary criteria. A criterion fails only if
 - Any schema change has a corresponding migration file
 - No raw SQL strings where the TAD specifies an ORM or query builder
 
+**Accessibility — WCAG 2.1 AA baseline (frontend diffs only, mandatory floor):**
+- Interactive elements are keyboard-operable and use semantic elements (`<button>`/`<a>` not click-only `<div>`); custom widgets carry correct `role`/ARIA state
+- Icon-only controls have an accessible name (`aria-label` / `aria-labelledby`)
+- No `outline: none` (or `:focus` removal) without a visible `:focus-visible` replacement
+- Informative images have real `alt`; form controls have associated `<label>`s
+- State/meaning not conveyed by colour alone
+- Fail only on a clear violation present in the diff (same bar as above). This is a floor — do not waive it because the project is "just an MVP".
+
 **Best-practices anti-patterns (runs if `best-practices/` exists):**
 
 ```bash

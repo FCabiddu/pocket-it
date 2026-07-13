@@ -215,6 +215,13 @@ Write thorough, production-quality tests. Apply these rules without exception:
 - Use accessibility queries (`getByRole`, `getByLabelText`) over test IDs where possible
 - Mock API calls at the network boundary, not at the component level
 
+**Accessibility tests (frontend — mandatory):**
+- The WCAG 2.1 AA baseline is a non-negotiable quality gate; build tests that verify it, per the Design Spec's verification plan (or TAD Section 7.6 if no spec).
+- Automated: run an a11y assertion (e.g. `axe-core` / `jest-axe` / Playwright `@axe-core/playwright`) on every key page and complex component; fail the test on any violation.
+- Keyboard & focus: assert tab order, that all interactive elements are reachable and operable by keyboard, visible focus, no traps, and focus management for modals/menus (trap + restore).
+- Assert named controls (accessible name on icon-only buttons), correct roles/states (`aria-expanded`, `aria-selected`, `aria-invalid`), and `aria-live` announcements for async status.
+- Where the design system defines contrast tokens, add a check that critical text/background pairs meet ≥ 4.5:1.
+
 **Integration tests:**
 - Test the full request/response cycle including the real database
 - Use transaction rollback or truncation between tests for isolation (as specified in TAD Section 11.2)

@@ -73,7 +73,7 @@ The compass holds the distilled *visual language* (colour, type, layout, motion)
 ## A.1 — Score
 Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a hosted static URL). Score each dimension **1–5** (1 = generic/broken, 5 = Awwwards-ready), each with the specific `file:line`/selector, why it falls short of the compass, and the fix:
 
-1. **Archetype & layout** · 2. **Typography** · 3. **Colour** · 4. **Decoration** · 5. **Animation** (3–5 purposeful, GPU-safe `transform`/`opacity`, no dead keyframes) · 6. **UX & hierarchy** (clear focal point, obvious primary CTA, reading order, spacing rhythm) · 7. **Responsive** (composed at 375px, fluid `clamp()`) · 8. **Accessibility** (contrast, `:focus-visible`, `aria-label` on icon controls, real `alt`, `prefers-reduced-motion`).
+1. **Archetype & layout** · 2. **Typography** · 3. **Colour** · 4. **Decoration** · 5. **Animation** (3–5 purposeful, GPU-safe `transform`/`opacity`, no dead keyframes) · 6. **UX & hierarchy** (clear focal point, obvious primary CTA, reading order, spacing rhythm) · 7. **Responsive** (composed at 375px, fluid `clamp()`) · 8. **Accessibility** — score against the compass's mandatory **WCAG 2.1 AA baseline** (contrast ≥ 4.5:1, keyboard operability, visible `:focus-visible`, `aria-label` on icon controls, real `alt`, no colour-only meaning, `prefers-reduced-motion`, semantic HTML). Any baseline failure caps this dimension at 2/5 — it is a floor, not a nice-to-have.
 
 ## A.2 — Prioritise & specify
 Order findings by **impact per effort**. Each item: **What** + **where** (file/selector), **Why** (compass principle), **How** (copy-pasteable CSS/HTML/JS matching the existing conventions). Keep animations to `transform`/`opacity`, tokens in `:root`, one CSS file per section, `@keyframes` only in `animations.css`, no inline `<style>`.
@@ -138,12 +138,11 @@ Sitemap / screen map, navigation model, route/URL structure hints, and the prima
 Product-wide patterns: feedback & optimistic UI, loading strategy (skeleton vs spinner), transitions (restrained, token-driven), form validation timing & error-message conventions, destructive-action confirmation, toast vs inline messaging rules, and microcopy voice. Empty/loading/error/success treated as a **system**, not per-screen improvisation.
 
 ### 7. Accessibility & WCAG 2.1 AA Conformance
-Target **WCAG 2.1 Level AA** (a superset of WCAG 2.0 A/AA — satisfies the 2.0 requirement and current baseline). A product-level checklist mapped to the four principles (component-level a11y already lives in Section 3):
-- **Perceivable** — AA contrast (4.5:1 / 3:1) verified in Section 2; text resize 200%; reflow to 320px CSS width without 2-D scroll; non-text contrast; text alternatives; no colour-only meaning; captions/transcripts if media.
-- **Operable** — everything keyboard-operable, no traps; visible focus (2.4.7); logical focus order; skip link; target size (2.5.8); `prefers-reduced-motion`; no content flashing > 3×/s; pause/stop for moving content; enough time / no surprise timeouts.
-- **Understandable** — visible labels & instructions; error identification + suggestion + prevention on legal/data submissions; consistent navigation & identification; predictable focus/context; language set.
-- **Robust** — semantic HTML; valid ARIA; name/role/value exposed; status messages via `aria-live`/roles (4.1.3).
-- **Verification plan** — automated (axe/Lighthouse) + manual keyboard walkthrough + screen-reader smoke (VoiceOver/NVDA) + zoom/reflow check; note this so `/qa-engineer` can build a11y tests.
+The **WCAG 2.1 AA baseline is the mandatory floor from the compass** — it already applies to this product; do not restate it. This section is the enterprise layer *on top* of that floor:
+- **Conformance statement** — declare target **WCAG 2.1 Level AA** (superset of 2.0 A/AA) product-wide, and call out any AAA criteria the domain warrants (e.g. 7:1 contrast for a health/finance app).
+- **Depth beyond the baseline** — the per-component ARIA/keyboard/focus contracts live in Section 3; confirm the complex composite widgets (data grid, combobox, date picker, modal, menu) follow the ARIA Authoring Practices patterns, and that Section 2 tokens carry the verified contrast ratios.
+- **Product-wide specifics** — reflow to 320px and 200% resize behaviour, focus-order-on-load and skip-link placement in the app shell (Section 4), consistent error-identification conventions (Section 6).
+- **Verification plan** — automated (axe/Lighthouse) + manual keyboard walkthrough + screen-reader smoke (VoiceOver/NVDA) + zoom/reflow check. State it explicitly so `/qa-engineer` builds the a11y tests and `/reviewer` can gate on it.
 
 ### 8. Handoff to /tech-architect
 A short mapping table: which Design Spec sections feed which TAD subsections — **§2 tokens & §6 motion → TAD 7.4** (CSS approach + component library), **§3 components & §4 shell → TAD 7.1** (frontend structure), **§5 → TAD 7.3** (routing), **§4 responsive/rendering needs → TAD 7.5/7.6**, **§7 accessibility target → TAD 7.6 (a11y)**. Recommend a concrete CSS approach and component-library direction (e.g. headless + tokens, or a named system) for the architect to ratify — framed as a recommendation, not a mandate, since the architect owns the stack.

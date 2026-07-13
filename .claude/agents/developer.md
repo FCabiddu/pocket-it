@@ -56,7 +56,7 @@ From `{{ARGUMENTS}}`, extract:
 
 - **`Label:`** — `Backend` or `Frontend`. This governs every branching decision below.
 - **`TAD:`** and **`IPD:`** paths — if present, read them directly; skip the find commands.
-- **`DesignSpec:`** path — if present **and** Label is `Frontend`, read this file now, before the TAD. It is the primary source for all visual decisions (colors, typography, spacing, component states, animations, screen layouts). Where it conflicts with TAD Section 7 on frontend matters, the design spec takes precedence.
+- **`DesignSpec:`** path — if present **and** Label is `Frontend`, read this file now, before the TAD. **Division of authority (no conflicts to arbitrate — each source owns different facts): the TAD owns the *engineering* frame (stack, file structure, state, routing, CSS approach + component-library technology, rendering, performance); the Design Spec owns the *UI* (design tokens, component contracts with their states/ARIA/keyboard behaviour, screen layouts, accessibility depth).** Build the engineering skeleton from the TAD and fill the UI from the Design Spec. The WCAG 2.1 AA baseline applies either way.
 - **`BestPractices:`** path — note for Step 2.
 
 If TAD/IPD paths were not in arguments:
@@ -67,6 +67,14 @@ find . -path "*/implementation-plans/*.md" | head -10
 ```
 
 If multiple files are found, use `AskUserQuestion` to ask which project to work on. If none are found, ask the user for the file paths. Read both documents in full before proceeding.
+
+**Frontend design-spec auto-discovery.** If `Label` is `Frontend` and no `DesignSpec:` path was passed, look for one before falling back to the TAD alone:
+
+```bash
+find . -path "*/design-specs/*.md" | head -10
+```
+
+If exactly one is found, treat it as the `DesignSpec:` and read it now (same division of authority as above — it owns the UI: tokens, component contracts, screens, accessibility depth). If several are found, pick the one matching this project; if none, take the UI from TAD Section 7 and the mandatory WCAG 2.1 AA baseline. This ensures the enterprise Design Spec written by `/ux-ui-designer` actually reaches the frontend implementation even when the caller forgets to pass the path.
 
 ---
 
@@ -233,11 +241,12 @@ Write production-ready code. Apply these rules without exception:
 - Never log passwords, tokens, or PII
 
 **Frontend:**
-- Apply the CSS approach from the TAD — do not mix approaches
+- Apply the CSS approach from the TAD (Section 7.4) — do not mix approaches
+- **Realize the UI from the Design Spec** when one was loaded: use its design tokens (never hardcode colours/spacing/type), and build each component to its contract — variants, all states (default/hover/focus/active/disabled/loading/error), responsive behaviour, and its accessibility contract (role/ARIA, keyboard map, focus management). If no Design Spec, follow TAD Section 7 for structure and design your own tokens consistently.
 - Reuse existing utilities and components — check before creating new ones
 - Handle loading, empty, and error states for every async operation
 - Apply the performance budget from TAD Section 7.5
-- Follow the accessibility target from TAD Section 7.6 (keyboard nav, ARIA, focus management)
+- **Accessibility: meet the mandatory WCAG 2.1 AA baseline on every component and page** (contrast ≥ 4.5:1, full keyboard operability, visible `:focus-visible`, named icon-only controls, no colour-only meaning, `prefers-reduced-motion`, semantic HTML) — this is a floor, plus any deeper per-component contract from the Design Spec / TAD Section 7.6.
 - Never render unsanitised user input as HTML
 - Validate all form inputs client-side
 - Do not store sensitive data in localStorage/sessionStorage unless the TAD explicitly calls for it

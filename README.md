@@ -23,6 +23,7 @@ flowchart TD
     G --> H(["/developer — one per issue\nLabel: Backend or Frontend"])
     G --> I(["/devops-engineer — one per issue"])
     G --> J(["/qa-engineer"])
+    UXD -. authoritative UI source .-> H
     H --> K(["/reviewer"])
     I --> K
     J --> K

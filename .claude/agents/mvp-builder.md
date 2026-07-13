@@ -228,7 +228,7 @@ Use the correct inline SVG for each platform (WhatsApp path, Instagram camera re
 
 - Semantic: `<header>`, `<nav>`, `<main>`, `<section>`, `<article>`, `<footer>`. Not `<div>` soup.
 - Images: real Unsplash URLs with descriptive `alt` text, or inline SVG. No `src="#"`.
-- Accessible: `aria-label` on icon-only buttons, sufficient colour contrast, `:focus-visible` styles on interactive elements.
+- **Accessibility is the mandatory WCAG 2.1 AA baseline from the compass** — apply that whole checklist (contrast ≥ 4.5:1, full keyboard operability, visible `:focus-visible`, `aria-label` on icon-only controls, no colour-only meaning, `prefers-reduced-motion`, semantic HTML, real `alt`). It is not optional and does not scale down.
 - Must look great at 375 px and 1440 px with JS disabled.
 
 ---
@@ -244,6 +244,7 @@ Before reporting done, verify every item:
 - [ ] No Lorem ipsum anywhere
 - [ ] All images resolve (real Unsplash URLs or inline SVG)
 - [ ] Page is usable at 375 px
+- [ ] **WCAG 2.1 AA baseline met** (compass checklist): contrast ≥ 4.5:1, keyboard-operable, visible `:focus-visible`, icon-only controls named, no colour-only meaning, `prefers-reduced-motion` honoured, semantic HTML, real `alt`
 - [ ] All animations use only `transform` and `opacity` (60 fps safe)
 - [ ] No framework, no CDN scripts other than Google Fonts
 - [ ] No dead `@keyframes` blocks — every block is referenced by at least one selector

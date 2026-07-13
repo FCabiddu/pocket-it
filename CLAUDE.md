@@ -61,6 +61,17 @@ Model rationale: agents run on Sonnet by default (Pro subscription — optimisin
 
 The designer's 28-gallery inspiration library is a **manual** refresh channel, not a runtime tool — those galleries are JS-heavy SPAs that return only site names to a fetch (verified), so the agent never fetches them during an audit. A human browses them and distils new trends into the compass.
 
+### Accessibility floor — WCAG 2.1 AA (mandatory, no opt-out)
+
+Accessibility is decoupled from the optional Design Spec: a **WCAG 2.1 AA baseline is a hard floor on every output**, standalone or Flow B, MVP or enterprise. It lives in the shared `design-compass.md` (so `mvp-builder` static sites meet it too) and is enforced end-to-end:
+- **Compass** — defines the baseline checklist; `mvp-builder` and `ux-ui-designer` both read it.
+- **Design Spec** (`ux-ui-designer` mode C) — *adds depth* (per-component ARIA/keyboard contracts + verification plan); never lowers the floor.
+- **TAD 7.6** — accessibility target is never `N/A`; minimum AA even for MVP/static.
+- **qa-engineer** — builds mandatory a11y tests (axe + keyboard/focus) from the target.
+- **reviewer** — treats the AA baseline as a code-quality gate on frontend diffs.
+
+The *depth* of the design (tokens, component library, screens) scales with scope; the *accessibility floor* does not. Editing the compass is the only way to change the baseline — there is deliberately no per-project switch.
+
 ---
 
 ## Output folders
@@ -68,7 +79,7 @@ The designer's 28-gallery inspiration library is a **manual** refresh channel, n
 | Folder | Created by | Read by |
 |--------|-----------|---------|
 | `business-analysis/` | `business-analyst` | `ux-ui-designer` (mode C), `tech-architect` |
-| `design-specs/` | `ux-ui-designer` (mode C) | `tech-architect` (→ TAD Section 7) |
+| `design-specs/` | `ux-ui-designer` (mode C) | `tech-architect` (→ TAD Section 7); `developer` (Frontend — read directly, overrides TAD §7) |
 | `tech-analysis/` | `tech-architect` | all developer agents |
 | `best-practices/` | `tech-architect` (Step 6) | `developer`, `devops-engineer`, `qa-engineer` |
 | `implementation-plans/` | `implementation-planner` | all developer agents |
@@ -94,9 +105,9 @@ Agents reference TAD sections by number. These are fixed — if the tech-archite
 | 7.1 | Frontend Application Structure (directory tree) |
 | 7.2 | State management + data fetching |
 | 7.3 | Routing strategy |
-| 7.4 | CSS approach + component library |
+| 7.4 | CSS approach + component-library **technology** (engineering choice). Design tokens & per-component visual/behavioural contracts are NOT here — the Design Spec in `design-specs/` is authoritative; 7.4 references it |
 | 7.5 | Performance budget |
-| 7.6 | Rendering strategy (SSR/SSG/ISR/CSR) + accessibility target |
+| 7.6 | Rendering strategy (SSR/SSG/ISR/CSR) + accessibility target. **The accessibility target is never `N/A`: minimum WCAG 2.1 AA always** (see the a11y floor policy below); per-component a11y depth lives in the Design Spec |
 | 8.1 | Backend Application Layer Structure (directory tree) |
 | 8.2 | Backend design patterns (Repository, service layer) |
 | 8.3 | Background jobs |
@@ -130,7 +141,9 @@ Pass arguments to skills as plain text when invoking them. Recommended formats:
 Issue: {issue_id} — {issue_title}
 Label: Backend | Frontend
 Branch: {branch-name}
+DesignSpec: design-specs/{NAME}_DESIGN_SPEC.md   # optional; Frontend only
 ```
+`DesignSpec:` is optional — a `Frontend` developer auto-discovers `design-specs/*.md` if the line is omitted. Pass it explicitly to disambiguate when several specs exist. It is the authoritative source for visual/component/accessibility decisions and overrides TAD Section 7 where they conflict (the length-capped TAD carries only a summary of it).
 
 **`/devops-engineer`**
 ```
