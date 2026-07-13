@@ -40,7 +40,13 @@ Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the me
 - **Found** → extract `MVP` or `Full Production` — use it for **architecture style decisions** (managed platforms vs full infra, monolith vs microservices).
 - **Not found** → infer from the project description. Do not ask again — `PROJECT_SCOPE` already covers output depth.
 
-**Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD. Extract: CSS approach, component library, animation library, color/token strategy, typography, motion principles. Use these to inform Section 7 (Frontend Architecture) of the TAD.
+**Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD (produced by `/ux-ui-designer` in Enterprise Design Spec mode). It carries the front-end design foundation; fold it into Section 7 per its own §8 handoff table:
+- **Design tokens & motion** (colour/type/spacing/radius/elevation/breakpoints) → **7.4** (CSS approach + component library) — adopt the token system and ratify a component-library direction consistent with the chosen stack.
+- **Component specs & app shell** → **7.1** (frontend structure) — reflect the component inventory and shell in the directory tree.
+- **Information architecture & routes** → **7.3** (routing).
+- **Responsive & rendering needs** → **7.5 / 7.6**.
+- **Accessibility target (WCAG 2.1 AA)** → **7.6** — carry the conformance target and reflect its verification plan into Section 11 so `/qa-engineer` builds a11y tests.
+Treat the Design Spec's library/CSS recommendations as inputs to ratify, not mandates — you own the final stack decision. For a lightweight/static Design Spec, extract only what applies.
 
 **Output targets:**
 

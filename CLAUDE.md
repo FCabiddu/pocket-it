@@ -35,6 +35,7 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | File | Model | Role |
 |------|-------|------|
 | `mvp-builder.md` | Sonnet | Builds an award-quality static site (index.html + css/ folder, vanilla JS) from a plain-English description; no TAD/Linear required. Output to `~/Desktop/clients/{slug}/` |
+| `ux-ui-designer.md` | Opus | **Three modes.** Standalone: (A) audits an existing static site against the shared compass → `{target-dir}/UX_UI_REVIEW.md`; (B) gives a lightweight static-site design direction for `mvp-builder`. Also runs **in Flow B** (see below) as mode (C). Keeps 28 inspiration galleries as a manual compass-refresh channel (not a runtime fetch). Critiques and directs; does not build. |
 
 (The other Flow A agents — business-prospector, pitch-generator, scraper, legal-advisor, css-animator — and the Flow C creative-writing agents were removed from this repo; recover them from git history before `72bd240` if needed.)
 
@@ -43,7 +44,8 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | File | Model | Role |
 |------|-------|------|
 | `business-analyst.md` | Sonnet | Writes BAD from a feature description |
-| `tech-architect.md` | Opus | Writes TAD from the BAD (reads Design Spec from `design-specs/` if present, otherwise BAD alone) |
+| `ux-ui-designer.md` (mode C) | Opus | Acts as a pure UX/UI designer: reads the BAD, writes an enterprise Design Spec (design tokens, component specs with accessibility contracts, page/screen specs, IA, WCAG 2.1 AA) to `design-specs/{NAME}_DESIGN_SPEC.md`. Runs after `business-analyst`, before `tech-architect`. **Scope-conditioned: a default step for `Production`/enterprise BADs, optional for `MVP`/simple/static.** `business-analyst` recommends it (or not) based on `PROJECT_SCOPE` in its closing report |
+| `tech-architect.md` | Opus | Writes TAD from the BAD (reads the Design Spec from `design-specs/` if present — folds it into TAD Section 7 per the spec's §8 handoff table — otherwise BAD alone) |
 | `implementation-planner.md` | Sonnet | Writes IPD, pushes Linear issues, writes deps JSON |
 | `developer.md` | Sonnet | Implements one Backend or Frontend issue (branches on `Label:` in arguments), opens a draft PR |
 | `devops-engineer.md` | Sonnet | Implements one DevOps issue, opens a draft PR |
@@ -51,7 +53,13 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | `reviewer.md` | Sonnet | Checks acceptance criteria + TAD constraints against PR diffs |
 | `documentation-agent.md` | Sonnet | Writes README, API reference, architecture overview |
 
-Model rationale: all agents run on Sonnet (Pro subscription — optimising for token budget). Upgrade individual agents to Opus if quality gaps appear in practice.
+Model rationale: agents run on Sonnet by default (Pro subscription — optimising for token budget). Exceptions on Opus where judgement quality dominates: `tech-architect` (architecture) and `ux-ui-designer` (design taste + accessibility depth). Upgrade others to Opus if quality gaps appear in practice.
+
+### Shared design compass
+
+`mvp-builder` and `ux-ui-designer` share one design knowledge base: `.claude/agents/shared/design-compass.md` (layout archetypes, typography, colour, Industry Design DNA, decorative elements, full animation catalogue). Both agents `Read` it at runtime instead of embedding it — the builder to make design decisions, the designer to judge/design against the same standard. **Edit the compass once; never copy its content back into either agent.** Each agent keeps only its own framing on top: the builder's anti-repetition + build rules; the designer's three modes (audit rubric, static direction, and the enterprise Design Spec whose component/accessibility/WCAG knowledge lives in the agent file, not the compass — the compass is the shared *visual language*, deliberately builder-focused and not bloated with app-UI concerns).
+
+The designer's 28-gallery inspiration library is a **manual** refresh channel, not a runtime tool — those galleries are JS-heavy SPAs that return only site names to a fetch (verified), so the agent never fetches them during an audit. A human browses them and distils new trends into the compass.
 
 ---
 
@@ -59,7 +67,8 @@ Model rationale: all agents run on Sonnet (Pro subscription — optimising for t
 
 | Folder | Created by | Read by |
 |--------|-----------|---------|
-| `business-analysis/` | `business-analyst` | `tech-architect` |
+| `business-analysis/` | `business-analyst` | `ux-ui-designer` (mode C), `tech-architect` |
+| `design-specs/` | `ux-ui-designer` (mode C) | `tech-architect` (→ TAD Section 7) |
 | `tech-analysis/` | `tech-architect` | all developer agents |
 | `best-practices/` | `tech-architect` (Step 6) | `developer`, `devops-engineer`, `qa-engineer` |
 | `implementation-plans/` | `implementation-planner` | all developer agents |
@@ -110,6 +119,11 @@ The `tech-architect` template enforces this: skipped sections keep their heading
 ## Arguments protocol
 
 Pass arguments to skills as plain text when invoking them. Recommended formats:
+
+**`/ux-ui-designer`** — mode is inferred from what you pass:
+- Enterprise Design Spec (Flow B): pass the BAD path — `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` (or run it right after `/business-analyst`)
+- Audit: pass a built-site path or URL — `~/Desktop/clients/{slug}` or `https://…`
+- Static direction: pass a plain brief — `Design direction for a coffee-bar landing page`
 
 **`/developer`**
 ```
