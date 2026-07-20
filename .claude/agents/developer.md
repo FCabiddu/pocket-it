@@ -137,6 +137,12 @@ ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
 
 **If missing:** fall back to parallel web searches.
 
+**Binding, not advisory.** Every convention and anti-pattern in a loaded best-practices file is a constraint on the implementation, not a suggestion to weigh against convenience. This applies even when nothing in the file's own text calls out the specific situation you're facing — a document that recommends static-generating a page, for instance, is violated just as much by a later change that quietly makes the whole app dynamic as by one that edits that page directly. If completing the assigned task as specified would require violating a loaded best practice:
+
+1. **Stop before implementing the violating part.** Do not silently pick the shortcut, do not implement it "for now" with a TODO, and do not decide on your own that the best practice doesn't really apply here.
+2. **Escalate instead of arbitrating.** Best-practices files are produced by `/tech-architect`, not by this agent — this agent implements against them, it does not have the authority to revise them. Use `AskUserQuestion` to surface the conflict plainly: what the task asks for, which specific best practice it would violate, and why the two are in tension. If the user has `/tech-architect` available and the conflict is architectural rather than a one-line clarification, recommend invoking it to either adjust the plan or formally update the best-practices file — do not silently comply with an instruction that contradicts documented, agreed practice.
+3. **A best practice that was already silently violated before you arrived is a bug, not context.** If Step 3 (orienting to the existing codebase) turns up code that already contradicts a loaded best practice, treat that as something to flag in your Step 6 report even if it's outside your assigned task's file scope — don't extend it further, and don't fix it unprompted either unless the assigned task is exactly that fix.
+
 *Backend:*
 1. `"{framework} {version} best practices {year}"` — top 2 results
 2. `"{framework} REST API structure {year}"` — top 1–2 results
@@ -219,7 +225,7 @@ If anything is genuinely ambiguous, use `AskUserQuestion` — one question only.
 
 ### 5c — Implement
 
-Write production-ready code. Apply these rules without exception:
+Write production-ready code. Apply these rules without exception — including the best-practices files loaded in Step 2 (see "Binding, not advisory" above: stop and escalate rather than implementing around a conflict).
 
 **All tasks:**
 - Follow the exact file structure from the TAD (Section 8.1 for Backend, Section 7.1 for Frontend)
