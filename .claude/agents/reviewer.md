@@ -142,9 +142,17 @@ Get the most recent run ID for the branch and fetch the failure log:
 ```bash
 gh run list --branch {branch-name} --limit 1 --json databaseId --jq '.[0].databaseId'
 gh run view {run-id} --log-failed 2>&1 | head -100
+gh run view {run-id} --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .steps[] | select(.conclusion=="failure")'
 ```
 
-Read enough of the log to identify the root cause (e.g. a dependency CVE, a lint rule violation, a type error, a build failure).
+**Infra-outage check (before assuming a code problem):** if the log/annotation shows an account- or platform-level error rather than a code failure — billing/spending-limit block, runner provisioning failure, "workflow was not authorized", quota exceeded — this is not something a `developer`/`devops-engineer` fix can address, and dispatching one would waste a cycle diagnosing a problem that isn't in the diff. Instead:
+
+- Treat CI as unable to report for this PR — do not wait/retry further.
+- Note the outage in your Step 5 report so the orchestrator/user is aware it's infra, not code.
+- Fall back to manual verification: read the full diff (Step 3+) and, only if the diff makes a behavioural claim you cannot confirm by reading alone, do independent local verification per the note in Step 4 below.
+- Do **not** route to a fixing agent for an infra-level failure — only for an actual lint/type/test/build failure in the log.
+
+If the log shows a genuine code-level failure (a real lint violation, type error, failing test, broken build step), proceed to 2b as normal.
 
 ### 2b — Route to the fixing agent
 
@@ -225,6 +233,13 @@ gh pr diff {pr-number} --name-only
 
 You need to understand the full shape of the implementation before evaluating any issue.
 
+**Independent local verification (only when needed, worktree-only):** reading the diff is enough for most checks in 4b/4c. Only run code locally when a claim in the PR (or in acceptance criteria) genuinely cannot be confirmed by reading alone — e.g. the developer's report claims a runtime behaviour, a visual result, or a test-count you want to spot-check. When you do:
+
+- **Never** check out the branch in the project's main working directory — it may have a live dev server running against it. Use an isolated worktree: `git worktree add /tmp/{repo-name}-{branch-slug} {branch-name} --detach`.
+- Reuse the main directory's installed dependencies instead of a fresh install where the lockfile is unchanged (`ln -s {main-repo}/node_modules /tmp/{repo-name}-{branch-slug}/node_modules`); only fall back to a real install if the symlink fails or the lockfile differs on this branch.
+- Scope any test run to the files the PR actually touches (`git diff --name-only main...HEAD`), the same way `/developer` does — never re-run the full suite yourself. The full suite is `qa-engineer`'s and CI's job, not the reviewer's.
+- Remove the worktree when done: `git worktree remove /tmp/{repo-name}-{branch-slug}`.
+
 ### 4a — Identify the issue
 
 The task file was already read in Step 3. Its `## Description` section is the source of acceptance criteria.
@@ -257,13 +272,19 @@ Check the PR diff against TAD-derived binary criteria. A criterion fails only if
 - State/meaning not conveyed by colour alone
 - Fail only on a clear violation present in the diff (same bar as above). This is a floor — do not waive it because the project is "just an MVP".
 
-**Best-practices anti-patterns (runs if `best-practices/` exists):**
+**Best-practices anti-patterns (binding, not advisory — runs whenever a best-practices folder exists for this project):**
+
+**Check arguments first:** if your arguments contain `Best practices: {path}` (or `BestPractices: {path}`), read that file directly, plus every sibling `.md` file in the same directory, and skip the search below.
+
+Otherwise, locate the folder — it is not always at the repo root, so search rather than assume a fixed path:
 
 ```bash
-ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+find . -type d -name "best-practices" 2>/dev/null | head -3
 ```
 
-If found, read every file in the folder. For each anti-pattern listed under `## Anti-Patterns`, scan the PR diff for a clear violation. Same bar as TAD checks — only fail on an evident violation present in the diff.
+Do not conclude "missing" from a single `ls ./best-practices/` — that only matches a repo-root location and will silently miss the far more common `tech-analysis/best-practices/` nesting this pipeline actually produces (`tech-architect`'s Step 6 output). Only report "no best-practices folder" after the `find` above genuinely returns nothing.
+
+If found, read every file in the folder. For each anti-pattern or convention it documents, scan the PR diff for a clear violation. Same bar as TAD checks — only fail on an evident violation present in the diff. Treat every rule as binding on the PR being reviewed, exactly as `/developer` treats it as binding on implementation (see that agent's "Binding, not advisory" note) — a violation here is a real, escalatable finding, not a style nitpick to soften.
 
 Record each failing criterion with the exact file and line where the violation occurs.
 
@@ -287,6 +308,12 @@ Combine results from 4b (and 4c in full mode).
   gh pr review {pr-number} --approve --body "✅ Review approved — all checks passed. Marked ready for review. {If the PR has the Auto-merge label: 'Auto-merge label present — will merge automatically once CI is green.' Otherwise: 'Awaiting user authorisation to merge.'}"
   ```
   **Do not run `gh pr merge`.** Record the PR in your approved list, noting whether it carries the `Auto-merge` label.
+
+  Also update the project history log if this project keeps one:
+  ```bash
+  find . -maxdepth 2 -iname "SESSION_HANDOFF.md" 2>/dev/null | head -1
+  ```
+  If found, locate this PR's entry (added by the implementing agent when it opened the draft, marked "(draft)") and update that marker to "approved, awaiting merge". If no entry exists yet (e.g. this reviewer was invoked standalone, or the PR predates this convention), append a short one now — same 1–3 line format as the implementing agents use. If the file doesn't exist, skip; it's opt-in per project.
 
 - **NEEDS WORK**: any check fails → proceed to Step 4e.
 

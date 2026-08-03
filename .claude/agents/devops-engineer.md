@@ -95,17 +95,19 @@ Also note any `> **MVP note:**` callouts — these are intentional shortcuts you
 
 ## Step 2 — Load best-practices references
 
-**Check arguments first:** If your arguments contain `BestPractices: {path}`, use that path directly and skip the bash check below.
+**Check arguments first:** If your arguments contain `Best practices: {path}` (or `BestPractices: {path}`), use that path directly and skip the search below.
 
-Before writing any configuration, check whether the tech-architect has already generated best-practices files for this stack:
+Before writing any configuration, check whether the tech-architect has already generated best-practices files for this stack. It is not always at the repo root, so search rather than assume a fixed path:
 
 ```bash
-ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+find . -type d -name "best-practices" 2>/dev/null | head -3
 ```
 
-**If `best-practices/` exists:**
+Do not conclude "missing" from a single `ls ./best-practices/` — that only matches a repo-root location and will silently miss the far more common `tech-analysis/best-practices/` nesting this pipeline actually produces (`tech-architect`'s Step 6 output). Only fall back to web search after the `find` above genuinely returns nothing.
 
-1. List the files: `ls ./best-practices/`
+**If a best-practices folder is found:**
+
+1. List the files it contains
 2. Read every file relevant to DevOps work (e.g. `devops-*.md`)
 3. Treat the contents as your authoritative guide — apply every convention, pattern, and anti-pattern listed
 
@@ -185,7 +187,7 @@ If your arguments contain `CI Failure:`, skip this step — the issue is already
 Otherwise update the local task file to "In Progress" before touching any file:
 
 ```bash
-sed -i.bak 's/\*\*Status:\*\* .*/\*\*Status:\*\* In Progress/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
+sed -i.bak -E 's/\*\*Status\*\*:.*|\*\*Status:\*\*.*/**Status**: In Progress/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
 ```
 
 ### 5b — Understand the task fully
@@ -305,7 +307,7 @@ If your arguments contain `CI Failure:`, skip this step — do not change the ta
 Otherwise, only after all checks pass, update the local task file to "Done":
 
 ```bash
-sed -i.bak 's/\*\*Status:\*\* .*/\*\*Status:\*\* Done/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
+sed -i.bak -E 's/\*\*Status\*\*:.*|\*\*Status:\*\*.*/**Status**: Done/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
 ```
 
 ---
@@ -340,6 +342,7 @@ git push -u origin {branch-name}
 
 ```bash
 gh pr create \
+  --draft \
   --title "{issue_id}: {issue_title}" \
   --body "$(cat <<'EOF'
 ## Linear
@@ -400,6 +403,18 @@ PYEOF
 ```
 
 Merging is never part of this agent's job. Record the PR URL — include it in your Step 6 report.
+
+### 5g — Update the project history log (if present)
+
+Check for a running project history file — a pipeline convention for surviving long sessions without re-deriving context from `git log` across dozens of PRs:
+
+```bash
+find . -maxdepth 2 -iname "SESSION_HANDOFF.md" 2>/dev/null | head -1
+```
+
+**If found:** read it and insert one new entry at the top of its reverse-chronological PR/feature list — match its existing section, language, and formatting exactly. Keep it to 1–3 lines: issue ID, PR number (mark it "(draft)"), and a one-line what/why. Call out explicitly any real pre-existing bug found and fixed outside the assigned task's scope.
+
+**If not found:** skip silently. This is opt-in per project — do not create the file unprompted.
 
 ---
 

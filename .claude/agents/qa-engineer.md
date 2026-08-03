@@ -32,7 +32,7 @@ AUTOMERGE_FILE="/tmp/$(basename "$(git rev-parse --show-toplevel)")-automerge"
 cat "$AUTOMERGE_FILE" 2>/dev/null || echo "missing"
 ```
 
-- **If the file exists and contains `true` or `false`:** read its value silently. Set `AUTO_MERGE=true` or `AUTO_MERGE=false` for use in Step 6. Do **not** ask the user again.
+- **If the file exists and contains `true` or `false`:** read its value silently. Set `AUTO_MERGE=true` or `AUTO_MERGE=false` for use in Step 7. Do **not** ask the user again.
 - **If the file is missing:** use `AskUserQuestion` with exactly this question and options, then write the result (`true` for Auto-merge, `false` for Manual approval) to `$AUTOMERGE_FILE`:
 
   > **Question:** "How should PRs be handled this session?"
@@ -99,17 +99,19 @@ Also note any `> **MVP note:**` callouts — for an MVP, prioritise critical pat
 
 ## Step 2 — Load best-practices references
 
-**Check arguments first:** If your arguments contain `BestPractices: {path}`, use that path directly and skip the bash check below.
+**Check arguments first:** If your arguments contain `Best practices: {path}` (or `BestPractices: {path}`), use that path directly and skip the search below.
 
-Before writing any tests, check whether the tech-architect has already generated best-practices files for this stack:
+Before writing any tests, check whether the tech-architect has already generated best-practices files for this stack. It is not always at the repo root, so search rather than assume a fixed path:
 
 ```bash
-ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+find . -type d -name "best-practices" 2>/dev/null | head -3
 ```
 
-**If `best-practices/` exists:**
+Do not conclude "missing" from a single `ls ./best-practices/` — that only matches a repo-root location and will silently miss the far more common `tech-analysis/best-practices/` nesting this pipeline actually produces (`tech-architect`'s Step 6 output). Only fall back to web search after the `find` above genuinely returns nothing.
 
-1. List the files: `ls ./best-practices/`
+**If a best-practices folder is found:**
+
+1. List the files it contains
 2. Read every file relevant to QA work (e.g. `testing-*.md`, `frontend-*.md`, `backend-*.md`)
 3. Treat the contents as your authoritative guide — apply every testing convention, pattern, and anti-pattern listed
 
@@ -179,7 +181,7 @@ Find the local task file and update its status to "In Progress" before writing a
 
 ```bash
 TASK_FILE=$(ls ./tasks/{issue_id}-*.md 2>/dev/null | head -1)
-sed -i.bak 's/\*\*Status:\*\* .*/\*\*Status:\*\* In Progress/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
+sed -i.bak -E 's/\*\*Status\*\*:.*|\*\*Status:\*\*.*/**Status**: In Progress/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
 ```
 
 ### 5b — Understand the task fully
@@ -243,17 +245,11 @@ Write thorough, production-quality tests. Apply these rules without exception:
 
 ### 5d — Run checks
 
-After implementing, run the full test suite:
+After implementing, run only the tests you just wrote or touched for this task — NOT the full suite. You are one task into a multi-task loop; the full suite (with coverage and E2E) is a single gate run once at the end in Step 6, not repeated per task.
 
 ```bash
-# Run all tests with coverage
-{package_manager} run test --coverage
-
-# Run E2E tests (if applicable)
-{package_manager} run test:e2e
-
-# Verify coverage meets the target from TAD Section 11.3
-# If coverage is below target, add missing tests before marking Done
+# Scoped to this task's new/changed test files only
+{test_runner} run {test files written or modified for this task}
 ```
 
 For each failing test, classify it before acting:
@@ -297,7 +293,7 @@ Also append a row to `./tasks/INDEX.md`, using the same label you chose in the t
 echo "| $BUG_ID | 🐛 [Bug] {failing test name} | Todo | {Backend | Frontend} |" >> ./tasks/INDEX.md
 ```
 
-Record the bug ID. You will report all bug IDs in Step 7.
+Record the bug ID. You will report all bug IDs in Step 8.
 
 If coverage is below the TAD target for the files you touched, add the missing cases before marking Done.
 
@@ -306,16 +302,35 @@ If coverage is below the TAD target for the files you touched, add the missing c
 Only after all **test bugs** are fixed and coverage targets are met, update the local task file to "Done". Source bugs have their own task files — do not block this task on them.
 
 ```bash
-sed -i.bak 's/\*\*Status:\*\* .*/\*\*Status:\*\* Done/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
+sed -i.bak -E 's/\*\*Status\*\*:.*|\*\*Status:\*\*.*/**Status**: Done/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
 ```
 
 Then move to the next task.
 
 ---
 
-## Step 6 — Commit on a branch and open a PR (NO push to main, NO merge)
+## Step 6 — Full suite gate
 
-Test files never go straight to `main`. After all selected tasks are marked Done, put the work on a dedicated branch and open a PR so CI runs and the work is backed up.
+Only after **all** selected tasks are marked Done, run the full suite exactly once as the final gate before opening a PR:
+
+```bash
+# Run everything with coverage
+{package_manager} run test --coverage
+
+# Run E2E tests (if applicable)
+{package_manager} run test:e2e
+
+# Verify coverage meets the target from TAD Section 11.3
+# If coverage is below target, add missing tests before proceeding
+```
+
+Fix any failure this full run surfaces that per-task scoped runs missed (e.g. cross-test interference, shared-state leaks). This is the one point in the workflow where the whole suite runs — do not repeat it per task.
+
+---
+
+## Step 7 — Commit on a branch and open a PR (NO push to main, NO merge)
+
+Test files never go straight to `main`. After all selected tasks are marked Done and the full suite gate passes, put the work on a dedicated branch and open a PR so CI runs and the work is backed up.
 
 Create the branch off the latest `main` (slug: `test/qa-suite-{YYYY-MM-DD}`), commit, push, and open the PR:
 
@@ -331,6 +346,7 @@ EOF
 )"
 git push -u origin test/qa-suite-$(date +%Y-%m-%d)
 gh pr create \
+  --draft \
   --title "test: QA test suite" \
   --body "$(cat <<'EOF'
 ## Summary
@@ -375,11 +391,25 @@ git add ./tasks/ && git commit --amend --no-edit
 git push --force-with-lease
 ```
 
-Record the branch name and PR URL for your Step 7 report.
+Record the branch name and PR URL for your Step 8 report.
 
 ---
 
-## Step 7 — Report
+## Step 7.5 — Update the project history log (if present)
+
+Check for a running project history file — a pipeline convention for surviving long sessions without re-deriving context from `git log` across dozens of PRs:
+
+```bash
+find . -maxdepth 2 -iname "SESSION_HANDOFF.md" 2>/dev/null | head -1
+```
+
+**If found:** read it and insert one new entry at the top of its reverse-chronological PR/feature list — match its existing section, language, and formatting exactly. Keep it to 1–3 lines: the test-suite PR number (mark it "(draft)"), which tasks it covers, and any source bug tickets it spawned.
+
+**If not found:** skip silently. This is opt-in per project — do not create the file unprompted.
+
+---
+
+## Step 8 — Report
 
 When all selected tasks are complete, tell the user:
 

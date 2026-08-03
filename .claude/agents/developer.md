@@ -127,11 +127,13 @@ Also note any `> **MVP note:**` callouts — these are intentional shortcuts you
 
 ## Step 2 — Load best-practices references
 
-If `BestPractices:` was in your arguments, use that path. Otherwise check:
+If `Best practices: {path}` (or `BestPractices: {path}`) was in your arguments, use that path directly. Otherwise search for it — it is not always at the repo root, so don't assume a fixed path:
 
 ```bash
-ls ./best-practices/ 2>/dev/null && echo "found" || echo "missing"
+find . -type d -name "best-practices" 2>/dev/null | head -3
 ```
+
+Do not conclude "missing" from a single `ls ./best-practices/` — that only matches a repo-root location and will silently miss the far more common `tech-analysis/best-practices/` nesting this pipeline actually produces (`tech-architect`'s Step 6 output). Only fall back to web search after the `find` above genuinely returns nothing.
 
 **If found:** list the files and read those relevant to your label (`backend-*.md` + `testing-*.md` for Backend; `frontend-*.md` + `testing-*.md` for Frontend). Treat them as authoritative — apply every convention and anti-pattern listed. Do **not** run web searches.
 
@@ -212,7 +214,7 @@ If your arguments contain `CI Failure:`, skip this step — the issue is already
 Otherwise update the local task file to "In Progress" before touching any code:
 
 ```bash
-sed -i.bak 's/\*\*Status:\*\* .*/\*\*Status:\*\* In Progress/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
+sed -i.bak -E 's/\*\*Status\*\*:.*|\*\*Status:\*\*.*/**Status**: In Progress/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
 ```
 
 ### 5b — Understand the task fully
@@ -260,14 +262,14 @@ Write production-ready code. Apply these rules without exception — including t
 ### 5d — Run checks
 
 ```bash
-# Type checking
+# Type checking (necessarily project-wide — TS has no reliable single-file check)
 {package_manager} run typecheck
 
 # Linting
 {package_manager} run lint
 
-# Tests
-{package_manager} run test
+# Tests — scoped to what this task touched, NEVER the full suite
+{test_runner} run {test files co-located with, or matching, the source files you touched}
 
 # Frontend: build verification
 {package_manager} run build
@@ -275,6 +277,8 @@ Write production-ready code. Apply these rules without exception — including t
 # Backend: migration dry-run (if migrations were added)
 {migration_command} --dry-run
 ```
+
+**Scoping the test run:** you implemented one task, not the whole app — running every test in the repo on every task is slow and wasteful. Derive the target test files from what you actually changed (`git diff --name-only main...HEAD`), map each touched source file to its test via the project's naming convention (co-located `*.test.ts`/`*.spec.ts`, or a mirrored path under `__tests__`/`test/`), and pass those paths explicitly to the test runner (e.g. `vitest run path/to/foo.test.ts path/to/bar.test.ts`, `jest path/to/foo.test.ts`). If a touched file has no existing test yet, that's expected — you likely just wrote it as part of this task; include it. Only fall back to a full untargeted run if you cannot determine which tests correspond to your changes. The full suite is `qa-engineer`'s and CI's job, not every task's.
 
 Fix all failures before proceeding.
 
@@ -284,7 +288,7 @@ If your arguments contain `CI Failure:`, skip this step — do not change the ta
 Otherwise, only after all checks pass, update the local task file to "Done":
 
 ```bash
-sed -i.bak 's/\*\*Status:\*\* .*/\*\*Status:\*\* Done/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
+sed -i.bak -E 's/\*\*Status\*\*:.*|\*\*Status:\*\*.*/**Status**: Done/' "$TASK_FILE" && rm -f "${TASK_FILE}.bak"
 ```
 
 ---
@@ -319,6 +323,7 @@ git push -u origin {branch-name}
 
 ```bash
 gh pr create \
+  --draft \
   --title "{issue_id}: {issue_title}" \
   --body "$(cat <<'EOF'
 ## Linear
@@ -376,6 +381,18 @@ PYEOF
 ```
 
 The merge itself is never triggered by this agent. Record the branch name, commit SHA, PR URL, and whether the Auto-merge label was applied for your Step 6 report.
+
+### 5g — Update the project history log (if present)
+
+Check for a running project history file — a pipeline convention for surviving long sessions without re-deriving context from `git log` across dozens of PRs:
+
+```bash
+find . -maxdepth 2 -iname "SESSION_HANDOFF.md" 2>/dev/null | head -1
+```
+
+**If found:** read it and insert one new entry at the top of its reverse-chronological PR/feature list — match its existing section, language, and formatting exactly (don't impose your own style on someone else's log). Keep it to 1–3 lines: issue ID, PR number (mark it "(draft)" — it hasn't been reviewed/merged yet), and a one-line what/why. If you found and fixed a real pre-existing bug unrelated to the assigned task, call that out explicitly — those are the entries most worth preserving for a future session.
+
+**If not found:** skip silently. This is opt-in per project — do not create the file unprompted.
 
 ---
 

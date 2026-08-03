@@ -153,7 +153,7 @@ Branch: {branch-name}
 
 **`/qa-engineer`** — pass a project description or `"all non-Done QA tasks"`
 
-**`/reviewer`** — pass PR numbers or branch names: `Review the following PRs: 12, 13` (or branch names if the PR isn't known yet)
+**`/reviewer`** — pass PR numbers or branch names: `Review the following PRs: 12, 13` (or branch names if the PR isn't known yet). Also pass `TAD:`/`IPD:` and, whenever the target project has one, `Best practices: {path}` — same as `/developer`/`/qa-engineer`/`/devops-engineer` — so best-practices compliance is checked as part of the review, not silently skipped. If unsure whether a best-practices folder exists for the project, check (`find . -type d -name "best-practices"`) before invoking rather than omitting the line.
 
 **`/documentation-agent`** — pass a project slug or leave empty to auto-detect
 
@@ -182,6 +182,15 @@ Code reaches GitHub as a **draft PR** (so CI runs and work is backed up), but no
 Why draft-PR-then-gate-the-merge instead of withholding the push: a draft PR runs CI, backs the work up to the remote, and gives line-anchored review — while the not-ready/unmerged state is the actual safety gate. Withholding the push only changes the definition of "on GitHub"; it doesn't add real safety and it loses CI + backup.
 
 **Same gate applies to `devops-engineer` and `qa-engineer`:** both now commit on a branch, push, and open a **draft** PR — never pushing to `main` or merging directly. `qa-engineer` puts its test suite on a `test/qa-suite-{YYYY-MM-DD}` branch instead of committing to `main`. The merge stays user-triggered for all four implementing agents.
+
+### Project history log (opt-in per project)
+
+Long-running Flow B engagements risk the orchestrator (human or Claude) burning a large share of a fresh session just re-deriving what already happened from `git log` across dozens of PRs. The mitigation is a running, reverse-chronological history file the pipeline keeps current on its own, instead of relying on the orchestrator to remember to write one near a context limit.
+
+- **Location, by convention:** `docs/SESSION_HANDOFF.md` in the target project. **Opt-in, not mandatory** — a project only has one once someone (usually the orchestrator, on the user's request) creates it. Implementing agents check for it and use it if present; none of them create it unprompted.
+- **Who writes to it:** `developer`, `devops-engineer`, and `qa-engineer` each append a short entry (1–3 lines: issue ID, PR number marked "(draft)", one-line what/why) at Step 5g/7.5, right after opening their PR. `reviewer` then updates that entry's marker to "approved, awaiting merge" at Step 4d on approval (or appends one if it's missing). The orchestrator finalises the entry to reflect the actual merge once the user authorises it — the one step no agent template can do on its own, since none of them merge.
+- **Content shape:** a short "architectural facts worth remembering" section (gotchas, non-obvious invariants, conventions discovered the hard way) that stays evergreen, plus the reverse-chronological PR/feature log itself. Entries are terse — the PR/commit is the source of truth for detail; this file is a fast-recovery index, not a duplicate changelog.
+- **Starting one:** if a project doesn't have this file yet and the user wants one, write it directly (no dedicated agent for this) — backfill a compressed history from context/`git log` if useful, then let the pipeline steps above keep it current going forward.
 
 ---
 
