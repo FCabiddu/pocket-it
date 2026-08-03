@@ -330,7 +330,7 @@ Fix any failure this full run surfaces that per-task scoped runs missed (e.g. cr
 
 ## Step 7 — Commit on a branch and open a PR (NO push to main, NO merge)
 
-Test files never go straight to `main`. After all selected tasks are marked Done and the full suite gate passes, put the work on a dedicated branch and open a PR so CI runs and the work is backed up.
+Test files never go straight to `main`. After all selected tasks are marked Done and the full suite gate passes, put the work on a dedicated branch and open a PR so the work is backed up and reviewable (and CI runs, if the project is in `prod`).
 
 Create the branch off the latest `main` (slug: `test/qa-suite-{YYYY-MM-DD}`), commit, push, and open the PR:
 

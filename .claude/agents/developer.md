@@ -315,7 +315,7 @@ git push -u origin {branch-name}
   ```bash
   # Find the existing PR number (or use the PR: {pr_number} from your arguments if provided)
   PR_NUM=$(gh pr list --head {branch-name} --json number --jq '.[0].number')
-  gh pr comment "$PR_NUM" --body "🔧 **CI fix applied** — {one-line description of what was fixed and how}. CI will re-run on this commit."
+  gh pr comment "$PR_NUM" --body "🔧 **CI fix applied** — {one-line description of what was fixed and how}. CI will re-run on this commit if the project is in \`prod\`."
   ```
 - Record the commit SHA and that the fix was pushed. The reviewer will re-check CI and decide.
 

@@ -168,18 +168,38 @@ Branch: {branch-name}
 | Docs branch | `docs/{project-slug}-{YYYY-MM-DD}` | `docs/recipe-app-2026-05-21` |
 | Auto-merge label | GitHub PR label `Auto-merge`, colour `#94a3b8` (slate); mirrored in Linear by `/implementation-planner` | Applied by implementing agents when the session preference is Auto-merge; acted on by `.github/workflows/auto-merge.yml` (created by `/devops-engineer`) |
 | Dependency file | `implementation-plans/{NAME}_DEPS.json` | Written by `/implementation-planner`; read by developer agents for ordering |
+| Application status | GitHub **repository variable** `APP_STATUS` = `dev` \| `prod` | Set by `/devops-engineer` (defaults to `dev`); read by the CI workflow and by `/reviewer` |
+
+### Application status — the hosted-CI switch
+
+Hosted CI does not run by default. Whether GitHub Actions does any real work on a project is a per-project switch: the repository variable **`APP_STATUS`**, `dev` or `prod`. An unset variable means `dev`.
+
+| `APP_STATUS` | Pull requests | Push to `main` | Deploy |
+|---|---|---|---|
+| `dev` (default) | nothing runs; PRs merge on review approval | nothing runs | — |
+| `prod` | lint + type-check + unit tests, once out of draft | build + integration + E2E + security scan | — |
+
+`workflow_dispatch` is live in both states: `gh workflow run ci.yml` gives a full run on demand without flipping anything. Flip with `gh variable set APP_STATUS --body prod` (or `dev`).
+
+Why: in development, hosted CI on every push of every draft PR re-validates what the developer already ran locally, and a build of unreviewed code informs nobody. On a Free private repo (~2,000 min/month) that exhausts the cap in a few dozen PRs, after which **all** workflows stop — CI, auto-merge, and any DB-migrate step included. Real validation while a project is in `dev` is local (`developer` runs `lint → type-check → scoped tests` before pushing) plus the reviewer's reading of the diff.
+
+**The gate is a job-level `if:`, never a trigger filter** — this is the load-bearing implementation detail. A job skipped by an `if:` condition reports **success** and bills **zero minutes**; a *workflow* skipped by a trigger-level filter reports nothing at all, leaving required status checks stuck "Expected — waiting for status to be reported" and blocking the PR permanently. Keeping the gate inside the workflow means the same branch-protection setup works in both states, so auto-merge keeps working in `dev` and flipping to `prod` needs no repo-settings change.
+
+**Deployment is currently out of scope.** No agent writes deploy jobs, environment targets, or deploy secrets: `tech-architect` marks TAD §9.3's deploy rows `N/A — deployment not managed by CI yet`, and `devops-engineer` implements everything up to build/scan and reports the deploy rows as intentionally unimplemented. This is a deliberate hold, to be revisited — not an oversight for an agent to "fix" by inventing a deploy target.
+
+**Downstream effect on `/reviewer`:** its Step 2 reads `APP_STATUS` before anything else. In `dev` it skips the CI gate entirely — an empty `statusCheckRollup` is the expected state, so it must not poll, wait, or dispatch a fixing agent — and reviews from the diff, stating the CI mode in its report. It never flips the variable itself: that is the user's budget decision.
 
 ### Merge gate (developer → reviewer → user)
 
-Code reaches GitHub as a **draft PR** (so CI runs and work is backed up), but nothing lands on `main` automatically. The merge is the gate, and only the user triggers it:
+Code reaches GitHub as a **draft PR** (so the work is backed up and reviewable — plus CI, when the project is in `prod`), but nothing lands on `main` automatically. The merge is the gate, and only the user triggers it:
 
 1. **`/developer`** — creates a task branch, implements, commits, pushes, and opens a **draft** PR. It never marks the PR ready-for-review and never merges. Reports the branch, commit SHA, and PR URL.
 2. **`/reviewer`** — reviews the draft PR diff (`gh pr diff {n}`). Feedback posts to the PR (`gh pr review --request-changes`) and mirrors to Linear. On pass it marks the PR **ready for review** (`gh pr ready`) and approves — but does **not** merge.
 3. **Merge** — the merge happens only after reviewer approval **and** user authorisation. Authorisation takes one of two forms: an explicit per-PR instruction (e.g. "merge LIN-42" / "ship it"), or the session auto-merge preference below. No agent ever runs `gh pr merge` on its own initiative.
 
-**Session auto-merge preference (Step 0a):** the first implementing agent of a session asks once — "How should PRs be handled this session?" — and records the answer in `/tmp/{repo-name}-automerge`. If the user chose **Auto-merge**, implementing agents apply the `Auto-merge` label at PR creation and the target project's `.github/workflows/auto-merge.yml` (created by `/devops-engineer` alongside the CI pipeline; requires "Allow auto-merge" + branch protection on `main` in repo settings) merges once CI is green and the reviewer has approved — the user's gate is exercised once per session instead of per PR. If **Manual approval**, every merge stays per-PR. Delete the file to be asked again. `developer`, `devops-engineer`, and `qa-engineer` all read this preference; the `reviewer` reports whether an approved PR will auto-merge or awaits authorisation.
+**Session auto-merge preference (Step 0a):** the first implementing agent of a session asks once — "How should PRs be handled this session?" — and records the answer in `/tmp/{repo-name}-automerge`. If the user chose **Auto-merge**, implementing agents apply the `Auto-merge` label at PR creation and the target project's `.github/workflows/auto-merge.yml` (created by `/devops-engineer` alongside the CI pipeline; requires "Allow auto-merge" + branch protection on `main` in repo settings) merges once the reviewer has approved (and, in `prod`, CI is green) — the user's gate is exercised once per session instead of per PR. If **Manual approval**, every merge stays per-PR. Delete the file to be asked again. `developer`, `devops-engineer`, and `qa-engineer` all read this preference; the `reviewer` reports whether an approved PR will auto-merge or awaits authorisation.
 
-Why draft-PR-then-gate-the-merge instead of withholding the push: a draft PR runs CI, backs the work up to the remote, and gives line-anchored review — while the not-ready/unmerged state is the actual safety gate. Withholding the push only changes the definition of "on GitHub"; it doesn't add real safety and it loses CI + backup.
+Why draft-PR-then-gate-the-merge instead of withholding the push: a draft PR backs the work up to the remote, gives line-anchored review, and runs CI where CI is on — while the not-ready/unmerged state is the actual safety gate. Withholding the push only changes the definition of "on GitHub"; it doesn't add real safety and it loses CI + backup.
 
 **Same gate applies to `devops-engineer` and `qa-engineer`:** both now commit on a branch, push, and open a **draft** PR — never pushing to `main` or merging directly. `qa-engineer` puts its test suite on a `test/qa-suite-{YYYY-MM-DD}` branch instead of committing to `main`. The merge stays user-triggered for all four implementing agents.
 

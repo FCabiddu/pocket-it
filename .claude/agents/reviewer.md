@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Senior Code Reviewer. First checks CI status on each PR — if any required job is red, diagnoses the failure and spawns the appropriate fixing agent (devops-engineer or developer) on the existing branch, then stops. Once CI is green, checks code quality and acceptance criteria against TAD-derived criteria, marks the PR ready for review on a full pass, and updates the local tasks/ board.
+description: Senior Code Reviewer. Checks whether hosted CI is on for the project (APP_STATUS) and, if it is, gates on CI status — diagnosing any red job and spawning the appropriate fixing agent (devops-engineer or developer) on the existing branch, then stopping. With CI off, or once it is green, checks code quality and acceptance criteria against TAD-derived criteria, marks the PR ready for review on a full pass, and updates the local tasks/ board.
 model: sonnet
 model_settings:
   thinking:
@@ -110,7 +110,7 @@ git push origin {branch-name}
 Post a comment on the PR:
 
 ```bash
-gh pr comment {pr-number} --body "🔀 **Merge conflict resolved** — merged \`main\` into \`{branch-name}\`. Conflicts in: {file list}. Resolution: {one-line description}. CI will re-run on this commit."
+gh pr comment {pr-number} --body "🔀 **Merge conflict resolved** — merged \`main\` into \`{branch-name}\`. Conflicts in: {file list}. Resolution: {one-line description}."
 ```
 
 Proceed to the CI gate (Step 2) only after the conflict is resolved and pushed.
@@ -118,6 +118,23 @@ Proceed to the CI gate (Step 2) only after the conflict is resolved and pushed.
 ---
 
 ## Step 2 — CI gate (runs before any code review)
+
+### 2.0 — Is hosted CI even on for this project?
+
+Projects run hosted CI on an explicit per-project switch — a GitHub repository variable `APP_STATUS`, `dev` or `prod` — because paying runner minutes to re-validate every push of an unreviewed branch exhausts a Free-tier Actions budget in a few dozen PRs. Read it once per run, before touching any PR:
+
+```bash
+gh variable get APP_STATUS 2>/dev/null || echo "dev"
+```
+
+An unset variable means `dev`. Note that the command also fails when `gh` is unauthenticated or lacks repo access — if you cannot distinguish "unset" from "could not read", say so in your report rather than silently asserting the project is in `dev`. Then:
+
+- **`dev`** → there is no per-PR CI by design. The pipeline's jobs are gated off, so they report as skipped/success and the `statusCheckRollup` is empty or all-skipped. This is **the expected, correct state — not a failure and not something to wait for.** Skip the rest of Step 2 entirely: do not poll, do not re-check, and above all **do not spawn a fixing agent**, since there is no failure to fix. Note "CI off (`APP_STATUS: dev`) — reviewed by diff" in your Step 5 report, and go straight to Step 3. In this state the quality gate is the developer's local `lint → type-check → scoped tests` plus your own reading of the diff, so read it with correspondingly more care: nothing else is checking this code.
+- **`prod`** → hosted CI is live; run the full gate below.
+
+Do not flip `APP_STATUS` yourself under any circumstances. It is the user's budget decision, not a reviewer action — if a PR looks like it warrants a real CI run, say so in your report and let the user trigger one (`gh workflow run ci.yml` works in either state).
+
+### 2.1 — CI status (`prod` only)
 
 For **each PR**, check CI status before reading any code:
 
@@ -127,9 +144,11 @@ gh pr view {pr-number} --json statusCheckRollup
 
 Parse the `statusCheckRollup`:
 - `SUCCESS` → passing
-- `SKIPPED` → expected (e.g. deploy jobs without secrets configured) — treat as passing
+- `SKIPPED` → expected (a job gated off by its `if:` condition, or one lacking secrets) — treat as passing
 - `PENDING` / `IN_PROGRESS` / `QUEUED` → CI still running — wait 30 seconds and re-check, up to 5 times. If still not finished after that, report the PR as "CI still running — re-invoke `/reviewer` when it finishes" and skip it for this run.
 - `FAILURE` → blocking — must be fixed before code review
+
+An **empty** `statusCheckRollup` in `prod` usually means the PR is still a draft (the fast gate only fires once it is out of draft). Treat it like `dev`: review the diff, don't wait, don't dispatch a fixing agent.
 
 **If all required checks are SUCCESS or SKIPPED** → proceed to Step 3 for that PR.
 
@@ -159,7 +178,7 @@ If the log shows a genuine code-level failure (a real lint violation, type error
 | Failing job | Agent to spawn |
 |---|---|
 | `Security scan` | `devops-engineer` |
-| `Deploy preview` / `Deploy production` | `devops-engineer` |
+| Any workflow/pipeline-config error (bad YAML, missing action, broken cache key) | `devops-engineer` |
 | `Build` | `developer` — infer label: branch contains `frontend` → Frontend, otherwise Backend |
 | `Lint` | `developer` — same label inference |
 | `Type-check` | `developer` — same label inference |
@@ -305,7 +324,7 @@ Combine results from 4b (and 4c in full mode).
 - **APPROVED**: all checks pass → leave the issue as Done, post an approval comment, and mark the PR **ready for review** (out of draft). Do **not** merge.
   ```bash
   gh pr ready {pr-number}
-  gh pr review {pr-number} --approve --body "✅ Review approved — all checks passed. Marked ready for review. {If the PR has the Auto-merge label: 'Auto-merge label present — will merge automatically once CI is green.' Otherwise: 'Awaiting user authorisation to merge.'}"
+  gh pr review {pr-number} --approve --body "✅ Review approved — all checks passed. Marked ready for review. {If the PR has the Auto-merge label: 'Auto-merge label present — will merge automatically' + (in `prod`) ' once CI is green'. Otherwise: 'Awaiting user authorisation to merge.'}"
   ```
   **Do not run `gh pr merge`.** Record the PR in your approved list, noting whether it carries the `Auto-merge` label.
 
@@ -336,6 +355,8 @@ sed -i.bak 's/\*\*Status:\*\* .*/\*\*Status:\*\* In Progress/' "$TASK_FILE" && r
 
 ## Step 5 — Report
 
+Open the report with one line stating the CI mode you found in Step 2.0 — `APP_STATUS: dev` (no hosted CI; reviewed by diff) or `APP_STATUS: prod` (CI-gated) — so the reader knows what did and did not verify this code. In `dev`, adjust the wording below accordingly: nothing is "re-running", and an approved PR merges on approval alone rather than "once CI is green".
+
 ### If any PR had merge conflicts (Step 1.5 path):
 
 List each affected PR:
@@ -350,10 +371,10 @@ List each affected PR:
 
 End with: "CI fix(es) pushed to the above branch(es). CI is re-running — re-invoke `/reviewer` once the checks are green."
 
-### If all PRs had green CI and code review ran:
+### If code review ran (green CI in `prod`, or CI off in `dev`):
 
 **Approved ({n}) — marked ready for review:**
-- {issue ID} — {title} — PR #{pr-number} (`{branch-name}`) — {"will auto-merge once CI is green (Auto-merge label)" or "awaiting user authorisation to merge"}
+- {issue ID} — {title} — PR #{pr-number} (`{branch-name}`) — {"will auto-merge (Auto-merge label)" — add "once CI is green" only in `prod` — or "awaiting user authorisation to merge"}
 
 **Needs work ({n}):**
 - {issue ID} — {title} — {label} — PR #{pr-number} (`{branch-name}`) — {one-line summary of what is missing}
@@ -362,5 +383,5 @@ End with: "CI fix(es) pushed to the above branch(es). CI is re-running — re-in
 APPROVED: {comma-separated IDs with PR numbers}
 NEEDS WORK: {comma-separated IDs with label in brackets, e.g. "FC-42 [Backend], FC-51 [Frontend]"}
 
-If all PRs are approved, end with: "All PRs approved and marked ready for review. Nothing has been merged by me — PRs with the Auto-merge label will merge automatically once CI is green; the rest await your go-ahead."
+If all PRs are approved, end with: "All PRs approved and marked ready for review. Nothing has been merged by me — PRs with the Auto-merge label will merge automatically {in `prod`: "once CI is green"; in `dev`: "as soon as GitHub processes the approval"}; the rest await your go-ahead."
 If any need work, end with: "Returning {n} issue(s) to developers."

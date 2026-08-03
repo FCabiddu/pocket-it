@@ -219,11 +219,79 @@ Write production-ready infrastructure code. Apply these rules without exception:
 - Define health checks and `depends_on` conditions
 
 **CI/CD pipelines:**
-- Implement every step from TAD Section 9.3 in the correct order: lint → type-check → test → build → security scan → deploy
+- Implement the steps from TAD Section 9.3 in the correct order: lint → type-check → test → build → security scan
+- Gate every job on the project's application status — see the mandatory rule below. This is not optional and not a per-project judgement call.
 - Use caching for dependencies to speed up runs
-- Set environment-specific deployment targets (staging on merge to main, production on manual trigger or tag)
 - Never hardcode secrets — use the CI/CD platform's secrets/environment variable mechanism
 - Add pipeline badges to README if one exists
+- **Do not write deploy jobs.** Deployment is deliberately out of scope for this pipeline right now — no staging step, no production step, no environment targets, no deploy secrets. If TAD Section 9.3 lists deploy steps, implement everything up to the build/scan stage and report the deploy rows as intentionally unimplemented in your Step 6 report. Do not invent a deploy target to fill the gap.
+
+**Application status gate (MANDATORY — GitHub Actions projects):**
+
+A project in active development must not spend runner minutes re-validating every push of every draft PR: the developer already ran lint, type-check, and the scoped tests locally before pushing, and a build of unreviewed code tells nobody anything. On a Free private repo that duplicated work exhausts the monthly Actions cap in a few dozen PRs, after which **all** workflows stop — including the auto-merge one. So hosted CI is driven by an explicit, per-project status flag rather than running by default.
+
+The flag is a **GitHub repository variable** named `APP_STATUS`, with exactly two values:
+
+| `APP_STATUS` | Pull requests | Push to `main` |
+|---|---|---|
+| `dev` (default — also what an unset variable means) | nothing runs; PRs merge on review approval alone | nothing runs |
+| `prod` | lint + type-check + unit tests, once the PR is out of draft | full run: build, integration, E2E, security scan |
+
+`workflow_dispatch` is always enabled in both states, so the user can trigger a full run on demand at any time without flipping the flag.
+
+**Why the gate is a job-level `if:` and never a trigger filter.** A job skipped by an `if:` condition reports its status as **success** and consumes **no billing minutes**. A *workflow* skipped by a trigger-level filter (branch/path filters, or simply not firing) reports **nothing**, which leaves any required status check stuck "Expected — waiting for status to be reported" and blocks the PR forever. Since the auto-merge flow depends on branch protection being satisfiable, the gate must be inside the workflow. Never move this condition into `on:`.
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Fast gate — PRs, only in prod, only once out of draft. Always on manual dispatch.
+  checks:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.APP_STATUS == 'prod' &&
+       github.event_name == 'pull_request' &&
+       github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    steps:
+      # {checkout, dependency cache, setup for the TAD stack}
+      # lint → type-check → unit tests. No build, no E2E, no real-DB integration.
+
+  # Everything expensive — merges to main, only in prod. Always on manual dispatch.
+  full:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.APP_STATUS == 'prod' && github.event_name == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      # {checkout, dependency cache, setup for the TAD stack}
+      # build → real-DB integration tests → browser E2E → security scan. No deploy.
+```
+
+Fill both jobs with the concrete steps for the stack you extracted from the TAD. Keep the two `if:` conditions verbatim — they are the budget control, not boilerplate.
+
+Initialise the variable (idempotent — never overwrite an existing value, the project may already be in `prod`):
+
+```bash
+gh variable get APP_STATUS >/dev/null 2>&1 || gh variable set APP_STATUS --body dev
+```
+
+Report the flip command in your Step 6 report so the user knows how to turn CI on:
+
+```bash
+gh variable set APP_STATUS --body prod   # turn hosted CI on
+gh variable set APP_STATUS --body dev    # turn it back off
+gh workflow run ci.yml                   # one full run on demand, in either state
+```
 
 **Auto-merge workflow (create alongside the first CI pipeline — GitHub Actions projects only):**
 
@@ -260,6 +328,8 @@ gh label create "Auto-merge" --color "94a3b8" --description "Merge automatically
 ```
 
 **Manual setup steps to report (cannot be automated from CI config):** in the repo settings the user must enable **"Allow auto-merge"**, and add a branch protection rule on `main` with required status checks (and required review if desired). Without branch protection, `--auto` merges as soon as the labeled PR is mergeable — call this out explicitly in your Step 6 report.
+
+Required status checks stay compatible with `APP_STATUS: dev`: the gated jobs are *skipped*, not absent, so they report success and satisfy branch protection while costing nothing. That is precisely why the gate is a job-level `if:` — the same setup works in both states with no settings change when the project flips to `prod`.
 
 **Infrastructure-as-code (Terraform, Pulumi, CDK, etc.):**
 - Follow the provider's recommended module structure
@@ -334,7 +404,7 @@ git push -u origin {branch-name}
   ```bash
   # Use PR: {pr_number} from your arguments if provided, otherwise find it:
   PR_NUM=$(gh pr list --head {branch-name} --json number --jq '.[0].number')
-  gh pr comment "$PR_NUM" --body "🔧 **CI fix applied** — {one-line description of what was fixed and how}. CI will re-run on this commit."
+  gh pr comment "$PR_NUM" --body "🔧 **CI fix applied** — {one-line description of what was fixed and how}. CI will re-run on this commit if the project is in \`prod\`."
   ```
 - Record the commit SHA and that the fix was pushed. Do **not** mark the PR ready — the reviewer will re-check CI and decide.
 
@@ -425,6 +495,7 @@ When the issue is complete, tell the user:
 - The issue implemented and its local task status (Done in `tasks/{issue_id}-*.md`)
 - The PR URL — not merged, CI will trigger auto-merge if the label was applied
 - Any deviations from the TAD and why they were necessary
+- **If you created or modified the CI pipeline:** the current `APP_STATUS` value, what runs (or doesn't) at that value, the commands to flip it, and `gh workflow run ci.yml` for a one-off run. Also state explicitly that **no deploy job was written** and that TAD 9.3's deploy rows are intentionally unimplemented.
 - A list of every **environment variable** required by the new configuration — the user must add these to their deployment platform
 - Any **manual setup steps** that cannot be automated (e.g. creating cloud resources, setting secrets in the CI/CD platform, DNS records)
 - Any open questions that came up during implementation that the user should review

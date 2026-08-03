@@ -73,18 +73,24 @@ Treat the Design Spec's library/CSS recommendations as inputs to ratify, not man
 
 ### CI/CD & Actions-budget sizing (MANDATORY — applies to §9.3 and §11.3)
 
-Match the pipeline you spec to the delivery answer from Step 1. Never spec more CI than the runner budget can sustain.
+Never spec more CI than the runner budget can sustain. The pipeline shape is **fixed** — what varies is which jobs it contains and which state the project starts in.
 
-| Delivery reality | CI/CD to spec in §9.3 | Quality gate in §11.3 |
+**The `APP_STATUS` gate (spec this for every GitHub Actions project).** Hosted CI is driven by a repository variable `APP_STATUS`, `dev` or `prod`, read inside the workflow as a job-level `if:` condition. It is not a trigger filter: a job skipped by `if:` reports **success** and bills **zero minutes**, whereas a workflow skipped by a trigger filter reports nothing and leaves required status checks stuck pending forever, blocking the merge. Spec it accordingly:
+
+| `APP_STATUS` | Pull requests | Push to `main` |
 |---|---|---|
-| **Local-only / no hosted CI**, or **solo + pre-deploy** on a **Free private repo** | **No per-PR hosted pipeline.** Validation runs **locally** (`lint → type-check → unit/component tests → build`); the developer runs it before each PR. State this explicitly and note migrations are applied manually (`supabase db push` or equivalent). | Gates are **locally enforced**, not CI-enforced. |
-| **Solo/small team, Free private repo, has a deploy** | **Minimal hosted CI**: `lint → type-check → unit/component tests → build` only. Keep **heavy jobs off the per-PR path** — run the real-DB integration suite and E2E **on merge-to-main only**, or manually (`workflow_dispatch`), never on every PR. | Fast gates block merge; heavy suites are advisory or main-only. |
-| **Small/multi-team, public repo / paid CI / self-hosted** | Full pipeline (the §9.3 template as written), heavy jobs included per-PR. | Full CI-enforced gates. |
+| `dev` (default; an unset variable means `dev`) | nothing runs — validation is **local**, PRs merge on review approval | nothing runs |
+| `prod` | fast gate: `lint → type-check → unit/component tests`, once out of draft | full run: `build → real-DB integration → E2E → security scan` |
+
+`workflow_dispatch` is always live in both states, so a full run is one command away on demand.
+
+This replaces the old "spec no pipeline at all for tight budgets" advice: the pipeline is always written, it just costs nothing until switched on. That way flipping a project to `prod` needs no new engineering — and no repo-settings change either, since the skipped jobs keep branch protection satisfiable in both states.
 
 Rules that always hold, regardless of budget:
-- **A real-DB integration job and a browser-E2E job are the two most expensive things you can put in CI.** Only put them on the per-PR path when the runner budget is explicitly unlimited or paid. Otherwise gate them (main-only / manual / local).
-- If you spec any hosted CI on a **Free private repo**, add a one-line `> **Budget note:**` stating the ~2,000 min/month cap and which jobs are kept off the per-PR path to stay under it.
-- Do **not** invent a deploy pipeline (staging/production steps) when the Step 1 answer is "no deploy target yet" — mark §9.3 deploy rows `N/A — no deploy target yet` and revisit when one exists.
+- **A real-DB integration job and a browser-E2E job are the two most expensive things you can put in CI.** They belong in the `main`/dispatch job, never on the per-PR path — regardless of `APP_STATUS`.
+- Set the starting state from the Step 1 delivery answer: **pre-deploy / solo / Free private repo → `dev`**; live product on a paid or public runner → `prod`. State the chosen starting value explicitly in §9.3.
+- If any hosted CI will run on a **Free private repo**, add a one-line `> **Budget note:**` stating the ~2,000 min/month cap and what the `dev` default protects.
+- **Do not spec a deploy pipeline at all.** Deployment is currently out of scope for this pipeline: mark §9.3's deploy rows `N/A — deployment not managed by CI yet` regardless of whether a deploy target exists, and do not add deploy steps, environment targets, or deploy secrets.
 
 ---
 
@@ -398,19 +404,21 @@ graph TD
 
 ### 9.3 CI/CD Pipeline
 
-**Size this to the "CI/CD & Actions-budget sizing" rule above — do not paste the full pipeline by default.** For local-only / solo+pre-deploy / Free-private-repo cases, replace the table with a short note: validation is local (`lint → type-check → tests → build`), no hosted per-PR pipeline, migrations applied manually. Only use the full flow below when the runner budget is unlimited/paid. Add a `> **Budget note:**` line whenever any hosted CI runs on a Free private repo, and mark deploy rows `N/A — no deploy target yet` when there is none.
+**Size this to the "CI/CD & Actions-budget sizing" rule above.** State the starting `APP_STATUS` for this project and the flip command (`gh variable set APP_STATUS --body prod`). Add a `> **Budget note:**` line whenever hosted CI will run on a Free private repo.
 
-Full flow (paid/public/self-hosted budget only): lint → type-check → tests → build → security scan → deploy staging → smoke tests → deploy production
+Flow: lint → type-check → tests → build → security scan. **No deploy stage** (see below).
 
-| Step | Tool | Failure action |
-|---|---|---|
-| Lint & types | ESLint + tsc | Block merge |
-| Tests | {Vitest/Jest} | Block merge |
-| Build | {Vite/Next} | Block merge |
-| Integration (real DB) | {tool} | **Off per-PR path unless budget is unlimited/paid — main-only or manual** |
-| E2E (browser) | {Playwright} | **Off per-PR path unless budget is unlimited/paid — main-only or manual** |
-| Deploy staging | {tool} | Alert + rollback |
-| Deploy production | {tool} | Auto-rollback |
+| Step | Tool | Runs when | Failure action |
+|---|---|---|---|
+| Lint & types | ESLint + tsc | PR (`prod` only, non-draft) | Block merge |
+| Unit / component tests | {Vitest/Jest} | PR (`prod` only, non-draft) | Block merge |
+| Build | {Vite/Next} | Push to `main` (`prod`) or manual | Block merge |
+| Integration (real DB) | {tool} | Push to `main` (`prod`) or manual — **never per-PR** | Block merge |
+| E2E (browser) | {Playwright} | Push to `main` (`prod`) or manual — **never per-PR** | Block merge |
+| Security scan | {tool} | Push to `main` (`prod`) or manual | Block merge |
+| Deploy | — | `N/A — deployment not managed by CI yet` | — |
+
+In `APP_STATUS: dev` every row above is skipped (reported success, zero minutes) and validation is local: the developer runs `lint → type-check → scoped tests` before each PR, and migrations are applied manually (`supabase db push` or equivalent).
 
 ### 9.4 Containers & Runtime Environment Variables [N/A if serverless/managed — still list the env vars]
 
@@ -459,7 +467,7 @@ Full flow (paid/public/self-hosted budget only): lint → type-check → tests �
 
 ### 11.3 Quality Gates
 
-State **where** the gate runs per the CI-budget rule: **CI-enforced** only when a hosted per-PR pipeline exists; otherwise **locally enforced** (developer runs `lint → type-check → tests → build` before each PR). Real-DB integration and browser-E2E gates are advisory/main-only/local unless the runner budget is unlimited or paid — never a per-PR blocker on a Free private repo.
+State **where** each gate runs, per the `APP_STATUS` rule: **CI-enforced** only in `prod` (and only the fast gate is per-PR); in `dev` every gate is **locally enforced** — the developer runs `lint → type-check → scoped tests` before each PR and the reviewer reads the diff. Real-DB integration and browser-E2E gates are main-only or manual in both states — never a per-PR blocker.
 
 **Gates:** 100% test pass, ≥ 80% coverage, 0 TypeScript errors, 0 lint errors, Lighthouse ≥ 90 mobile.
 
