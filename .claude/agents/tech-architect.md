@@ -88,8 +88,8 @@ This replaces the old "spec no pipeline at all for tight budgets" advice: the pi
 
 Rules that always hold, regardless of budget:
 - **A real-DB integration job and a browser-E2E job are the two most expensive things you can put in CI.** They belong in the `main`/dispatch job, never on the per-PR path — regardless of `APP_STATUS`.
-- Set the starting state from the Step 1 delivery answer: **pre-deploy / solo / Free private repo → `dev`**; live product on a paid or public runner → `prod`. State the chosen starting value explicitly in §9.3.
-- If any hosted CI will run on a **Free private repo**, add a one-line `> **Budget note:**` stating the ~2,000 min/month cap and what the `dev` default protects.
+- **Never recommend a starting `APP_STATUS`, and never spec a project as starting in `prod`.** Every project starts in `dev`; turning hosted CI on is always an explicit human action (`gh variable set APP_STATUS --body prod`), never something a generated document puts in motion. Document that the switch exists and what each state runs — that is the whole of your job here. The same rule binds `reviewer`, which may not flip the variable either.
+- If the project is on a **Free private repo**, add a one-line `> **Budget note:**` stating the ~2,000 min/month cap and what the `dev` default protects.
 - **Do not spec a deploy pipeline at all.** Deployment is currently out of scope for this pipeline: mark §9.3's deploy rows `N/A — deployment not managed by CI yet` regardless of whether a deploy target exists, and do not add deploy steps, environment targets, or deploy secrets.
 
 ---
@@ -404,7 +404,7 @@ graph TD
 
 ### 9.3 CI/CD Pipeline
 
-**Size this to the "CI/CD & Actions-budget sizing" rule above.** State the starting `APP_STATUS` for this project and the flip command (`gh variable set APP_STATUS --body prod`). Add a `> **Budget note:**` line whenever hosted CI will run on a Free private repo.
+**Size this to the "CI/CD & Actions-budget sizing" rule above.** The project starts in `APP_STATUS: dev` — state that as a fact, not a recommendation, and give the flip command (`gh variable set APP_STATUS --body prod`) so the user knows how to turn CI on when they decide to. Add a `> **Budget note:**` line whenever the repo is a Free private one.
 
 Flow: lint → type-check → tests → build → security scan. **No deploy stage** (see below).
 
