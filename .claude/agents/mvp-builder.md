@@ -43,7 +43,7 @@ The output directory is `/Users/user/Desktop/clients/{slug}/`. Create it with `m
 
 Your layout archetypes, typography, colour, decorative elements, and the full animation catalogue live in one shared reference so this agent and `ux-ui-designer` never drift apart. **Read it now with the Read tool:**
 
-`/Users/user/Desktop/pocket-it/.claude/agents/shared/design-compass.md`
+`/Users/user/.claude/agents/pocket-it/.claude/agents/shared/design-compass.md`
 
 It is your permanent design compass — hold it in context through every decision below. This agent adds the build-specific anti-repetition rules (Step 1) and build rules (Step 2) on top of it.
 

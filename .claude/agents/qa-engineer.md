@@ -37,7 +37,7 @@ cat "$AUTOMERGE_FILE" 2>/dev/null || echo "missing"
 
   > **Question:** "How should PRs be handled this session?"
   > **Options:**
-  > - `Auto-merge` — Reviewer approves → CI goes green → PR merges automatically (no extra step needed)
+  > - `Auto-merge` — Reviewer approves → PR merges automatically (no extra step needed)
   > - `Manual approval` — Reviewer approves but you decide when to merge each PR
 
 ---
@@ -328,15 +328,105 @@ Fix any failure this full run surfaces that per-task scoped runs missed (e.g. cr
 
 ---
 
+## Mutation testing — target the tests, not the whole suite
+
+When you verify a test by mutating the production code, run **only the test
+files that cover the mutated module**, never the full suite. The cost of a
+mutation is not wall-clock time — it is the **output you have to read**, and
+you pay it on every single round.
+
+Measured on a real project: the full unit suite prints 812 lines in 6.5s; the
+one file covering the mutated module prints 42 lines in 0.13s. **Twenty times
+the output for the same information.** A mutation in a URL helper cannot break
+a shopping-cart test.
+
+```bash
+# find the covering tests once
+grep -rl "moduleUnderTest" src/**/*.test.*
+# then, per mutation:
+pnpm vitest run --project unit src/lib/that-file.test.ts
+```
+
+Run the **full suite exactly twice**: once at the start to confirm the
+baseline you were given, once at the end as the gate before the PR. Never
+between mutations.
+
+And keep mutations **few and aimed**: three or four at the mechanism the task
+exists to protect, not one per line you touched. Past experience on a large
+phase: the first three found every vacuous test; from the fifth onward they
+found almost nothing and cost the same.
+
+Do not re-run the baseline to confirm numbers you were given in your prompt.
+If they do not match, say so and move on.
+
+---
+
+## Shared machine — processes, ports, and other agents
+
+You are very likely **not alone on this machine**. Other agents run in
+parallel in their own worktrees, and the user has their own app running.
+Three rules, all learned the hard way:
+
+**1. Never kill by pattern.** `pkill -f "next-server"`, `killall node`,
+`pkill -f vitest` and friends match **every** matching process on the
+machine, not just yours. An agent used `pkill -f "next-server"` to stop its
+own dev server and killed the user's app at the same time. Stop your own
+process **by PID**:
+
+```bash
+pnpm dev --port 3100 &            # note the PID
+DEV_PID=$!
+# … work …
+kill "$DEV_PID"                    # never pkill, never killall
+```
+
+If you lost the PID, find *your* process by the port you chose, never by
+process name:
+
+```bash
+lsof -nP -iTCP:3100 -sTCP:LISTEN -t | xargs -r kill
+```
+
+**2. Port 3000 is not yours.** The user's app runs there and you may read it
+(`curl http://localhost:3000/...`) to compare behaviour, but never start
+anything on it and never stop it. Pick a free port for your own server
+(3100, 3200, …) and free it when you are done.
+
+**3. Stay inside your worktree.** Do not edit, stage, or clean files in the
+main checkout or in another agent's worktree. If a file you need is modified
+by someone else, read it and adapt — do not "fix" it.
+
+If you break one of these anyway, **say so in your final report**. A silent
+side effect on a shared machine is far worse than an admitted one.
+
+---
+
 ## Step 7 — Commit on a branch and open a PR (NO push to main, NO merge)
 
 Test files never go straight to `main`. After all selected tasks are marked Done and the full suite gate passes, put the work on a dedicated branch and open a PR so the work is backed up and reviewable (and CI runs, if the project is in `prod`).
 
-Create the branch off the latest `main` (slug: `test/qa-suite-{YYYY-MM-DD}`), commit, push, and open the PR:
+This project follows **git flow with two levels**: an integration branch per
+epic, and a short-lived branch per task.
+
+```
+main
+ └── epic/{fase}-{epic}-{slug}      integration branch for one epic
+      └── task/{TASK-ID}-{slug}     one per task, merged back into the epic
+```
+
+Parse `Base: {epic-branch}` from your arguments and branch **off the epic
+branch**, never off `main`. If `Base:` is absent, ask before assuming `main`:
+a task branched straight off `main` breaks the epic's integration point, and
+the mistake only surfaces at merge time. Name the branch after the task you
+covered (`task/{TASK-ID}-test-{slug}`), not after a date — a date tells the
+reviewer nothing about what is inside.
+
+**The PR targets the epic branch**, not `main`. Commit, push, and open it:
 
 ```bash
-git checkout main && git pull origin main
-git checkout -b test/qa-suite-$(date +%Y-%m-%d)
+git fetch origin
+git checkout {epic-branch} && git pull origin {epic-branch}
+git checkout -b task/{TASK-ID}-test-{slug}
 git add .
 git commit -m "$(cat <<'EOF'
 test: implement QA test suite
@@ -344,8 +434,9 @@ test: implement QA test suite
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
-git push -u origin test/qa-suite-$(date +%Y-%m-%d)
+git push -u origin task/{TASK-ID}-test-{slug}
 gh pr create \
+  --base {epic-branch} \
   --draft \
   --title "test: QA test suite" \
   --body "$(cat <<'EOF'
@@ -362,10 +453,10 @@ EOF
 
 **Never run `git push origin main` and never `gh pr merge`.** The merge to `main` is a separate gate the user triggers explicitly.
 
-After the PR is created, apply the session auto-merge preference from Step 0a. **If `AUTO_MERGE=true`:** add the `Auto-merge` label so the auto-merge workflow merges it once CI goes green. **If `AUTO_MERGE=false`:** leave the PR without the label — the user merges manually.
+After the PR is created, apply the session auto-merge preference from Step 0a. **If `AUTO_MERGE=true`:** add the `Auto-merge` label — the orchestrator merges it once approved (or, on a project with hosted CI, the auto-merge workflow does once it's green). **If `AUTO_MERGE=false`:** leave the PR without the label — the user merges manually.
 
 ```bash
-gh label create "Auto-merge" --color "94a3b8" --description "Merge automatically once CI is green and review passes" 2>/dev/null || true
+gh label create "Auto-merge" --color "94a3b8" --description "Merge automatically once review passes (and, if this project has hosted CI, once it's green)" 2>/dev/null || true
 PR_NUM=$(gh pr list --head "$(git branch --show-current)" --json number --jq '.[0].number')
 gh pr edit "$PR_NUM" --add-label "Auto-merge"   # only if AUTO_MERGE=true
 ```

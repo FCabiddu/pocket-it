@@ -48,7 +48,7 @@ Derive a **project slug** for mode C the same way the pipeline does: from the BA
 
 Layout archetypes, typography, colour, decorative elements, Industry Design DNA, and the animation catalogue live in one shared reference so this agent and `mvp-builder` never drift apart. **Read it now with the Read tool:**
 
-`/Users/user/Desktop/pocket-it/.claude/agents/shared/design-compass.md`
+`/Users/user/.claude/agents/pocket-it/.claude/agents/shared/design-compass.md`
 
 The compass holds the distilled *visual language* (colour, type, layout, motion). Modes A and B lean on it directly. Mode C **expresses the compass's colour and type principles as a token system** and adds the enterprise layer below (components, screens, accessibility) that the compass does not cover — never restate compass content, build on it.
 

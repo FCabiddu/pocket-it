@@ -37,7 +37,7 @@ cat "$AUTOMERGE_FILE" 2>/dev/null || echo "missing"
 
   > **Question:** "How should PRs be handled this session?"
   > **Options:**
-  > - `Auto-merge` — Reviewer approves → CI goes green → PR merges automatically (no extra step needed)
+  > - `Auto-merge` — Reviewer approves → PR merges automatically (no extra step needed)
   > - `Manual approval` — Reviewer approves but you decide when to merge each PR
 
   After the user answers, run:
@@ -47,6 +47,36 @@ cat "$AUTOMERGE_FILE" 2>/dev/null || echo "missing"
   echo "false" > "$AUTOMERGE_FILE"  # if Manual approval chosen
   ```
   Set `AUTO_MERGE` accordingly.
+
+---
+
+## Step 0b — Pipeline integration preference
+
+Hosted CI/CD is **opt-in, not the default**. Check for a recorded preference before touching any infrastructure task:
+
+```bash
+PIPELINE_FILE="/tmp/$(basename "$(git rev-parse --show-toplevel)")-pipeline"
+cat "$PIPELINE_FILE" 2>/dev/null || echo "missing"
+```
+
+- **If the file exists:** read its value silently (`true`/`false`) and skip the question. Set `PIPELINE=true` or `PIPELINE=false`.
+- **If the file is missing and this session's work includes a CI/CD task at all:** ask once with `AskUserQuestion`, then record the answer:
+
+  > **Question:** "Do you want a hosted CI/CD pipeline (GitHub Actions) for this project?"
+  > **Options:**
+  > - `No pipeline (Recommended)` — Skip CI/CD entirely. Validation stays local (lint/type-check/scoped tests before every push, plus the reviewer's reading of the diff). Fastest, costs nothing, no runner-minute budget to manage.
+  > - `Yes, build one` — Set up the dev/prod-gated pipeline described below (§5c), with an explicit `APP_STATUS` switch the user flips on when they actually want hosted runs.
+
+  ```bash
+  echo "true" > "$PIPELINE_FILE"   # if "Yes, build one"
+  # or
+  echo "false" > "$PIPELINE_FILE" # if "No pipeline"
+  ```
+
+- **If a pipeline already exists in the repo** (`.github/workflows/*.yml` present, e.g. from before this preference existed, or set up by a human directly): leave it alone regardless of what this preference says — this question only governs whether a *new* pipeline gets built, never a reason to remove or fight an existing one on your own initiative. Set `PIPELINE=true` to reflect reality and skip the question.
+- **If this session's work has no CI/CD-flavoured task at all** (e.g. you were dispatched only for a Dockerfile or an infra-as-code task with no pipeline step), skip this question entirely — it isn't relevant yet, and asking would just be noise. Ask it lazily, only when you're about to actually implement Section 9.3/CI-CD-tool work.
+
+When `PIPELINE=false`: skip the entire "CI/CD pipelines", "Application status gate", and "Auto-merge workflow" subsections of Step 5c below. Implement everything else (Dockerfiles, IaC, observability, security) exactly as scoped by the TAD. Note in your Step 6 report that CI/CD was explicitly declined for this session, not silently skipped.
 
 ---
 
@@ -141,26 +171,125 @@ If no infrastructure files exist yet, note that and proceed — you will create 
 
 ---
 
-## Step 3.5 — Create working branch
+## Mutation testing — target the tests, not the whole suite
 
-Parse the branch name from your arguments (format: `Branch: {branch-name}`). Also check whether the arguments include the phrase "ALREADY EXISTS".
+When you verify a test by mutating the production code, run **only the test
+files that cover the mutated module**, never the full suite. The cost of a
+mutation is not wall-clock time — it is the **output you have to read**, and
+you pay it on every single round.
 
-If the branch does **not** exist:
+Measured on a real project: the full unit suite prints 812 lines in 6.5s; the
+one file covering the mutated module prints 42 lines in 0.13s. **Twenty times
+the output for the same information.** A mutation in a URL helper cannot break
+a shopping-cart test.
 
 ```bash
-git checkout main
-git pull origin main
+# find the covering tests once
+grep -rl "moduleUnderTest" src/**/*.test.*
+# then, per mutation:
+pnpm vitest run --project unit src/lib/that-file.test.ts
+```
+
+Run the **full suite exactly twice**: once at the start to confirm the
+baseline you were given, once at the end as the gate before the PR. Never
+between mutations.
+
+And keep mutations **few and aimed**: three or four at the mechanism the task
+exists to protect, not one per line you touched. Past experience on a large
+phase: the first three found every vacuous test; from the fifth onward they
+found almost nothing and cost the same.
+
+Do not re-run the baseline to confirm numbers you were given in your prompt.
+If they do not match, say so and move on.
+
+---
+
+## Shared machine — processes, ports, and other agents
+
+You are very likely **not alone on this machine**. Other agents run in
+parallel in their own worktrees, and the user has their own app running.
+Three rules, all learned the hard way:
+
+**1. Never kill by pattern.** `pkill -f "next-server"`, `killall node`,
+`pkill -f vitest` and friends match **every** matching process on the
+machine, not just yours. An agent used `pkill -f "next-server"` to stop its
+own dev server and killed the user's app at the same time. Stop your own
+process **by PID**:
+
+```bash
+pnpm dev --port 3100 &            # note the PID
+DEV_PID=$!
+# … work …
+kill "$DEV_PID"                    # never pkill, never killall
+```
+
+If you lost the PID, find *your* process by the port you chose, never by
+process name:
+
+```bash
+lsof -nP -iTCP:3100 -sTCP:LISTEN -t | xargs -r kill
+```
+
+**2. Port 3000 is not yours.** The user's app runs there and you may read it
+(`curl http://localhost:3000/...`) to compare behaviour, but never start
+anything on it and never stop it. Pick a free port for your own server
+(3100, 3200, …) and free it when you are done.
+
+**3. Stay inside your worktree.** Do not edit, stage, or clean files in the
+main checkout or in another agent's worktree. If a file you need is modified
+by someone else, read it and adapt — do not "fix" it.
+
+If you break one of these anyway, **say so in your final report**. A silent
+side effect on a shared machine is far worse than an admitted one.
+
+---
+
+## Step 3.5 — Create working branch (git flow: task branch off the EPIC branch)
+
+This project follows **git flow with two levels**: an integration branch per
+epic, and a short-lived branch per task.
+
+```
+main
+ └── epic/{fase}-{epic}-{slug}          integration branch for one epic
+      ├── task/{TASK-ID}-{slug}         one per task, merged back into the epic
+      └── task/{TASK-ID}-{slug}
+```
+
+Parse from your arguments:
+- `Branch: {branch-name}` — the **task** branch you must work on.
+- `Base: {epic-branch}` — the **epic** branch to branch from and merge back
+  into. If `Base:` is absent, ask before assuming `main`: branching a task
+  straight off `main` breaks the epic's integration point, and the mistake is
+  only visible at merge time.
+
+Also check for "ALREADY EXISTS".
+
+If the branch does **not** exist:
+```bash
+git fetch origin
+git checkout {epic-branch} && git pull origin {epic-branch}
 git checkout -b {branch-name}
 ```
 
-If the arguments say "ALREADY EXISTS":
-
+If "ALREADY EXISTS":
 ```bash
-git checkout {branch-name}
-git pull origin {branch-name}
+git checkout {branch-name} && git pull origin {branch-name}
 ```
 
----
+**Never branch off `main` for a task**, and never merge a task branch into
+`main` directly. The epic branch is what gets reviewed and merged into `main`,
+as one coherent unit of work.
+
+**Your PR targets the epic branch**, not `main`:
+```bash
+gh pr create --base {epic-branch} --head {branch-name} ...
+```
+
+If several tasks run **in parallel on the same epic**, each has its own task
+branch off the same base. Rebase or merge the epic branch into yours before
+opening the PR if it has moved — a task branch that has drifted is the most
+common source of a conflict nobody planned for.
 
 ## Step 4 — Load the assigned issue
 
@@ -218,15 +347,16 @@ Write production-ready infrastructure code. Apply these rules without exception:
 - Set environment variables via `.env` file reference — never hardcode values
 - Define health checks and `depends_on` conditions
 
-**CI/CD pipelines:**
+**CI/CD pipelines — only if `PIPELINE=true` (Step 0b). If `PIPELINE=false`, skip this whole subsection and everything under it (the status gate, the auto-merge workflow) entirely — do not create or modify any `.github/workflows/*.yml` file, do not set `APP_STATUS`.**
+
 - Implement the steps from TAD Section 9.3 in the correct order: lint → type-check → test → build → security scan
-- Gate every job on the project's application status — see the mandatory rule below. This is not optional and not a per-project judgement call.
+- Gate every job on the project's application status — see the mandatory rule below. This is not optional and not a per-project judgement call, *once the user has opted into having a pipeline at all*.
 - Use caching for dependencies to speed up runs
 - Never hardcode secrets — use the CI/CD platform's secrets/environment variable mechanism
 - Add pipeline badges to README if one exists
 - **Do not write deploy jobs.** Deployment is deliberately out of scope for this pipeline right now — no staging step, no production step, no environment targets, no deploy secrets. If TAD Section 9.3 lists deploy steps, implement everything up to the build/scan stage and report the deploy rows as intentionally unimplemented in your Step 6 report. Do not invent a deploy target to fill the gap.
 
-**Application status gate (MANDATORY — GitHub Actions projects):**
+**Application status gate (MANDATORY — GitHub Actions projects that opted in via Step 0b):**
 
 A project in active development must not spend runner minutes re-validating every push of every draft PR: the developer already ran lint, type-check, and the scoped tests locally before pushing, and a build of unreviewed code tells nobody anything. On a Free private repo that duplicated work exhausts the monthly Actions cap in a few dozen PRs, after which **all** workflows stop — including the auto-merge one. So hosted CI is driven by an explicit, per-project status flag rather than running by default.
 
@@ -293,9 +423,9 @@ gh variable set APP_STATUS --body dev    # turn it back off
 gh workflow run ci.yml                   # one full run on demand, in either state
 ```
 
-**Auto-merge workflow (create alongside the first CI pipeline — GitHub Actions projects only):**
+**Auto-merge workflow (create alongside the first CI pipeline — only if `PIPELINE=true`):**
 
-Whenever you create or modify the project's CI pipeline, also ensure `.github/workflows/auto-merge.yml` exists. This is the workflow that acts on the `Auto-merge` label the implementing agents apply (see the merge gate in the pipeline conventions). If the file already exists, leave it alone.
+If `PIPELINE=false`, do not create this file — the `Auto-merge` label still works without it (the orchestrator merges directly once the reviewer approves; see the merge gate convention). Only when the project has opted into a hosted pipeline does this GitHub Action take over that job. Whenever you create or modify the project's CI pipeline, also ensure `.github/workflows/auto-merge.yml` exists. This is the workflow that acts on the `Auto-merge` label the implementing agents apply (see the merge gate in the pipeline conventions). If the file already exists, leave it alone.
 
 ```yaml
 name: Auto-merge
@@ -324,7 +454,7 @@ How it stays safe: the job only fires on non-draft PRs carrying the `Auto-merge`
 Also create the GitHub label the workflow keys on (idempotent):
 
 ```bash
-gh label create "Auto-merge" --color "94a3b8" --description "Merge automatically once CI is green and review passes" 2>/dev/null || true
+gh label create "Auto-merge" --color "94a3b8" --description "Merge automatically once review passes (and, if this project has hosted CI, once it's green)" 2>/dev/null || true
 ```
 
 **Manual setup steps to report (cannot be automated from CI config):** in the repo settings the user must enable **"Allow auto-merge"**, and add a branch protection rule on `main` with required status checks (and required review if desired). Without branch protection, `--auto` merges as soon as the labeled PR is mergeable — call this out explicitly in your Step 6 report.
@@ -448,7 +578,7 @@ EOF
 **If `AUTO_MERGE=true`:** add the `Auto-merge` label so the auto-merge workflow merges it once CI goes green:
 
 ```bash
-gh label create "Auto-merge" --color "94a3b8" --description "Merge automatically once CI is green and review passes" 2>/dev/null || true
+gh label create "Auto-merge" --color "94a3b8" --description "Merge automatically once review passes (and, if this project has hosted CI, once it's green)" 2>/dev/null || true
 PR_NUM=$(gh pr list --head {branch-name} --json number --jq '.[0].number')
 gh pr edit "$PR_NUM" --add-label "Auto-merge"
 ```

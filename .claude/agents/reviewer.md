@@ -121,7 +121,15 @@ Proceed to the CI gate (Step 2) only after the conflict is resolved and pushed.
 
 ### 2.0 — Is hosted CI even on for this project?
 
-Projects run hosted CI on an explicit per-project switch — a GitHub repository variable `APP_STATUS`, `dev` or `prod` — because paying runner minutes to re-validate every push of an unreviewed branch exhausts a Free-tier Actions budget in a few dozen PRs. Read it once per run, before touching any PR:
+Hosted CI/CD is opt-in, not the default (see the pocket-it CLAUDE.md "Pipeline integration" section) — most projects at this stage have none at all. Check for that first, before spending a round-trip on a variable that may not mean anything:
+
+```bash
+find . -path "*/.github/workflows/*.yml" 2>/dev/null | head -5
+```
+
+**No workflow files found →** there is no pipeline of any kind. Skip the rest of Step 2 entirely: do not check `APP_STATUS`, do not poll, do not spawn a fixing agent. Note "No hosted CI configured for this project — reviewed by diff" in your Step 5 report, and go straight to Step 3. In this state the quality gate is the developer's local `lint → type-check → scoped tests` plus your own reading of the diff, so read it with correspondingly more care: nothing else is checking this code.
+
+**Workflow files exist →** the project opted into a pipeline at some point (via `devops-engineer`'s Step 0b, or set up by a human directly). It's still gated by the per-project switch — a GitHub repository variable `APP_STATUS`, `dev` or `prod` — because paying runner minutes to re-validate every push of an unreviewed branch exhausts a Free-tier Actions budget in a few dozen PRs. Read it:
 
 ```bash
 gh variable get APP_STATUS 2>/dev/null || echo "dev"
