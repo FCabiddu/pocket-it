@@ -248,8 +248,12 @@ Write thorough, production-quality tests. Apply these rules without exception:
 After implementing, run only the tests you just wrote or touched for this task — NOT the full suite. You are one task into a multi-task loop; the full suite (with coverage and E2E) is a single gate run once at the end in Step 6, not repeated per task.
 
 ```bash
-# Scoped to this task's new/changed test files only
+# Only this task's new/changed test files (see "Which tests to run" above)
 {test_runner} run {test files written or modified for this task}
+
+# …and, if this task's tests cover existing source, the tests the graph says
+# that source affects — so you catch what your new fixtures broke elsewhere:
+{package_manager} run test:affected     # if the project ships one
 ```
 
 For each failing test, classify it before acting:
@@ -314,17 +318,92 @@ Then move to the next task.
 Only after **all** selected tasks are marked Done, run the full suite exactly once as the final gate before opening a PR:
 
 ```bash
-# Run everything with coverage
+# The fast suite, with coverage — this is the gate
 {package_manager} run test --coverage
-
-# Run E2E tests (if applicable)
-{package_manager} run test:e2e
 
 # Verify coverage meets the target from TAD Section 11.3
 # If coverage is below target, add missing tests before proceeding
 ```
 
+**E2E and other slow suites are not automatic here.** Run them only if this
+session actually touched their surface — an E2E spec, its fixtures/seed, or a
+route those specs drive — or if the task explicitly asks for it. A browser or
+live-database suite costs minutes and a stack to start and stop; when the change
+did not touch it, it is CI's job:
+
+```bash
+{package_manager} run test:e2e     # only when the condition above holds
+```
+
 Fix any failure this full run surfaces that per-task scoped runs missed (e.g. cross-test interference, shared-state leaks). This is the one point in the workflow where the whole suite runs — do not repeat it per task.
+
+---
+
+## Which tests to run — the dependency graph, never the whole suite
+
+Running every test in the repo on every task is not thoroughness, it is noise.
+The cost you pay is not wall-clock time, it is **the output you have to read**,
+and you pay it on every round. A change to a URL helper cannot break a
+shopping-cart test.
+
+Resolve your test command in this order and **stop at the first hit**:
+
+**1. A project-provided affected-tests entry point.** Look for it once, at the
+start of the session:
+
+```bash
+grep -n "affected\|related\|changed" package.json Makefile Taskfile* 2>/dev/null
+```
+
+If the project ships one — e.g. `{package_manager} run test:affected` — that
+**is** your test command. It already encodes which suites to run, which to skip
+and why (a suite needing a live database or a browser is not something to start
+on a whim). Do not hand-roll scoping around it, and do not "also run the full
+suite to be safe".
+
+**2. Otherwise, the runner's own dependency-graph selector.** Never derive test
+files from source filenames: that mapping misses every transitive importer, so
+it silently skips the tests most likely to catch your change. Every mainstream
+runner can answer "which tests cover these files":
+
+| Runner | Command |
+|---|---|
+| Vitest | `vitest related --run <files>` &nbsp;/&nbsp; `vitest --changed <ref>` |
+| Jest | `jest --findRelatedTests <files>` &nbsp;/&nbsp; `jest --onlyChanged` |
+| pytest | `pytest --testmon` (or the package/module path) |
+| Go | `go test ./path/to/pkg/...` |
+| Cargo | `cargo test -p <crate>` |
+
+Feed it the files git says you changed — committed **and** still in the working
+tree — not the ones you remember touching:
+
+```bash
+git diff --name-only $(git merge-base {parent-branch} HEAD) HEAD
+git status --porcelain --untracked-files=all
+```
+
+`{parent-branch}` is the branch you actually forked from (an epic branch, if
+this task sits under one), not `main` — otherwise you drag every sibling task's
+files back into scope.
+
+**3. Only if neither exists**, map source to test by the project's naming
+convention — and say in your final report that the scope was heuristic.
+
+**Quiet the output too.** A scoped run still prints hundreds of lines if every
+passing test dumps its `console.log`. Where the runner supports it, use a
+compact reporter and suppress output from passing tests (Vitest ≥3.2:
+`--reporter=dot --silent=passed-only`; Jest: `--reporters=summary`). Failures
+keep their full detail — that is the only output worth reading.
+
+**The full suite runs at most once**, as the gate immediately before opening the
+PR, and you skip even that when CI runs the same suite on the PR. Never between
+mutations, never per task, never "just to check".
+
+**Slow suites are opt-in.** Integration tests that need a live database and
+browser E2E are not part of a scoped run unless the change actually touches
+their surface — a migration, the service layer they exercise, or the specs
+themselves. Otherwise they belong to CI, and starting them locally costs
+minutes and a stack you then have to shut down.
 
 ---
 
@@ -341,10 +420,10 @@ the output for the same information.** A mutation in a URL helper cannot break
 a shopping-cart test.
 
 ```bash
-# find the covering tests once
-grep -rl "moduleUnderTest" src/**/*.test.*
-# then, per mutation:
-pnpm vitest run --project unit src/lib/that-file.test.ts
+# ask the module graph which tests cover the mutated file — once
+pnpm exec vitest related --run --project unit --silent=passed-only src/lib/that-file.ts
+# then re-run exactly those files, per mutation:
+pnpm exec vitest run --project unit --silent=passed-only src/lib/that-file.test.ts
 ```
 
 Run the **full suite exactly twice**: once at the start to confirm the

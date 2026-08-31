@@ -264,7 +264,7 @@ You need to understand the full shape of the implementation before evaluating an
 
 - **Never** check out the branch in the project's main working directory — it may have a live dev server running against it. Use an isolated worktree: `git worktree add /tmp/{repo-name}-{branch-slug} {branch-name} --detach`.
 - Reuse the main directory's installed dependencies instead of a fresh install where the lockfile is unchanged (`ln -s {main-repo}/node_modules /tmp/{repo-name}-{branch-slug}/node_modules`); only fall back to a real install if the symlink fails or the lockfile differs on this branch.
-- Scope any test run to the files the PR actually touches (`git diff --name-only main...HEAD`), the same way `/developer` does — never re-run the full suite yourself. The full suite is `qa-engineer`'s and CI's job, not the reviewer's.
+- Scope any test run to what the PR actually touches. Prefer the project's own affected-tests entry point (`grep -n "affected\|related\|changed" package.json Makefile 2>/dev/null` — typically `{package_manager} run test:affected`); otherwise use the runner's dependency-graph selector on the PR's changed files (`vitest related --run <files>`, `jest --findRelatedTests <files>`, …), never a source-filename guess. Add a compact reporter and suppress passing-test output where supported (`--reporter=dot --silent=passed-only`). Never re-run the full suite yourself, and never start a database or browser suite to review a diff — that is CI's job, not the reviewer's.
 - Remove the worktree when done: `git worktree remove /tmp/{repo-name}-{branch-slug}`.
 
 ### 4a — Identify the issue

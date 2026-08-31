@@ -174,6 +174,74 @@ If the project is empty, note that and proceed — establish patterns yourself f
 
 ---
 
+## Which tests to run — the dependency graph, never the whole suite
+
+Running every test in the repo on every task is not thoroughness, it is noise.
+The cost you pay is not wall-clock time, it is **the output you have to read**,
+and you pay it on every round. A change to a URL helper cannot break a
+shopping-cart test.
+
+Resolve your test command in this order and **stop at the first hit**:
+
+**1. A project-provided affected-tests entry point.** Look for it once, at the
+start of the session:
+
+```bash
+grep -n "affected\|related\|changed" package.json Makefile Taskfile* 2>/dev/null
+```
+
+If the project ships one — e.g. `{package_manager} run test:affected` — that
+**is** your test command. It already encodes which suites to run, which to skip
+and why (a suite needing a live database or a browser is not something to start
+on a whim). Do not hand-roll scoping around it, and do not "also run the full
+suite to be safe".
+
+**2. Otherwise, the runner's own dependency-graph selector.** Never derive test
+files from source filenames: that mapping misses every transitive importer, so
+it silently skips the tests most likely to catch your change. Every mainstream
+runner can answer "which tests cover these files":
+
+| Runner | Command |
+|---|---|
+| Vitest | `vitest related --run <files>` &nbsp;/&nbsp; `vitest --changed <ref>` |
+| Jest | `jest --findRelatedTests <files>` &nbsp;/&nbsp; `jest --onlyChanged` |
+| pytest | `pytest --testmon` (or the package/module path) |
+| Go | `go test ./path/to/pkg/...` |
+| Cargo | `cargo test -p <crate>` |
+
+Feed it the files git says you changed — committed **and** still in the working
+tree — not the ones you remember touching:
+
+```bash
+git diff --name-only $(git merge-base {parent-branch} HEAD) HEAD
+git status --porcelain --untracked-files=all
+```
+
+`{parent-branch}` is the branch you actually forked from (an epic branch, if
+this task sits under one), not `main` — otherwise you drag every sibling task's
+files back into scope.
+
+**3. Only if neither exists**, map source to test by the project's naming
+convention — and say in your final report that the scope was heuristic.
+
+**Quiet the output too.** A scoped run still prints hundreds of lines if every
+passing test dumps its `console.log`. Where the runner supports it, use a
+compact reporter and suppress output from passing tests (Vitest ≥3.2:
+`--reporter=dot --silent=passed-only`; Jest: `--reporters=summary`). Failures
+keep their full detail — that is the only output worth reading.
+
+**The full suite runs at most once**, as the gate immediately before opening the
+PR, and you skip even that when CI runs the same suite on the PR. Never between
+mutations, never per task, never "just to check".
+
+**Slow suites are opt-in.** Integration tests that need a live database and
+browser E2E are not part of a scoped run unless the change actually touches
+their surface — a migration, the service layer they exercise, or the specs
+themselves. Otherwise they belong to CI, and starting them locally costs
+minutes and a stack you then have to shut down.
+
+---
+
 ## Mutation testing — target the tests, not the whole suite
 
 When you verify a test by mutating the production code, run **only the test
@@ -187,10 +255,10 @@ the output for the same information.** A mutation in a URL helper cannot break
 a shopping-cart test.
 
 ```bash
-# find the covering tests once
-grep -rl "moduleUnderTest" src/**/*.test.*
-# then, per mutation:
-pnpm vitest run --project unit src/lib/that-file.test.ts
+# ask the module graph which tests cover the mutated file — once
+pnpm exec vitest related --run --project unit --silent=passed-only src/lib/that-file.ts
+# then re-run exactly those files, per mutation:
+pnpm exec vitest run --project unit --silent=passed-only src/lib/that-file.test.ts
 ```
 
 Run the **full suite exactly twice**: once at the start to confirm the
@@ -372,8 +440,9 @@ Write production-ready code. Apply these rules without exception — including t
 # Linting
 {package_manager} run lint
 
-# Tests — scoped to what this task touched, NEVER the full suite
-{test_runner} run {test files co-located with, or matching, the source files you touched}
+# Tests — only what this task touched (see "Which tests to run" above)
+{package_manager} run test:affected          # if the project ships one — preferred
+{test_runner} related --run {changed source files}   # otherwise, the graph selector
 
 # Frontend: build verification
 {package_manager} run build
@@ -382,7 +451,7 @@ Write production-ready code. Apply these rules without exception — including t
 {migration_command} --dry-run
 ```
 
-**Scoping the test run:** you implemented one task, not the whole app — running every test in the repo on every task is slow and wasteful. Derive the target test files from what you actually changed (`git diff --name-only main...HEAD`), map each touched source file to its test via the project's naming convention (co-located `*.test.ts`/`*.spec.ts`, or a mirrored path under `__tests__`/`test/`), and pass those paths explicitly to the test runner (e.g. `vitest run path/to/foo.test.ts path/to/bar.test.ts`, `jest path/to/foo.test.ts`). If a touched file has no existing test yet, that's expected — you likely just wrote it as part of this task; include it. Only fall back to a full untargeted run if you cannot determine which tests correspond to your changes. The full suite is `qa-engineer`'s and CI's job, not every task's.
+**Scoping the test run:** you implemented one task, not the whole app. The rules are in "Which tests to run — the dependency graph, never the whole suite" above: prefer the project's own affected-tests script, fall back to the runner's dependency-graph selector, and never map source files to tests by name unless neither exists. If a file you touched has no test yet, that's expected — you likely just wrote it as part of this task; include it explicitly. The full suite is CI's job, not every task's.
 
 Fix all failures before proceeding.
 
