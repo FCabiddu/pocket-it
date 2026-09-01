@@ -9,7 +9,7 @@ Your only job is to spawn an isolated agent. Call the Agent tool immediately wit
 
 ---
 
-Read the file `/Users/user/Desktop/pocket-it/.claude/agents/ux-ui-designer.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
+Read the file `/Users/user/Desktop/agents/pocket-it/.claude/agents/ux-ui-designer.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
 
 $ARGUMENTS
 
