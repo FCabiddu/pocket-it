@@ -1,6 +1,6 @@
 # pocket-it — Agent Maintenance Guide
 
-This file is for working on the agents themselves. (The old `CLAUDE.template.md` for target projects was removed from versioning together with Flow A — recover it from git history at `72bd240^` if you need it.)
+This file is for working on the agents themselves. (The old `CLAUDE.template.md` for target projects was removed from versioning together with the old prospecting agents — recover it from git history at `72bd240^` if you need it.)
 
 ---
 
@@ -35,11 +35,11 @@ The body is plain Markdown. Use `{{ARGUMENTS}}` once, near the top, to receive w
 | File | Model | Role |
 |------|-------|------|
 | `mvp-builder.md` | Sonnet | Builds an award-quality static site (index.html + css/ folder, vanilla JS) from a plain-English description; no TAD/Linear required. Output to `~/Desktop/clients/{slug}/` |
-| `ux-ui-designer.md` | Opus | **Three modes.** Standalone: (A) audits an existing static site against the shared compass → `{target-dir}/UX_UI_REVIEW.md`; (B) gives a lightweight static-site design direction for `mvp-builder`. Also runs **in Flow B** (see below) as mode (C). Keeps 28 inspiration galleries as a manual compass-refresh channel (not a runtime fetch). Critiques and directs; does not build. |
+| `ux-ui-designer.md` | Opus | **Three modes.** Standalone: (A) audits an existing static site against the shared compass → `{target-dir}/UX_UI_REVIEW.md`; (B) gives a lightweight static-site design direction for `mvp-builder`. Also runs **in the development pipeline** (see below) as mode (C). Keeps 28 inspiration galleries as a manual compass-refresh channel (not a runtime fetch). Critiques and directs; does not build. |
 
-(The other Flow A agents — business-prospector, pitch-generator, scraper, legal-advisor, css-animator — and the Flow C creative-writing agents were removed from this repo; recover them from git history before `72bd240` if needed.)
+(The old prospecting agents — business-prospector, pitch-generator, scraper, legal-advisor, css-animator — and the creative-writing agents were removed from this repo; recover them from git history before `72bd240` if needed.)
 
-**Flow B — Full software engineering pipeline**
+**Development pipeline — full software engineering flow**
 
 | File | Model | Role |
 |------|-------|------|
@@ -63,7 +63,7 @@ The designer's 28-gallery inspiration library is a **manual** refresh channel, n
 
 ### Accessibility floor — WCAG 2.1 AA (mandatory, no opt-out)
 
-Accessibility is decoupled from the optional Design Spec: a **WCAG 2.1 AA baseline is a hard floor on every output**, standalone or Flow B, MVP or enterprise. It lives in the shared `design-compass.md` (so `mvp-builder` static sites meet it too) and is enforced end-to-end:
+Accessibility is decoupled from the optional Design Spec: a **WCAG 2.1 AA baseline is a hard floor on every output**, standalone or inside the development pipeline, MVP or enterprise. It lives in the shared `design-compass.md` (so `mvp-builder` static sites meet it too) and is enforced end-to-end:
 - **Compass** — defines the baseline checklist; `mvp-builder` and `ux-ui-designer` both read it.
 - **Design Spec** (`ux-ui-designer` mode C) — *adds depth* (per-component ARIA/keyboard contracts + verification plan); never lowers the floor.
 - **TAD 7.6** — accessibility target is never `N/A`; minimum AA even for MVP/static.
@@ -132,7 +132,7 @@ The `tech-architect` template enforces this: skipped sections keep their heading
 Pass arguments to skills as plain text when invoking them. Recommended formats:
 
 **`/ux-ui-designer`** — mode is inferred from what you pass:
-- Enterprise Design Spec (Flow B): pass the BAD path — `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` (or run it right after `/business-analyst`)
+- Enterprise Design Spec (development pipeline): pass the BAD path — `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` (or run it right after `/business-analyst`)
 - Audit: pass a built-site path or URL — `~/Desktop/clients/{slug}` or `https://…`
 - Static direction: pass a plain brief — `Design direction for a coffee-bar landing page`
 
@@ -159,7 +159,7 @@ Branch: {branch-name}
 
 ---
 
-## Flow B conventions
+## Development pipeline conventions
 
 | Convention | Format | Example |
 |---|---|---|
@@ -196,7 +196,7 @@ Why draft-PR-then-gate-the-merge instead of withholding the push: a draft PR bac
 
 ### Project history log (opt-in per project)
 
-Long-running Flow B engagements risk the orchestrator (human or Claude) burning a large share of a fresh session just re-deriving what already happened from `git log` across dozens of PRs. The mitigation is a running, reverse-chronological history file the pipeline keeps current on its own, instead of relying on the orchestrator to remember to write one near a context limit.
+Long-running pipeline engagements risk the orchestrator (human or Claude) burning a large share of a fresh session just re-deriving what already happened from `git log` across dozens of PRs. The mitigation is a running, reverse-chronological history file the pipeline keeps current on its own, instead of relying on the orchestrator to remember to write one near a context limit.
 
 - **Location, by convention:** `docs/SESSION_HANDOFF.md` in the target project. **Opt-in, not mandatory** — a project only has one once someone (usually the orchestrator, on the user's request) creates it. Implementing agents check for it and use it if present; none of them create it unprompted.
 - **Who writes to it:** `developer`, `devops-engineer`, and `qa-engineer` each append a short entry (1–3 lines: issue ID, PR number marked "(draft)", one-line what/why) at Step 5g/7.5, right after opening their PR. `reviewer` then updates that entry's marker to "approved, awaiting merge" at Step 4d on approval (or appends one if it's missing). The orchestrator finalises the entry to reflect the actual merge once the user authorises it — the one step no agent template can do on its own, since none of them merge.

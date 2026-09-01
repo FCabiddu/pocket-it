@@ -64,7 +64,7 @@ Run `/developer` and `/devops-engineer` in parallel where Linear issues are unbl
 
 ## Standalone design tools
 
-Independent of the Flow B pipeline — no BAD/TAD/Linear required. `/mvp-builder` turns a plain-English brief into an award-quality static site; `/ux-ui-designer` (mode A) audits that site and returns prioritised, copy-pasteable fixes, or (mode B) gives a lightweight design direction from a brief. Both draw on one shared **design compass** so the builder and the reviewer judge by the same standard. (The same `/ux-ui-designer` also runs inside Flow B in its Enterprise Design Spec mode — see [How it works](#how-it-works).)
+Independent of the development pipeline — no BAD/TAD/Linear required. `/mvp-builder` turns a plain-English brief into an award-quality static site; `/ux-ui-designer` (mode A) audits that site and returns prioritised, copy-pasteable fixes, or (mode B) gives a lightweight design direction from a brief. Both draw on one shared **design compass** so the builder and the reviewer judge by the same standard. (The same `/ux-ui-designer` also runs inside the development pipeline in its Enterprise Design Spec mode — see [How it works](#how-it-works).)
 
 ```mermaid
 flowchart LR
