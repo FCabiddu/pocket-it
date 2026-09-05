@@ -1,16 +1,11 @@
 ## Launcher
 
-Your only job is to spawn an isolated agent. Call the Agent tool immediately with:
-- `subagent_type`: `general-purpose`
-- `model`: `opus`
+Spawn the native agent. Call the Agent tool immediately with:
+- `subagent_type`: `business-analyst`
 - `description`: `Business Analyst — BAD generation`
 - `run_in_background`: `false`
-- `prompt`: exactly the text below (substitute $ARGUMENTS verbatim)
+- `prompt`: exactly the text below
 
 ---
 
-Read the file `/Users/user/Desktop/agents/pocket-it/.claude/agents/business-analyst.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
-
 $ARGUMENTS
-
-Then execute the instructions in that file exactly as written.

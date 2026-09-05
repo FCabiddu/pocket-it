@@ -1,6 +1,6 @@
 # pocket-it
 
-An AI-powered agent toolkit built on [Claude Code](https://claude.ai/code) for end-to-end software product delivery — from business analysis to production code — plus standalone design tools that build and audit static sites.
+An agent toolkit for [Claude Code](https://claude.ai/code) that takes a feature from business analysis to reviewed pull requests, plus standalone tools that build and audit static sites and write the legal pages a client site needs.
 
 ---
 
@@ -8,150 +8,82 @@ An AI-powered agent toolkit built on [Claude Code](https://claude.ai/code) for e
 
 ```mermaid
 flowchart TD
-    A(["/business-analyst"]) --> B[("BAD\nBusiness Analysis Doc")]
-    B --> BC{{"👤 Review BAD"}}
-    BC --> UX(["/ux-ui-designer\n(Design Spec mode)"])
-    UX --> UXD[("Design Spec\ntokens · components · WCAG 2.1 AA")]
-    UXD --> UXC{{"👤 Review Design Spec"}}
-    UXC --> C(["/tech-architect"])
-    UXD -. feeds TAD Section 7 .-> C
-    C --> D[("TAD\nTechnical Architecture Doc")]
-    D --> DC{{"👤 Review TAD"}}
-    DC --> E(["/implementation-planner"])
-    E --> F[("IPD\nImplementation Plan\n+ Linear Issues")]
-    F --> G{{"👤 Review Linear board"}}
-    G --> H(["/developer — one per issue\nLabel: Backend or Frontend"])
-    G --> I(["/devops-engineer — one per issue"])
-    G --> J(["/qa-engineer"])
-    UXD -. authoritative UI source .-> H
-    H --> K(["/reviewer"])
-    I --> K
-    J --> K
-    K --> L(["/documentation-agent"])
+    A(["/business-analyst"]) --> B[("BAD")]
+    B --> UX(["/ux-ui-designer (Design Spec)"]) --> UXD[("Design Spec")]
+    B --> C(["/tech-architect"])
+    UXD -. TAD §7 .-> C
+    C --> D[("TAD + best-practices/")]
+    D --> E(["/implementation-planner"])
+    E --> F[("tasks/*.md · INDEX.md · DEPS.json")]
+    F --> W{{"orchestrator: wave by wave, parallel, worktrees"}}
+    W --> H(["/developer ×n"]) & I(["/devops-engineer"]) & J(["/qa-engineer"])
+    H & I & J --> K(["/reviewer (batch)"])
+    K --> M{{"👤 merge"}}
+    M --> L(["/documentation-agent"])
 ```
 
----
+Every stage is a subagent that reads the artefacts of the previous one from disk. No agent asks questions at runtime: a `.pocket-it.json` in the target repo answers them, and anything still unknown is written down as an assumption for you to confirm.
 
 ## Agents
 
-### Phase 1 — Planning
-
-| Skill | What it produces | Model |
+| Skill | Produces | Model |
 |---|---|---|
-| `/business-analyst` | Business Analysis Document (BAD) — user stories, acceptance criteria, scope | Sonnet |
-| `/ux-ui-designer` | Enterprise Design Spec — design tokens, component specs with accessibility contracts, page/screen specs, information architecture, WCAG 2.1 AA. Feeds TAD Section 7. **Default step for Production/enterprise scope; optional for MVP/static** | Opus |
-| `/tech-architect` | Technical Architecture Document (TAD) — stack, structure, API contracts, infra, testing strategy. Reads the Design Spec if present | Opus |
-| `/implementation-planner` | Implementation Plan Document (IPD) — epics, stories, tasks with estimates + Linear issues | Sonnet |
-
-**Output:** Markdown documents in `./business-analysis/`, `./design-specs/`, `./tech-analysis/`, `./implementation-plans/` and a fully populated Linear project.
-
-### Phase 2 — Build
-
-Run one skill per Linear issue. Each agent reads the TAD and IPD, marks the issue **In Progress**, implements, and marks it **Done**.
-
-| Skill | What it does | Model |
-|---|---|---|
-| `/developer Issue: LIN-42 — Title Label: Backend` | Implements one Backend issue — APIs, services, DB migrations | Sonnet |
-| `/developer Issue: LIN-43 — Title Label: Frontend` | Implements one Frontend issue — UI components, pages, state | Sonnet |
-| `/devops-engineer Issue: LIN-44 — Title` | Implements one DevOps issue — Dockerfiles, CI/CD, infra config | Sonnet |
-| `/qa-engineer` | Implements the full test suite from all QA issues in Linear | Sonnet |
-| `/reviewer` | Checks open PRs against TAD constraints and acceptance criteria | Sonnet |
-| `/documentation-agent` | Writes README, API reference, and architecture overview | Sonnet |
-
-Run `/developer` and `/devops-engineer` in parallel where Linear issues are unblocked. Run `/qa-engineer` after backend issues are merged.
-
----
-
-## Standalone design tools
-
-Independent of the development pipeline — no BAD/TAD/Linear required. `/mvp-builder` turns a plain-English brief into an award-quality static site; `/ux-ui-designer` (mode A) audits that site and returns prioritised, copy-pasteable fixes, or (mode B) gives a lightweight design direction from a brief. Both draw on one shared **design compass** so the builder and the reviewer judge by the same standard. (The same `/ux-ui-designer` also runs inside the development pipeline in its Enterprise Design Spec mode — see [How it works](#how-it-works).)
-
-```mermaid
-flowchart LR
-    U(["Plain-English brief"]) --> MB(["/mvp-builder"])
-    MB --> SITE[("Static site\nindex.html + css/")]
-    SITE --> UX(["/ux-ui-designer\naudit"])
-    UX --> REV[("UX_UI_REVIEW.md\nscores + prioritised fixes")]
-    REV -. apply .-> MB
-    COMPASS[["design-compass.md\nshared knowledge"]] -. read .-> MB
-    COMPASS -. read .-> UX
-    GAL(["28 inspiration galleries"]) -. manual refresh .-> COMPASS
-```
-
-| Skill | What it does | Model |
-|---|---|---|
-| `/mvp-builder Build a portfolio site for a tattoo artist` | Builds a static site — `index.html` + `css/` (one file per section) + vanilla JS — in `~/Desktop/clients/{slug}/` | Sonnet |
-| `/ux-ui-designer ~/Desktop/clients/my-site` | Audits a built site against the compass, scores 8 dimensions 1–5, writes `UX_UI_REVIEW.md`. Given only a static brief, returns a design direction instead | Opus |
-
-**Shared design compass** — `.claude/agents/shared/design-compass.md` holds the distilled design knowledge (25 layout archetypes, typography, colour, Industry Design DNA, decorative elements, 15-technique animation catalogue). Both agents read it at runtime; it is never copied inline. Edit it once and both agents follow.
-
-**Inspiration library** — `/ux-ui-designer` keeps 28 curated inspiration galleries as a **manual** refresh channel: a human browses them and distils new trends into the compass. The agent does not fetch them at runtime (they are JS-heavy SPAs that return no usable design signal to a fetch).
-
----
+| `/business-analyst {brief}` | `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` | Opus |
+| `/ux-ui-designer {BAD path \| site \| brief}` | Design Spec (pipeline), audit `UX_UI_REVIEW.md`, or a design direction | Opus |
+| `/tech-architect {BAD path}` | `tech-analysis/{NAME}_TECH_ANALYSIS.md` + `best-practices/` | Opus |
+| `/implementation-planner {TAD path}` | `tasks/T-*.md`, `tasks/INDEX.md`, `implementation-plans/{NAME}_DEPS.json`, short IPD | Sonnet |
+| `/developer Issue: T-1.2.3 — title Label: Backend` | one task with tests, task branch, draft PR | Sonnet |
+| `/devops-engineer Issue: T-1.1.2 — title` | one infra task, draft PR | Sonnet |
+| `/qa-engineer` | integration, E2E and a11y tests for all open QA tasks, draft PR, bug tasks | Sonnet |
+| `/reviewer PRs: 12, 13` or `Tasks: T-1.2.3` | review by diff vs task criteria, TAD, best practices; conflicts; CI routing | Opus |
+| `/documentation-agent` | README, `docs/API.md`, `docs/ARCHITECTURE.md`, draft PR | Sonnet |
+| `/mvp-builder {brief}` | static site in `~/Desktop/clients/{slug}/` | Sonnet |
+| `/legal-advisor {client}` | privacy, cookie, terms pages + `LEGAL_CHECKLIST.md` | Opus |
 
 ## Setup
 
-### Prerequisites
+1. Clone and let Claude Code see the agents (this repo is designed to live at `~/.claude/agents/pocket-it`, e.g. via a symlink from `~/Desktop/agents`).
+2. Register the guard hook and drop the 1M-context model for orchestration in `~/.claude/settings.json`:
 
-- [Claude Code](https://claude.ai/code) installed
-- A [Linear](https://linear.app) account with the Claude AI Linear MCP connected
-
-### Install
-
-Clone the repo, then copy the `.claude/` folder into your target project:
-
-```bash
-git clone https://github.com/FCabiddu/pocket-it
-cp -r pocket-it/.claude /your/project/root/
+```json
+{
+  "model": "claude-fable-5-1",
+  "hooks": { "PreToolUse": [ { "matcher": "Bash", "hooks": [ { "type": "command", "command": "bash /ABS/PATH/pocket-it/.claude/hooks/guard.sh" } ] } ] }
+}
 ```
 
-Then install the security hook (blocks pushes containing secrets or API keys):
+3. In each target project: `cp pocket-it/templates/pocket-it.json ./.pocket-it.json` and set `scope`, `automerge`, `pipeline`, `baseBranch`, `testCommand`.
+4. Optional: `bash .claude/hooks/install.sh` in the target repo installs the pre-push secret scanner.
+
+## Running a feature
 
 ```bash
-bash .claude/hooks/install.sh
-```
-
-Restart Claude Code. The skills will appear in your `/` menu.
-
----
-
-## Usage
-
-```bash
-# 1. Describe your feature — agent produces the BAD
-/business-analyst Build a recipe sharing app with social features
-
-# 2. Review the BAD, then design the UX/UI foundation (tokens, components, screens, WCAG 2.1 AA)
-#    Default step for Production/enterprise scope; optional for MVP/static.
-/ux-ui-designer business-analysis/RECIPE_APP_BUSINESS_ANALYSIS.md
-
-# 3. Review the Design Spec, then generate the architecture (it reads the spec into TAD §7)
-/tech-architect
-
-# 4. Review the TAD, then generate the implementation plan + Linear issues
-/implementation-planner
-
-# 5. Review the Linear board. Edit or remove issues if needed.
-#    Then run one agent per issue (parallel where unblocked):
-/developer Issue: LIN-42 — User auth API Label: Backend
-/developer Issue: LIN-43 — Login page Label: Frontend
-/devops-engineer Issue: LIN-44 — Docker setup
-
-# 6. Run QA after backend issues are merged, then review and document
+/business-analyst  Gestione ordini rivenditori con email di conferma
+/tech-architect    business-analysis/ORDINI_RIVENDITORI_TECH_ANALYSIS.md
+/implementation-planner tech-analysis/ORDINI_RIVENDITORI_TECH_ANALYSIS.md
+# then, wave by wave from DEPS.json — one message, several agents, isolation: worktree
+/developer Issue: T-3.1.1 — Migrazione tabella ordini  Label: Backend
+/developer Issue: T-3.2.1 — Form ordine rivenditore   Label: Frontend
+/reviewer  Tasks: T-3.1.1, T-3.2.1
+# you merge; next wave; at the end
 /qa-engineer
-/reviewer
 /documentation-agent
 ```
 
----
+## Cost model
+
+The 2026-09 audit found the bill dominated by two things: an orchestration session on a 1M-context model, kept open for a day and implementing tasks itself, and implementing agents that re-read files and ran 400+ turns. The current design counters both: the orchestrator delegates and stays small (one session per epic, standard context), agents read the task file plus cited TAD sections only, have `maxTurns`, ship tests with code, and the reviewer runs per batch. Hard rules (no merge, no push to main, no `pkill`, no CI flips, no sleep-polling) are enforced by a hook, not by prompt text.
 
 ## Repository structure
 
 ```
 .claude/
-  agents/           # Agent definitions (one .md per agent)
-    shared/         # Cross-agent references — design-compass.md (mvp-builder + ux-ui-designer)
-  skills/           # Skill launchers (one folder per skill)
-README.md
-CLAUDE.md           # Maintenance guide for working on the agents
+  agents/               one .md per agent
+    shared/             design-compass.md · implementing-common.md
+  skills/               /launchers (forward $ARGUMENTS to the native agent)
+  hooks/                guard.sh (PreToolUse) · pre-push secret scanner + install.sh
+bin/tasks-index.sh      regenerates tasks/INDEX.md
+templates/pocket-it.json
+docs/agent-reviews/     audits and change logs
+CLAUDE.md               maintenance guide for the agents
 ```

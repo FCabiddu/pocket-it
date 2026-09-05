@@ -22,19 +22,13 @@ The user has provided: {{ARGUMENTS}}
 
 ---
 
-## Step 0 — Scope detection (MANDATORY, runs first)
+## Step 0 — Scope and delivery context (no questions)
 
-Check if `{{ARGUMENTS}}` begins with the word `simple`, `medium`, or `full` (case-insensitive).
+```bash
+cat .pocket-it.json 2>/dev/null || echo '{}'
+```
 
-- **Yes** → extract it as `PROJECT_SCOPE`, strip it from the arguments, treat the remainder as the actual input.
-- **No** → use `AskUserQuestion` once:
-
-  > "What's the project scope?
-  > - **simple** — static site, landing page, or small frontend-only project
-  > - **medium** — product with a backend, small SaaS, small e-commerce
-  > - **full** — multi-team enterprise product, complex data model, production-grade"
-
-  Wait for the answer. Store it as `PROJECT_SCOPE`. Proceed with the original arguments unchanged.
+`PROJECT_SCOPE` = first word of `{{ARGUMENTS}}` if `simple|medium|full`, else config `scope`, else inferred (record `[ASSUMPTION]`). Delivery context for §9.3/§11.3 comes from config too: `teamSize` (default 1), `pipeline` (default `false` = no hosted CI, local validation only). **Never call `AskUserQuestion`** — you run as a subagent and it fails; unresolved facts go into §13 as blocking questions with the conservative choice applied meanwhile.
 
 Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the metadata table.
 - **Found** → extract `MVP` or `Full Production` — use it for **architecture style decisions** (managed platforms vs full infra, monolith vs microservices).
@@ -101,18 +95,9 @@ Rules that always hold, regardless of budget:
 - **Free text**: Use directly.
 - **Empty**: Ask "What would you like me to architect?" and wait.
 
-After ingesting, only ask blocking questions (cloud provider preference, hard constraints) that you cannot infer. One `AskUserQuestion` call, bundled. **This bundle MUST include the delivery-budget question below** unless the answer is already stated in the input.
+### Delivery & CI budget (from config, drives §9.3 and §11.3)
 
-### Delivery & CI budget (MANDATORY question — drives Step 4's §9.3 and §11.3)
-
-A production-grade CI/CD pipeline is **not free** and is often **premature**. Before speccing one, you must know the delivery reality. Ask (bundled into the Step 1 call):
-
-> "Delivery context — pick what applies:
-> - **Team size:** solo / small team / multi-team
-> - **Is there a deploy target yet?** none yet (pre-deploy) / staging only / production
-> - **CI runner budget:** GitHub **Free private repo** (~2,000 Actions min/month — a hard cap) / GitHub public repo (unlimited) / paid CI / self-hosted / **local-only (no hosted CI)**"
-
-Why this is blocking: on a **Free private repo**, heavy per-PR jobs — a real-DB integration suite (`supabase start`/Docker ≈ 3 min each) and browser E2E (Playwright ≈ 2–4 min each) — burn the monthly minute cap in a few dozen PRs, after which **all** Actions stop (CI, auto-merge, and any DB-migrate step included). For a solo, pre-deploy project this pipeline mostly **duplicates local validation** the developer already runs. Size the CI to the budget; do not default to the full pipeline.
+`pipeline: false` (the default) means the project validates locally: §9.3 describes the `APP_STATUS`-gated pipeline as **available but not built**, §11.3 states every gate is locally enforced. `pipeline: true` means spec it fully, starting in `dev`. On a Free private repo a real-DB integration suite and browser E2E per PR exhaust the 2,000 min/month cap in a few dozen PRs, so those jobs are main-only or manual regardless. Do not ask about this; read the config.
 
 ---
 
@@ -122,17 +107,13 @@ After ingesting the BAD, identify any case where your preferred technical approa
 
 A business requirement is any functional or non-functional constraint the BAD explicitly states — e.g. "no user data", "must work offline", "GDPR compliant", "no subscriptions", "support X user type".
 
-**Rule:** You may decide technology freely (stack, libraries, patterns, infra). You may NOT silently substitute a different solution for a business requirement. If your technical instinct conflicts with a requirement, you must:
+**Rule:** You may decide technology freely (stack, libraries, patterns, infra). You may NOT silently substitute a different solution for a business requirement. When your technical instinct conflicts with a requirement:
 
-1. Use `AskUserQuestion` to surface the conflict — state:
-   - What the BAD requires
-   - What you would propose instead and **why** (technical reason, risk, cost, complexity)
-   - Ask explicitly: "Can I proceed with this change, or do you want to keep the original requirement?"
-2. **Wait for the answer.** Do not start Step 2 or write any part of the TAD until the user responds.
-3. If the user approves the change, proceed and document it as an ADR with the user's rationale.
-4. If the user says no, honour the original requirement exactly as stated.
+1. **Honour the requirement as stated** in the TAD you write now.
+2. Add an ADR titled `ADR-n: {requirement} — alternative proposed` stating what the BAD requires, what you would propose instead and why (risk, cost, complexity), and mark it `**Status: needs user decision**`.
+3. List it under **Blocking questions** in §13 and in your Step 7 report, so the orchestrator relays it. Do not stall the pipeline waiting for an answer.
 
-**Example of what NOT to do:** BAD says "avoid storing user data" → do not silently decide "migrate to Supabase Auth" (which still stores user credentials). Instead, ask: "The BAD says avoid storing user data. My instinct is to migrate auth to Supabase, but that still stores credentials. Should I instead drop auth entirely and go guest-only, or do you want to keep auth in scope?"
+**Example:** BAD says "avoid storing user data" → do not silently decide "migrate to Supabase Auth". Design guest-only as required, and record the Supabase Auth alternative as an ADR needing a decision.
 
 ---
 
@@ -536,7 +517,9 @@ Then do a final Write with Version **1.1** and add a Revision History note at th
 
 ## Step 6 — Best-practices files
 
-Create `best-practices/` in the same output directory. Write **one file per technology group** (frontend, backend, devops, testing). Cap each at **120 lines**. Run all research in parallel.
+Create `best-practices/` in the same output directory. Write **one file per technology group** — `frontend.md`, `backend.md`, `devops.md`, `testing.md` (or a single `BEST_PRACTICES.md` for `medium`). Cap each at **120 lines**. Run all research in parallel.
+
+**Update in place, never per feature.** If the folder already exists (a later feature on the same project), read the existing group file and edit it: add the few rules this feature introduces, remove nothing that still applies. Do not create `{FEATURE}.md` files — developers read every file for their label, and a folder that grows one file per feature is what made a real project read eight of them per task.
 
 **File format:**
 

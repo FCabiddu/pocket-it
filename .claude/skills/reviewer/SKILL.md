@@ -1,16 +1,11 @@
 ## Launcher
 
-Your only job is to spawn an isolated agent. Call the Agent tool immediately with:
-- `subagent_type`: `general-purpose`
-- `model`: `sonnet`
-- `description`: `Code Reviewer — check PRs against TAD criteria and acceptance criteria`
+Spawn the native agent. Call the Agent tool immediately with:
+- `subagent_type`: `reviewer`
+- `description`: `Code Reviewer — PRs vs task criteria, TAD, best practices`
 - `run_in_background`: `false`
-- `prompt`: exactly the text below (substitute $ARGUMENTS verbatim)
+- `prompt`: exactly the text below
 
 ---
 
-Read the file `/Users/user/Desktop/agents/pocket-it/.claude/agents/reviewer.md` using the Read tool. Replace every occurrence of `{{ARGUMENTS}}` in the content with this exact value:
-
 $ARGUMENTS
-
-Then execute the instructions in that file exactly as written.

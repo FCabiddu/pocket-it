@@ -1,0 +1,11 @@
+{
+  "scope": "medium",
+  "automerge": false,
+  "pipeline": false,
+  "baseBranch": "main",
+  "branching": "flat",
+  "testCommand": "",
+  "ticketPrefix": "T",
+  "teamSize": 1,
+  "language": "it"
+}
