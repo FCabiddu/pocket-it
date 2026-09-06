@@ -22,7 +22,7 @@ for f in glob.glob("tasks/*.md"):
     for line in txt.splitlines()[:40]:
         h = hdr.match(line)
         if h: fields[h.group(1).strip().lower()] = h.group(3).strip()
-    status[tid] = fields.get("status", "Todo")
+    status[tid] = re.split(r"\s+[\u2014\u2013-]\s+|\s*\(", fields.get("status", "Todo"))[0].strip() or "Todo"
     label[tid] = fields.get("label", "")
     risk[tid] = fields.get("risk", "low")
     files_of[tid] = [x.strip("` ") for x in fields.get("files", "").split(",") if x.strip()]
