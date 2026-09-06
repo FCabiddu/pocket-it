@@ -8,21 +8,38 @@ An agent toolkit for [Claude Code](https://claude.ai/code) that takes a feature 
 
 ```mermaid
 flowchart TD
-    subgraph feature["Feature lane"]
-      IN(["/intake — one round of questions, in your session"]) --> BR[("BRIEF.md + .pocket-it.json")]
-      BR --> BA(["/business-analyst"]) --> BAD[("BAD — Given/When/Then, examples, non-goals")]
-      BAD --> UX(["/ux-ui-designer (Production scope)"]) -.-> TA
-      BAD --> TA(["/tech-architect"]) --> TAD[("PROJECT TAD once · DELTA per feature · best-practices/")]
-      TAD --> PL(["/implementation-planner"]) --> BOARD[("tasks/ · INDEX.md · DEPS.json — waves, contracts, risk")]
-      BOARD --> GATE{{"👤 review the board"}}
-      GATE --> RW(["/run-wave ×N — doctor → next-wave → developers in worktrees → one reviewer"])
-      RW --> M{{"👤 merge"}} --> RW
-      M --> RT(["/retro — findings become rules"])
+    subgraph docs["1 · Understand — once per feature"]
+      direction LR
+      IN["/intake<br/>4 questions, in your session"] --> BR[("BRIEF.md<br/>.pocket-it.json")]
+      BR --> BA["business-analyst"] --> BAD[("BAD<br/>Given/When/Then · examples · non-goals")]
+      BAD --> UX["ux-ui-designer<br/>(Production scope)"] -.-> TA
+      BAD --> TA["tech-architect"] --> TAD[("PROJECT TAD once<br/>DELTA per feature<br/>best-practices/")]
     end
-    subgraph quick["Fast lane"]
-      QF(["/quickfix 'the button does not…'"]) --> T[("tasks/QF-n.md")] --> D(["developer"]) --> R(["reviewer"]) --> M2{{"👤 merge"}}
+    subgraph plan["2 · Plan"]
+      direction LR
+      TAD --> PL["implementation-planner"] --> BOARD[("tasks/*.md · INDEX.md · DEPS.json<br/>waves · contracts · risk")]
+      BOARD --> DOC[/"doctor.sh"/] --> GATE{{"👤 review the board<br/>the one human gate"}}
     end
+    subgraph wave["3 · /run-wave — repeat until next-wave says Done"]
+      direction LR
+      NW[/"next-wave.sh<br/>what is ready"/] --> DEV["developer ×N<br/>worktrees, in parallel<br/>opus if Risk: high"]
+      DEV --> PRS[("draft PRs<br/>AC → tests")]
+      PRS --> VER[/"verify.sh<br/>lint · types · affected tests"/] --> REV["reviewer ×1<br/>comments + labels"]
+      REV -- needs-work ≤ 2 rounds --> DEV
+      REV -- approved --> MERGE{{"👤 merge"}}
+    end
+    GATE --> NW
+    MERGE --> NW
+    MERGE --> RT["/retro<br/>findings → rules"]
+    subgraph fast["Fast lane — no documents"]
+      direction LR
+      QF["/quickfix 'the button does not…'"] --> QT[("tasks/QF-n.md")] --> QD["developer"] --> QV[/"verify.sh"/] --> QR["reviewer"] --> QM{{"👤 merge"}}
+    end
+    classDef script fill:#e8f1f0,stroke:#0e7c7b,color:#0a3d3c
+    class DOC,NW,VER,QV script
 ```
+
+Rounded boxes are agents, cylinders are files on disk, parallelograms are scripts that spend no tokens, hexagons are the two moments that need you.
 
 No agent asks questions at runtime. `/intake` asks you once; everything else reads `.pocket-it.json` and `BRIEF.md` and writes its assumptions down. Scripts, not agents, decide what is ready to launch and whether a PR is mechanically green.
 
