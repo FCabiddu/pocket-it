@@ -38,11 +38,11 @@ gh pr view $N --json number,title,headRefName,baseRefName,isDraft,labels,mergeab
 
 ## Step 2 — CI gate (only if the project has a pipeline)
 
-`ls .github/workflows/*.yml 2>/dev/null` — none → note "no hosted CI, reviewed by diff" and go to Step 3. Otherwise `gh variable get APP_STATUS 2>/dev/null || echo dev`: `dev` → CI is off by design, review by diff, **never** spawn a fixer. `prod` → `gh pr checks $N --watch --interval 30 2>&1 | tail -20` (Bash timeout 600000). Empty checks on a draft = expected. On a **code-level** failure (lint/type/test/build) get the log (`gh run view $RUN --log-failed | head -80`), then spawn the fixer with the Agent tool: `devops-engineer` for workflow/security-scan failures, `developer` (Label inferred from the task file) for the rest, arguments:
+`ls .github/workflows/*.yml 2>/dev/null` — none → note "no hosted CI, reviewed by diff" and go to Step 3. Otherwise `gh variable get APP_STATUS 2>/dev/null || echo dev`: `dev` → CI is off by design, review by diff, **never** spawn a fixer. `prod` → `gh pr checks $N --watch --interval 30 2>&1 | tail -20` (Bash timeout 600000). Empty checks on a draft = expected. On a **code-level** failure (lint/type/test/build) get the log (`gh run view $RUN --log-failed | head -80`), then spawn `developer` with the Agent tool — `Label: DevOps` for workflow/security-scan failures, otherwise the Label from the task file — with arguments:
 
 ```
 Issue: {ID} — CI fix: {job}
-Label: {Backend|Frontend}
+Label: {Backend|Frontend|DevOps}
 Branch: {branch} ALREADY EXISTS
 Base: {baseRefName}
 PR: {N}
@@ -52,7 +52,15 @@ CI Failure:
 
 Comment `🔧 CI fix dispatched — {job}: {root cause}` and stop for this PR. Infra-level errors (billing, runner, permissions) are not code: note them and review by diff instead. Never flip `APP_STATUS`.
 
-## Step 3 — Read the diff
+## Step 3 — Mechanical verification first, then read the diff
+
+Before spending judgement, let the script spend CPU:
+
+```bash
+bash ~/.claude/agents/pocket-it/bin/verify.sh $N 2>&1 | tail -40
+```
+
+It runs lint, type-check and the affected tests on the PR branch in a throwaway worktree and prints a ≤ 40-line summary. **RED → NEEDS WORK immediately** with the failing lines as findings; do not read the diff to "see if it is minor". GREEN → continue. If the script cannot run (no package manager, exotic stack) say so and fall back to reading with more care.
 
 ```bash
 gh pr diff $N --name-only; gh pr diff $N | head -1500
@@ -67,7 +75,8 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 **Security (§6.2):** auth guard on every protected route the TAD names; no secrets committed; input validated before DB/shell/HTML.
 **Contract (§5.2):** status codes and field names match.
 **Data (§4.3, §8.2):** schema changes have a migration; no raw SQL where an ORM is mandated; patterns respected.
-**Tests:** the tests listed under "Tests expected" in the task exist in the PR and exercise the acceptance criteria. Missing tests = NEEDS WORK.
+**Tests ↔ criteria:** the PR body maps every numbered acceptance criterion (AC1, AC2…) to a test name, and those tests exist in the diff and assert the "then" of their criterion. An unmapped criterion, or a test that only checks the happy path of a criterion that names an error case, is a finding. Missing tests = NEEDS WORK.
+**Contract:** if the task cites a `**Contract**:` file, backend and frontend changes conform to it exactly (names, shapes, status codes); a change to the contract itself needs a one-line justification in the PR.
 **Accessibility (frontend, floor):** semantic interactive elements, names on icon controls, no `outline:none` without `:focus-visible`, real `alt`, labels on inputs, no colour-only meaning.
 **Best practices:** any documented anti-pattern present in the diff — binding.
 **Scope:** files touched outside `**Files**:` need a one-line justification in the PR; unexplained drift = finding.

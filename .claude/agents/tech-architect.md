@@ -126,10 +126,12 @@ Read top 1–2 results per search. Synthesise into concrete, versioned recommend
 
 ---
 
-## Step 3 — Derive name and output path
+## Step 3 — Derive name and output path; project TAD or delta
 
-- `SNAKE_CASE` name from project title, max 5 words, all caps.
-- If an explicit output path was given in the arguments, use it exactly. Otherwise: check `./tech-analysis/` exists (`[ -d "./tech-analysis" ] && echo exists || echo missing`), create if missing, output to `./tech-analysis/{NAME}_TECH_ANALYSIS.md`.
+- `SNAKE_CASE` name from the feature title, max 5 words, all caps. `mkdir -p tech-analysis`.
+- **First feature on a project (no TAD exists yet):** write the full document below as `tech-analysis/PROJECT_TECH_ANALYSIS.md` — this is the **project TAD**: stack, structure, conventions, infra, testing. It is written once and updated in place.
+- **Later features (a project TAD or any `*_TECH_ANALYSIS.md` exists):** do **not** write a new full TAD. Read the existing one (§3, §7.1, §8.1, §11 at least) and write `tech-analysis/{NAME}_TECH_DELTA.md`: same section numbering, but **only the sections this feature changes or adds** — typically §4.3 (new tables/columns), §5.2 (new endpoints), §2.4 (new ADRs), §8.3 (new jobs), and one line per untouched section: `unchanged — see PROJECT_TECH_ANALYSIS.md`. A delta is 60–200 lines. If the feature genuinely changes the stack or the architecture style, update the project TAD's affected sections in place and say so in the report.
+- Legacy projects with several per-feature TADs and no `PROJECT_TECH_ANALYSIS.md`: treat the newest full TAD as the project TAD, write the delta against it, and recommend in the report that the user consolidate (`/tech-architect consolidate` rewrites the project TAD from the existing ones).
 - Save incrementally after each section — overwrite each time.
 
 ---

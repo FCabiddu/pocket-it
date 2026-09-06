@@ -37,6 +37,8 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 
 - Read the task file, then only the TAD sections it references. Extract a section by number, never the whole document:
   `awk '/^## 5\. /,/^## 6\. /' tech-analysis/X_TECH_ANALYSIS.md`
+  When the task cites `PROJECT §… · DELTA §…`, the delta (`tech-analysis/{NAME}_TECH_DELTA.md`) overrides the project TAD (`tech-analysis/PROJECT_TECH_ANALYSIS.md`) for those sections.
+- If the task cites a `**Contract**:` file, read it in full: it is the agreed API shape between backend and frontend and it is not yours to change without saying so in the PR.
 - Do not read the IPD. The task file is self-contained; if it is not, that is a planner bug to report, not a reason to read 800 lines.
 - Read a source file **once**. After an `Edit`, do not re-`Read` the whole file; the Edit result already confirmed the change. Re-read a range only when you need lines you have not seen.
 - Cap command output: `| head -60`, `--reporter=dot`, `--silent=passed-only`, `2>&1 | tail -40` on compilers. Never dump a whole log.
