@@ -432,12 +432,14 @@ In `APP_STATUS: dev` every row above is skipped (reported success, zero minutes)
 
 ### 11.1 Testing Pyramid
 
-| Layer | Tool | Target | What it covers |
-|---|---|---|---|
-| Unit | Vitest / Jest | ≥ 80% | Business logic in isolation |
-| Component | Testing Library | Key components | Render, interactions, states |
-| Integration | Supertest / {tool} | Critical paths | Endpoints with real DB |
-| E2E | Playwright | Happy path + 3 errors | Full user journeys |
+Default policy of this pipeline (`.pocket-it.json` → `tests`): unit and component tests are **required** and ship with each task; integration and E2E are **on-demand** — spec them only where this product earns them, and say why in the "Justification" column. Never fill the two bottom rows by habit.
+
+| Layer | Tool | Target | What it covers | Justification |
+|---|---|---|---|---|
+| Unit | Vitest / Jest | ≥ 80% of changed code | Business logic in isolation, edge and error paths | required |
+| Component | Testing Library + axe | Every component with state or a11y contract | Render, interactions, states, a11y floor | required |
+| Integration | Supertest / {tool} | {the specific flows, or `N/A`} | Endpoints with real DB | {money / auth / data integrity / shared contract — or "not needed"} |
+| E2E | Playwright | {1–3 named journeys, or `N/A`} | Full user journeys | {the flows the product cannot ship broken — or "not needed"} |
 
 ### 11.2 Test Environment Strategy
 
@@ -447,7 +449,7 @@ In `APP_STATUS: dev` every row above is skipped (reported success, zero minutes)
 
 State **where** each gate runs, per the `APP_STATUS` rule: **CI-enforced** only in `prod` (and only the fast gate is per-PR); in `dev` every gate is **locally enforced** — the developer runs `lint → type-check → scoped tests` before each PR and the reviewer reads the diff. Real-DB integration and browser-E2E gates are main-only or manual in both states — never a per-PR blocker.
 
-**Gates:** 100% test pass, ≥ 80% coverage, 0 TypeScript errors, 0 lint errors, Lighthouse ≥ 90 mobile.
+**Gates:** 100% pass of the affected unit/component tests on every PR, ≥ 80% coverage of changed code, 0 TypeScript errors, 0 lint errors, Lighthouse ≥ 90 mobile. Integration/E2E gates exist only for the flows named in 11.1 and run when their surface changes or on demand.
 
 ---
 

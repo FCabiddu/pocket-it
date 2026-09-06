@@ -46,7 +46,8 @@ Epic → Story → Task. A task is one engineer, one session, one PR, a clear do
 
 - Every task lists the **files it is expected to create or touch**. Two tasks in the same wave must not touch the same file; if they must, make one depend on the other.
 - Every task cites the **TAD sections** that specify it. If the TAD does not specify something the task needs, write the decision into the task's Notes rather than leaving it to the developer.
-- Every task carries **acceptance criteria** the reviewer can check by reading a diff, and the **test expectation** (unit tests alongside the code; QA tasks own integration/E2E/a11y).
+- Every task carries **acceptance criteria** the reviewer can check by reading a diff, and the **test expectation**: name the unit/component tests the developer ships with the code (scenarios, not file names).
+- **Integration and E2E are not default.** Read `tests` in `.pocket-it.json` (default `on-demand`). Create a QA task only when you can write its justification in one line — money moves, auth/permissions, data integrity across tables, a contract several clients depend on, or the 1–3 journeys the product cannot ship broken. That line goes in the QA task's Goal. No justification, no QA task. With `tests.e2e: off` / `tests.integration: off` never create one; with `on` create one per story.
 - Sizes: XS < 2h, S 2–4h, M 4–8h. Split anything larger. Prefer 6–15 tasks per epic.
 - Backend tasks that expose an endpoint precede the frontend task that consumes it. Migrations are their own task and go first in the wave.
 
@@ -78,7 +79,7 @@ One file per task with **exactly** this header (fields are `**Key**: value`, one
 - [ ] {…}
 
 ## Tests expected
-{which unit/component tests the developer adds with the code; "QA task T-… covers integration/E2E" where applicable}
+{unit/component scenarios the developer ships with the code — happy path, the edge cases the criteria imply, error paths. Frontend: axe check on the component. Add "Integration/E2E: covered by QA task T-… because {one-line justification}" only when such a task exists; otherwise write "Integration/E2E: not needed for this task".}
 
 ## Notes
 {decisions already taken, gotchas, exact names/routes/columns from the TAD — everything the developer would otherwise have to go hunting for}

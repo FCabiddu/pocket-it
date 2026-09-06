@@ -70,6 +70,7 @@ Copy `templates/pocket-it.json` to the target repo root. Every agent reads it in
 | `baseBranch` | `main` | branch base and PR target |
 | `branching` | `flat` | `epic` = orchestrator passes `Base: epic/...` to each task |
 | `testCommand` | auto | affected-tests entry point |
+| `tests` | `unit: required`, `integration: on-demand`, `e2e: on-demand` | test policy (see below) |
 | `ticketPrefix` | `T` | bug task ids (`T-BUG-n`) |
 | `teamSize` | `1` | planner waves, TAD delivery context |
 
@@ -127,7 +128,7 @@ Skipped sections keep their heading with a one-line `N/A`.
 ### Cost rules (from the 2026-09 audit)
 
 - Agents read the task file + cited TAD sections, never the IPD or the whole TAD. Source files are read once; edits are not followed by full re-reads. Command output is capped.
-- Unit tests ship with the code (developer); QA owns integration/E2E/a11y. Scoped test runs only; full suite at most once before the PR.
+- **Test policy (default since 2026-09-06):** unit and component tests are required and ship with each task, written well (scenario-named, edge and error paths, behaviour not implementation, axe on components). Integration and E2E are **on-demand**: the planner creates a QA task only with a one-line justification (money, auth, data integrity, shared contract, the 1–3 journeys that cannot ship broken); `tech-architect` §11.1 names those flows or writes N/A; `qa-engineer` runs only when such tasks exist. Override per project via `tests` in `.pocket-it.json` (`off` / `on-demand` / `on`). Scoped test runs only; full suite at most once before the PR.
 - `maxTurns` on every implementing agent; stop conditions in the shared rules — a clean partial report beats a runaway.
 - Reviewer is launched once per wave/batch with `PRs:` or `Tasks:` listed, not once per PR; it never guesses PR numbers.
 

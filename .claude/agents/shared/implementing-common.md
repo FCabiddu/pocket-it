@@ -16,6 +16,7 @@ CFG=$(cat .pocket-it.json 2>/dev/null || echo '{}')
 | `baseBranch` | `main` | branch tasks fork from and PRs target (an epic branch if `branching: epic`) |
 | `branching` | `flat` | `flat` = task branches off `baseBranch`; `epic` = `epic/...` branches, orchestrator passes `Base:` |
 | `testCommand` | auto | project's affected-tests entry point, e.g. `pnpm test:affected` |
+| `tests` | `{unit: required, integration: on-demand, e2e: on-demand}` | test policy — see §4 |
 | `ticketPrefix` | `T` | task id prefix used by the board |
 
 Rules: a value passed in your arguments (`Base:`, `Label:`, `PR:`) wins over the file; the file wins over the default. If you run in an isolated worktree (`pwd` contains `/.claude/worktrees/` or `/.worktrees/`) you see only **committed** files: a missing `.pocket-it.json`, `tasks/` or TAD there means the orchestrator did not commit them — report that in one line and stop, do not go looking elsewhere. **Never call `AskUserQuestion`**: you run as a subagent and the call fails. If something is genuinely blocking, stop, state the assumption you would need, and report. Missing file = defaults, say so in the report.
@@ -41,9 +42,22 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 - Cap command output: `| head -60`, `--reporter=dot`, `--silent=passed-only`, `2>&1 | tail -40` on compilers. Never dump a whole log.
 - Best-practices files: `find . -type d -name best-practices | head -1`, then read only the file(s) for your label. Binding, not advisory — if the task cannot be done without violating one, stop and report the conflict; do not decide alone.
 
-## 4. Tests — the dependency graph, never the whole suite
+## 4. Tests — unit done well by default, the rest only when it earns its place
 
-Resolution order, stop at the first hit: (1) `testCommand` from config or a `test:affected` script in `package.json`; (2) the runner's own selector on the files git says you changed — `vitest related --run <files>`, `jest --findRelatedTests <files>`, `pytest <module>`, `go test ./pkg/...`, `cargo test -p <crate>`; (3) naming convention, and say in the report that scope was heuristic. Changed files:
+**Default policy (overridable per project in `.pocket-it.json` → `tests`):**
+
+| Layer | Default | Who | When |
+|---|---|---|---|
+| Unit + component | `required` | developer, in the same PR as the code | every task that adds or changes behaviour |
+| Integration (real DB / real API) | `on-demand` | qa-engineer, as its own QA task | only when the planner justified it: money, auth, data integrity, a contract several clients depend on, or a bug that unit tests could not have caught |
+| E2E (browser) | `on-demand` | qa-engineer, as its own QA task | only the 1–3 journeys the product cannot ship broken (checkout, login, the core flow) — never one per screen |
+| Accessibility | `required` (floor) | developer (axe on the component), qa if E2E exists | every frontend task |
+
+"Done well" for unit tests means: one behaviour per test named as scenario + outcome; happy path, the edge cases the acceptance criteria imply, and the error paths; behaviour, not implementation; deterministic, independent, factories over inline literals; coverage of the code you wrote, not of the repo. A task whose "Tests expected" section is empty and that changes behaviour is a planner defect — write the tests anyway and say so.
+
+`tests.integration` / `tests.e2e` values: `off` (never, even if asked by a task — report instead), `on-demand` (default), `on` (the planner adds a QA task per story). Unit tests cannot be turned off.
+
+**Which tests to run** — the dependency graph, never the whole suite. Resolution order, stop at the first hit: (1) `testCommand` from config or a `test:affected` script in `package.json`; (2) the runner's own selector on the files git says you changed — `vitest related --run <files>`, `jest --findRelatedTests <files>`, `pytest <module>`, `go test ./pkg/...`, `cargo test -p <crate>`; (3) naming convention, and say in the report that scope was heuristic. Changed files:
 
 ```bash
 git diff --name-only $(git merge-base $BASE HEAD) HEAD; git status --porcelain --untracked-files=all

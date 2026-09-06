@@ -56,7 +56,9 @@ Per the shared rules: `BASE` = `Base:` argument, else `baseBranch` from config, 
 
 ## Step 5 — Implement, with tests
 
-Rules, all labels: follow the TAD file structure; match existing conventions; typed code, no `any`; no TODOs or placeholders; secrets via env only; **write the unit/component tests listed under "Tests expected" in the same PR** — a task without its tests is not done.
+Rules, all labels: follow the TAD file structure; match existing conventions; typed code, no `any`; no TODOs or placeholders; secrets via env only.
+
+**Unit and component tests are part of the task, not an afterthought.** Write the scenarios listed under "Tests expected" in the same PR, and add the ones the acceptance criteria imply if the list is thin: happy path, edge cases, error paths; behaviour not implementation; one behaviour per test with a name that states scenario and outcome; factories over inline literals; deterministic. Frontend components get an axe check. Do **not** write integration or E2E tests unless the task file names a QA task or explicitly asks — that layer is on-demand by policy (shared rules §4). A task without its unit tests is not done.
 
 Backend: patterns from §8.2 strictly (repository/service layer, no logic in handlers); endpoints exactly as §5.2 (method, path, shapes, status codes); auth middleware from §6.1 on protected routes; schema changes only via reversible migrations applying §4.3 constraints; parameterised queries; no N+1; never log secrets or PII.
 

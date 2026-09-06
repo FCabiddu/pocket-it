@@ -34,7 +34,7 @@ Every stage is a subagent that reads the artefacts of the previous one from disk
 | `/implementation-planner {TAD path}` | `tasks/T-*.md`, `tasks/INDEX.md`, `implementation-plans/{NAME}_DEPS.json`, short IPD | Sonnet |
 | `/developer Issue: T-1.2.3 — title Label: Backend` | one task with tests, task branch, draft PR | Sonnet |
 | `/devops-engineer Issue: T-1.1.2 — title` | one infra task, draft PR | Sonnet |
-| `/qa-engineer` | integration, E2E and a11y tests for all open QA tasks, draft PR, bug tasks | Sonnet |
+| `/qa-engineer` | integration/E2E tests for the QA tasks the planner justified (on-demand by default; unit tests are the developer's), draft PR, bug tasks | Sonnet |
 | `/reviewer PRs: 12, 13` or `Tasks: T-1.2.3` | review by diff vs task criteria, TAD, best practices; conflicts; CI routing | Opus |
 | `/documentation-agent` | README, `docs/API.md`, `docs/ARCHITECTURE.md`, draft PR | Sonnet |
 | `/mvp-builder {brief}` | static site in `~/Desktop/clients/{slug}/` | Sonnet |
@@ -72,7 +72,7 @@ Every stage is a subagent that reads the artefacts of the previous one from disk
 
 ## Cost model
 
-The 2026-09 audit found the bill dominated by two things: an orchestration session on a 1M-context model, kept open for a day and implementing tasks itself, and implementing agents that re-read files and ran 400+ turns. The current design counters both: the orchestrator delegates and stays small (one session per epic, standard context), agents read the task file plus cited TAD sections only, have `maxTurns`, ship tests with code, and the reviewer runs per batch. Hard rules (no merge, no push to main, no `pkill`, no CI flips, no sleep-polling) are enforced by a hook, not by prompt text.
+The 2026-09 audit found the bill dominated by two things: an orchestration session on a 1M-context model, kept open for a day and implementing tasks itself, and implementing agents that re-read files and ran 400+ turns. The current design counters both: the orchestrator delegates and stays small (one session per epic, standard context), agents read the task file plus cited TAD sections only, have `maxTurns`, and the reviewer runs per batch. Tests follow one default policy: unit and component tests are required and ship with each task; integration and E2E are on-demand, created only where the planner can justify them in a line (`tests` in `.pocket-it.json` overrides per project). Hard rules (no merge, no push to main, no `pkill`, no CI flips, no sleep-polling) are enforced by a hook, not by prompt text.
 
 ## Repository structure
 

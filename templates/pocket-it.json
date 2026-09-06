@@ -5,6 +5,11 @@
   "baseBranch": "main",
   "branching": "flat",
   "testCommand": "",
+  "tests": {
+    "unit": "required",
+    "integration": "on-demand",
+    "e2e": "on-demand"
+  },
   "ticketPrefix": "T",
   "teamSize": 1,
   "language": "it"
