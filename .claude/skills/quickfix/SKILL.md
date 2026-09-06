@@ -63,4 +63,4 @@ Label: {label}
 When it reports, one Agent call: `subagent_type: reviewer`, prompt `Tasks: QF-{n}`.
 
 ### 4. Close
-Report: PR URL, review outcome, what to do next (merge if approved; a second developer round with `Branch: … ALREADY EXISTS` and `PR: n` if NEEDS WORK). Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh` and commit the index if the project keeps one.
+Report: PR URL, review outcome, what to do next (merge if approved; a second developer round with `Branch: … ALREADY EXISTS` and `PR: n` if NEEDS WORK). Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "QF-{n} PR #{m} {approved|needs work} — {title}"`, and commit the index and the handoff.

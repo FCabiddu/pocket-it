@@ -79,7 +79,13 @@ git fetch origin && git checkout "$BASE" && git pull --ff-only origin "$BASE"
 git checkout -b {branch}            # or: git checkout {branch} && git pull origin {branch}  if "ALREADY EXISTS"
 ```
 
-Commit early and often (a killed agent loses uncommitted work). Before `git add -A`, check `git status --short` for `.env`/credentials and gitignore them. Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, then open a **draft** PR against `$BASE` with `gh pr create --draft --base "$BASE" …`. Never `gh pr merge`, never push to `main` directly (hooks block both). If `automerge` is true: `gh label create Auto-merge --color 94a3b8 2>/dev/null || true; gh pr edit $PR_NUM --add-label Auto-merge`. Record `$PR_URL` in the task file. If `docs/SESSION_HANDOFF.md` exists, prepend a 1–3 line entry (ID, PR "(draft)", what/why); never create it.
+Commit early and often (a killed agent loses uncommitted work). Before `git add -A`, check `git status --short` for `.env`/credentials and gitignore them. Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, then open a **draft** PR against `$BASE` with `gh pr create --draft --base "$BASE" …`. Never `gh pr merge`, never push to `main` directly (hooks block both). If `automerge` is true: `gh label create Auto-merge --color 94a3b8 2>/dev/null || true; gh pr edit $PR_NUM --add-label Auto-merge`. Record `$PR_URL` in the task file. Then log the event — this is the project's memory across sessions, and it is mandatory:
+
+```bash
+bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{n} draft — {what, six words} — {tests added}"
+```
+
+`handoff.sh` creates `docs/SESSION_HANDOFF.md` if missing and keeps the log to 40 lines. Use `handoff.sh fact "…"` **only** for something the next agent would otherwise rediscover the hard way (an invariant, a gotcha, a decision and its why) — never for progress. Commit the file with your task file.
 
 **CI-fix mode** (`CI Failure:` in arguments): do not touch task status, do not open a new PR; commit on the existing branch and `gh pr comment $PR "🔧 CI fix — {what}"`.
 

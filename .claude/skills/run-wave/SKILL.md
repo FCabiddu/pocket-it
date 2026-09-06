@@ -33,5 +33,5 @@ NEEDS WORK items → one developer each, in one message, background, prompt `Iss
 
 ### 5. Close the wave
 - APPROVED PRs: merge only if config `automerge` is true (`POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch`, the hook's authorised form); otherwise list them for the user.
-- `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, commit `tasks/` on the base branch, push.
+- `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh` and `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "wave {n} closed — {approved}/{launched} approved, {needs-work} needs work"`, commit `tasks/` and `docs/` on the base branch, push.
 - Report in ≤ 15 lines: launched / approved / needs work / blocked, PR links, open questions from agent reports. Then stop — the next wave is a new `/run-wave`, after the user has merged.

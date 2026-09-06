@@ -88,8 +88,8 @@ Record each failing criterion as `file:line — rule — what to change`.
 
 GitHub refuses `gh pr review --approve/--request-changes` on PRs opened by the same account, so use comments and labels:
 
-- **APPROVED:** `gh pr ready $N` · `gh pr comment $N --body "✅ Review passed — {n} criteria checked. {Auto-merge label present → 'will auto-merge' | 'awaiting your merge'}"` · `gh label create approved --color 22c55e 2>/dev/null || true; gh pr edit $N --add-label approved --remove-label needs-work 2>/dev/null` · task stays `Done`. Update `docs/SESSION_HANDOFF.md` entry to "approved, awaiting merge" if the file exists.
-- **NEEDS WORK:** `gh pr comment $N --body "$(cat <<'EOF' … EOF)"` with the findings list (file:line · rule · fix), `gh label create needs-work --color ef4444 2>/dev/null || true; gh pr edit $N --add-label needs-work`, and `set_status "Needs Work"` on the task file (tolerant sed from the shared rules — both `**Status**:` and `**Status:**` forms). Never `gh pr merge`.
+- **APPROVED:** `gh pr ready $N` · `gh pr comment $N --body "✅ Review passed — {n} criteria checked. {Auto-merge label present → 'will auto-merge' | 'awaiting your merge'}"` · `gh label create approved --color 22c55e 2>/dev/null || true; gh pr edit $N --add-label approved --remove-label needs-work 2>/dev/null` · task stays `Done` · `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{N} approved — awaiting merge"`.
+- **NEEDS WORK:** (also `handoff.sh log "{ID} PR #{N} needs work — {first finding, six words}"`) `gh pr comment $N --body "$(cat <<'EOF' … EOF)"` with the findings list (file:line · rule · fix), `gh label create needs-work --color ef4444 2>/dev/null || true; gh pr edit $N --add-label needs-work`, and `set_status "Needs Work"` on the task file (tolerant sed from the shared rules — both `**Status**:` and `**Status:**` forms). Never `gh pr merge`.
 
 Do not fail on style, naming taste, or anything not derived from the TAD, the task or the best-practices files.
 

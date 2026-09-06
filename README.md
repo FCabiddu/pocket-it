@@ -41,7 +41,9 @@ flowchart TD
 
 Rounded boxes are agents, cylinders are files on disk, parallelograms are scripts that spend no tokens, hexagons are the two moments that need you.
 
-No agent asks questions at runtime. `/intake` asks you once; everything else reads `.pocket-it.json` and `BRIEF.md` and writes its assumptions down. Scripts, not agents, decide what is ready to launch and whether a PR is mechanically green.
+Every entry point is a plain command, so pocket-it works on its own or under any orchestrator you put in front of it: `status.sh` tells an orchestrator where the project is, `next-wave.sh` what can be launched, and the three main-session skills (`/intake`, `/quickfix`, `/run-wave`) are the only places that talk to the user. Two things always stay with the human: reviewing the board before wave 1, and merging.
+
+No agent asks questions at runtime. `/intake` asks you once; everything else reads `.pocket-it.json` and `BRIEF.md` and writes its assumptions down. Scripts, not agents, decide what is ready to launch and whether a PR is mechanically green. Memory across sessions lives on disk: the board and git for state, `docs/SESSION_HANDOFF.md` (written by agents through `handoff.sh`) for facts and events — never `--resume`.
 
 ## Skills
 
@@ -59,8 +61,8 @@ No agent asks questions at runtime. `/intake` asks you once; everything else rea
 | `/quickfix {sentence}` | fast lane: task file → developer → reviewer, no documents | — (your session) |
 | `/retro EPIC-3` | turns repeated review findings into best-practices rules and template proposals | Opus |
 | `/documentation-agent` | README, API reference, architecture overview, on request | Sonnet |
-| `/mvp-builder {brief}` | static site in `~/Desktop/clients/{slug}/` | Sonnet |
-| `/legal-advisor {client}` | privacy, cookie, terms pages + `LEGAL_CHECKLIST.md` | Opus |
+
+`/ux-ui-designer` also works standalone on a static site (audit with scores and copy-pasteable fixes, or a design direction from a brief), reading the shared `design-compass.md`.
 
 ## Scripts (no tokens)
 
@@ -68,13 +70,15 @@ No agent asks questions at runtime. `/intake` asks you once; everything else rea
 bash ~/.claude/agents/pocket-it/bin/doctor.sh          # pre-flight: config, board, DEPS.json, TAD numbering, hygiene
 bash ~/.claude/agents/pocket-it/bin/next-wave.sh       # what can be launched right now, as JSON lines
 bash ~/.claude/agents/pocket-it/bin/verify.sh 42       # lint + type-check + affected tests on PR #42, in a throwaway worktree
+bash ~/.claude/agents/pocket-it/bin/status.sh          # project state from disk, ~25 lines (what an orchestrator reads first)
+bash ~/.claude/agents/pocket-it/bin/handoff.sh log "…"   # append to docs/SESSION_HANDOFF.md (agents do this; `fact "…"` for gotchas)
 bash ~/.claude/agents/pocket-it/bin/tasks-index.sh     # regenerate tasks/INDEX.md
 python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days 7   # where the tokens went this week
 ```
 
 ## Setup
 
-1. Clone so that the repo is reachable at `~/.claude/agents/pocket-it` (e.g. a symlink from `~/Desktop/agents`).
+1. Clone so that the repo is reachable at `~/.claude/agents/pocket-it` (e.g. `~/.claude/agents` is a symlink to the folder that contains it) and make the skills global: `~/.claude/skills` as a symlink to `pocket-it/.claude/skills`, or one symlink per skill inside it.
 2. In `~/.claude/settings.json`: a standard-context model for orchestration and the guard hook.
 
 ```json
@@ -113,6 +117,6 @@ The 2026-09 audit found the bill dominated by an orchestration session on a 1M-c
   hooks/                guard.sh (PreToolUse) + tests · pre-push secret scanner + install.sh
 bin/                    doctor · next-wave · verify · tasks-index · usage-report
 templates/pocket-it.json
-docs/agent-reviews/     audits (current: AUDIT-2026-09-05.md, PIPELINE-V2-2026-09-06.md)
+docs/agent-reviews/     design notes (current: PIPELINE-V2-2026-09-06.md)
 CLAUDE.md               maintenance guide for the agents
 ```

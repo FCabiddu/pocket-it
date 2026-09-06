@@ -18,7 +18,7 @@ This file is for working on the agents themselves. The rules the *orchestrator* 
 Small change? ─▶ /quickfix: task file → developer → reviewer. No documents.
 ```
 
-Scripts do everything that does not need judgement: `doctor` (pre-flight), `next-wave` (what is ready), `verify` (lint/type/tests on a PR), `tasks-index`, `usage-report` (where the tokens went), `guard.sh` (hook).
+Scripts do everything that does not need judgement: `doctor` (pre-flight), `next-wave` (what is ready), `verify` (lint/type/tests on a PR), `status` (where the project is), `handoff` (memory across sessions), `tasks-index`, `usage-report` (where the tokens went), `guard.sh` (hook).
 
 ---
 
@@ -54,10 +54,10 @@ tools: [Read, Write, ...]
 | `reviewer.md` | Opus | 60 | `verify.sh` first (red = needs work), then diff vs criteria, contract, TAD, best practices; comments + labels; conflicts; CI routing to `developer` |
 | `retro.md` | Opus | 60 | End of epic: repeated findings → best-practices rules (PR) + proposed template/heuristic lines for pocket-it |
 | `documentation-agent.md` | Sonnet | 60 | Optional, on request: README, API reference, architecture overview |
-| `mvp-builder.md` | Sonnet | — | Static site from a brief |
-| `../legal-advisor.md` | Opus | — | Privacy/cookie/terms for client sites |
 
-Removed in v2: `devops-engineer` (7 launches in two months vs 250 for developer) — its rulebook is the DevOps section of `developer.md`, `Label: DevOps`.
+Removed in v2: `devops-engineer` (7 launches in two months vs 250 for developer) — its rulebook is the DevOps section of `developer.md`, `Label: DevOps`. The static-site builder and the legal advisor live outside this repo as separate packs; they only share `shared/design-compass.md` (the builder reads it from here).
+
+An orchestrator in front of pocket-it (private, not part of this repo) needs nothing more than `bin/status.sh`, `bin/next-wave.sh`, the three main-session skills and the conventions below.
 
 ### Skills that are not launchers (run in the main session)
 
@@ -75,13 +75,15 @@ Removed in v2: `devops-engineer` (7 launches in two months vs 250 for developer)
 | `doctor.sh [--wave N]` | pre-flight: config valid and committed, task files complete and committed, DEPS.json consistent, no shared files in a wave, TAD numbering, hygiene. Exit 1 on errors |
 | `next-wave.sh` | prints one JSON line per launchable task (deps Done, no file overlap with tasks launched in the same call, model by risk) + a blocked list |
 | `verify.sh <PR|branch>` | lint, type-check, affected tests on the PR branch in a throwaway worktree, ≤ 40 lines. The reviewer runs it before reading |
+| `status.sh` | the project state computed from disk in ~25 lines: config, docs, board counts and high-risk open tasks, ready wave, open PRs with labels, worktrees, handoff facts + last log lines. What an orchestrator reads first; replaces `--resume` |
+| `handoff.sh log|fact|show` | the narrative memory `docs/SESSION_HANDOFF.md`: `log` prepends a dated line (kept to 40), `fact` adds an evergreen fact (cap 30). Agents call it at every PR and review; humans read it after a week away |
 | `tasks-index.sh` | regenerates `tasks/INDEX.md` |
 | `usage-report.py [--days N] [project]` | token/cost report from the transcripts: sessions, subagents by type, runaways, failure signatures. Run it weekly |
 | `.claude/hooks/guard.sh` | PreToolUse hook: blocks `gh pr merge` (unless `POCKET_IT_USER_MERGE=1` on explicit user instruction), pushes to main, `pkill/killall`, `APP_STATUS → prod`, `sleep N &&`. Tests: `guard.test.sh`, `guard.heredoc.test.sh` |
 
 ### Shared files
 
-- `shared/design-compass.md` — visual language for `mvp-builder` and `ux-ui-designer` (read at runtime).
+- `shared/design-compass.md` — visual language for `ux-ui-designer` and for the external static-site builder (read at runtime by both).
 - `shared/implementing-common.md` — config, board helpers, read discipline (task + cited TAD sections + contract, never the IPD), test policy, shared-machine rules, branch/PR flow, stop conditions. Read once by developer, qa-engineer, reviewer.
 - **Worktree agents see only committed files.** `.pocket-it.json`, the documents and `tasks/` must be committed on the base branch before launching; `doctor.sh` checks it.
 
@@ -151,7 +153,7 @@ Skipped sections keep their heading with a one-line `N/A`. A delta uses the same
 | PRs | always draft, against the base; approval = `gh pr ready` + comment + `approved` label; rejection = comment + `needs-work` + task `Needs Work` |
 | Merge | user-triggered (hook-enforced); the orchestrator merges only with `automerge: true` or an explicit instruction, using the `POCKET_IT_USER_MERGE=1` prefix |
 | Hosted CI | opt-in via `pipeline: true`; `APP_STATUS` starts `dev`; only a human flips it to `prod` |
-| History log | `docs/SESSION_HANDOFF.md`, opt-in; agents prepend, reviewer updates |
+| History log | `docs/SESSION_HANDOFF.md`, **mandatory**, written only through `bin/handoff.sh`: `## Fatti che non scadono` (≤ 30, gotchas and decisions) + `## Log` (≤ 40 dated lines). State is never written here — `status.sh` computes it |
 | Cost rules | task file + cited sections only; read once; capped output; `maxTurns`; one reviewer per wave; resume partial agents, never relaunch; one session per epic on a standard-context model |
 
 ---
