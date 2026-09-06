@@ -24,7 +24,7 @@ if os.path.exists(".pocket-it.json"):
     if sh("git ls-files .pocket-it.json") == "": err(".pocket-it.json is not committed — agents in worktrees will not see it")
 else:
     warn(".pocket-it.json missing — agents use defaults (medium / no automerge / no pipeline / main)")
-for k, allowed in {"scope": ("simple","medium","full"), "branching": ("flat","epic")}.items():
+for k, allowed in {"scope": ("simple","medium","full"), "branching": ("flat","epic"), "motion": ("none","sober","expressive")}.items():
     if k in cfg and cfg[k] not in allowed: err(f".pocket-it.json {k}={cfg[k]!r} not in {allowed}")
 for k in ("automerge","pipeline"):
     if k in cfg and not isinstance(cfg[k], bool): err(f".pocket-it.json {k} must be true/false")

@@ -10,6 +10,7 @@
     "integration": "on-demand",
     "e2e": "on-demand"
   },
+  "motion": "sober",
   "ticketPrefix": "T",
   "teamSize": 1,
   "language": "it"

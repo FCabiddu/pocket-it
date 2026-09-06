@@ -96,7 +96,7 @@ Not animations — static or near-static elements that add visual richness. Ever
 
 ## Animation Catalogue — award-winning techniques
 
-Study all of these. A page should use **3–5** that serve its specific personality — not all, not none. Restraint is the mark of quality.
+Study all of these. A page should use **3–5** that serve its specific personality — not all, not none. Restraint is the mark of quality. `ux-ui-designer` Mode C picks from this list **by number** (Design Spec §6 Motion System) — keep the numbering stable.
 
 ### 1. Split-text line reveal
 **Effect:** Each text line slides up from beneath a hidden overflow — cinematic "curtain rise."

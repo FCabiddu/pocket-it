@@ -105,6 +105,7 @@ Written by `/intake` (or copied from `templates/pocket-it.json`). Every agent re
 | `baseBranch` / `branching` | `main` / `flat` | branch base and PR target; `epic` = orchestrator passes `Base:` |
 | `testCommand` | auto | affected-tests entry point |
 | `tests` | `unit: required`, `integration: on-demand`, `e2e: on-demand` | test policy — planner creates QA tasks only with a one-line justification; `off` / `on` override |
+| `motion` | `sober` | ux-ui-designer Mode C (Design Spec §6 Motion System dial): `none` = feedback transitions only · `sober` = + page transitions + 4 catalogue techniques on public surfaces · `expressive` = up to 6 techniques, cursor/scroll-driven allowed |
 | `ticketPrefix` / `teamSize` | `T` / `1` | ids, planner waves |
 
 ---

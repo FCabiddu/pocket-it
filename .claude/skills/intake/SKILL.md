@@ -12,7 +12,7 @@ Pick from, in priority order:
 1. **Cosa costruiamo** — one sentence from the user if `$ARGUMENTS` is empty, plus "chi lo usa" (customers / staff / admin).
 2. **Scope** — `simple` (sito o feature piccola) / `medium` (prodotto con backend) / `full` (enterprise, multi-team).
 3. **Vincoli duri** — stack imposto, integrazioni obbligatorie, deploy target, scadenza, budget CI (multi-select: "nessuno", "stack imposto: …", "integrazione: …", "scadenza: …").
-4. **Come lavoriamo** — automerge on/off, test integration/E2E `on-demand` (default) / `on` / `off`, branching `flat` / `epic`.
+4. **Come lavoriamo** — automerge on/off, test integration/E2E `on-demand` (default) / `on` / `off`, branching `flat` / `epic`, motion `sober` (default) / `none` / `expressive` (quanta animazione nel prodotto: solo feedback / sobria e premium / espressiva).
 
 Use the "Other" answer freely for specifics. One round only; if a second round is needed, the brief says so instead.
 
@@ -33,7 +33,7 @@ Data: {today} · Scope: {scope} · Fonte: intake con l'utente
 ## Fuori scope (detto dall'utente)
 {bullets}
 ## Decisioni di lavoro
-automerge {on/off} · test integration/E2E {policy} · branching {flat/epic} · base {branch}
+automerge {on/off} · test integration/E2E {policy} · branching {flat/epic} · base {branch} · motion {none/sober/expressive}
 ## Domande ancora aperte
 {only what the user said "non lo so" to}
 ```

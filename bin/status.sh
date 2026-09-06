@@ -7,7 +7,10 @@ cd "$ROOT"
 BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "== $(basename "$ROOT") · branch $(git branch --show-current 2>/dev/null) · $(git status --porcelain | wc -l | tr -d ' ') uncommitted"
 if [[ -f .pocket-it.json ]]; then
-  python3 -c 'import json;d=json.load(open(".pocket-it.json"));t=d.get("tests",{});print(f"config: scope={d.get(\"scope\",\"medium\")} automerge={d.get(\"automerge\",False)} pipeline={d.get(\"pipeline\",False)} base={d.get(\"baseBranch\",\"main\")} branching={d.get(\"branching\",\"flat\")} tests={t.get(\"integration\",\"on-demand\")}/{t.get(\"e2e\",\"on-demand\")}")'
+  python3 - <<'PY'
+import json; d = json.load(open(".pocket-it.json")); t = d.get("tests", {})
+print("config: scope=%s automerge=%s pipeline=%s base=%s branching=%s motion=%s tests=%s/%s" % (d.get("scope","medium"), d.get("automerge",False), d.get("pipeline",False), d.get("baseBranch","main"), d.get("branching","flat"), d.get("motion","sober"), t.get("integration","on-demand"), t.get("e2e","on-demand")))
+PY
 else echo "config: .pocket-it.json missing (defaults) — run /intake"; fi
 echo "docs: $(ls business-analysis/*.md 2>/dev/null | wc -l | tr -d ' ') BAD · $(ls tech-analysis/PROJECT_TECH_ANALYSIS.md tech-analysis/*_TECH_ANALYSIS.md 2>/dev/null | wc -l | tr -d ' ') TAD · $(ls tech-analysis/*_TECH_DELTA.md 2>/dev/null | wc -l | tr -d ' ') delta · $(ls design-specs/*.md 2>/dev/null | wc -l | tr -d ' ') design spec · best-practices: $([[ -d tech-analysis/best-practices || -d best-practices ]] && echo yes || echo no)"
 if [[ -d tasks ]]; then
