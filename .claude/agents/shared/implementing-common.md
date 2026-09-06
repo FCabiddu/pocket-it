@@ -37,6 +37,8 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 
 - Read the task file, then only the TAD sections it references. Extract a section by number, never the whole document:
   `awk '/^## 5\. /,/^## 6\. /' tech-analysis/X_TECH_ANALYSIS.md`
+  When the task cites `PROJECT §… · DELTA §…`, the delta (`tech-analysis/{NAME}_TECH_DELTA.md`) overrides the project TAD (`tech-analysis/PROJECT_TECH_ANALYSIS.md`) for those sections.
+- If the task cites a `**Contract**:` file, read it in full: it is the agreed API shape between backend and frontend and it is not yours to change without saying so in the PR.
 - Do not read the IPD. The task file is self-contained; if it is not, that is a planner bug to report, not a reason to read 800 lines.
 - Read a source file **once**. After an `Edit`, do not re-`Read` the whole file; the Edit result already confirmed the change. Re-read a range only when you need lines you have not seen.
 - Cap command output: `| head -60`, `--reporter=dot`, `--silent=passed-only`, `2>&1 | tail -40` on compilers. Never dump a whole log.
@@ -77,7 +79,13 @@ git fetch origin && git checkout "$BASE" && git pull --ff-only origin "$BASE"
 git checkout -b {branch}            # or: git checkout {branch} && git pull origin {branch}  if "ALREADY EXISTS"
 ```
 
-Commit early and often (a killed agent loses uncommitted work). Before `git add -A`, check `git status --short` for `.env`/credentials and gitignore them. Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, then open a **draft** PR against `$BASE` with `gh pr create --draft --base "$BASE" …`. Never `gh pr merge`, never push to `main` directly (hooks block both). If `automerge` is true: `gh label create Auto-merge --color 94a3b8 2>/dev/null || true; gh pr edit $PR_NUM --add-label Auto-merge`. Record `$PR_URL` in the task file. If `docs/SESSION_HANDOFF.md` exists, prepend a 1–3 line entry (ID, PR "(draft)", what/why); never create it.
+Commit early and often (a killed agent loses uncommitted work). Before `git add -A`, check `git status --short` for `.env`/credentials and gitignore them. Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, then open a **draft** PR against `$BASE` with `gh pr create --draft --base "$BASE" …`. Never `gh pr merge`, never push to `main` directly (hooks block both). If `automerge` is true: `gh label create Auto-merge --color 94a3b8 2>/dev/null || true; gh pr edit $PR_NUM --add-label Auto-merge`. Record `$PR_URL` in the task file. Then log the event — this is the project's memory across sessions, and it is mandatory:
+
+```bash
+bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{n} draft — {what, six words} — {tests added}"
+```
+
+`handoff.sh` creates `docs/SESSION_HANDOFF.md` if missing and keeps the log to 40 lines. Use `handoff.sh fact "…"` **only** for something the next agent would otherwise rediscover the hard way (an invariant, a gotcha, a decision and its why) — never for progress. Commit the file with your task file.
 
 **CI-fix mode** (`CI Failure:` in arguments): do not touch task status, do not open a new PR; commit on the existing branch and `gh pr comment $PR "🔧 CI fix — {what}"`.
 

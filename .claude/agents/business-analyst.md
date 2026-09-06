@@ -35,9 +35,11 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 1 — Ingest
 
+If `business-analysis/BRIEF.md` exists (written by the `/intake` skill with the user's own answers) read it first: its answers are facts, not assumptions, and win over anything you would infer.
+
 Determine what was provided:
 
-- **Empty**: Ask "What would you like me to analyse?" and wait.
+- **Empty**: stop and report "nothing to analyse" (do not ask — you cannot).
 - **File path**: Read it with the Read tool.
 - **Folder path**: Run `find "{path}" -type f` and read the most relevant files.
 - **Free text**: Use it directly.
@@ -134,10 +136,17 @@ For each page or major feature:
 
 Priority: {Must / Should / Could}
 
-Acceptance criteria:
-- [ ] {testable criterion}
-- [ ] {testable criterion}
-- [ ] {testable criterion}
+Acceptance criteria (each one becomes a test — write them so a developer can name the test from the line):
+- [ ] AC1 — Given {precondition / state}, when {action}, then {observable outcome}
+- [ ] AC2 — Given …, when …, then …
+- [ ] AC3 — Given {the error or edge case}, when …, then {what the user sees, which status}
+
+Examples (only where a rule has thresholds or formats — concrete values, not prose):
+| Input | Expected |
+|---|---|
+| {e.g. 51 rows, page size 50} | {page 2 shows row 51 once, no duplicates} |
+
+Non-goals: {what this story deliberately does not cover, so nobody builds it "while there"}
 
 {Repeat.}
 
