@@ -31,5 +31,7 @@ ALLOW|until gh pr view 3 --json mergeable --jq .mergeable | grep -qv UNKNOWN; do
 ALLOW|git commit -m "docs: explain why pkill/killall and gh pr merge are blocked"
 ALLOW|gh pr comment 12 --body "never run git push origin main from an agent"
 BLOCK|echo "harmless" && gh pr merge 7
+ALLOW|POCKET_IT_USER_MERGE=1 gh pr merge 8 --merge --delete-branch
+BLOCK|POCKET_IT_USER_MERGE=0 gh pr merge 8 --merge
 CASES
 exit $fail

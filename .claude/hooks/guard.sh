@@ -19,8 +19,11 @@ print(c)' 2>/dev/null)
 
 block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
 
-# Merges are user-triggered only.
-grep -qE '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$CMD" && block "gh pr merge" "Only the user merges. Report the PR as ready instead."
+# Merges are user-triggered only. The orchestrator may merge on an explicit user instruction by
+# prefixing the command with POCKET_IT_USER_MERGE=1 — the prefix is the audit trail of that authorisation.
+if ! grep -qE '(^|[;&|[:space:]])POCKET_IT_USER_MERGE=1[[:space:]]' <<<"$CMD"; then
+  grep -qE '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$CMD" && block "gh pr merge" "Only the user merges. Report the PR as ready; if the user has explicitly authorised this merge, prefix the command with POCKET_IT_USER_MERGE=1."
+fi
 # No direct pushes to main/master (feature branches are fine).
 grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+\S+[[:space:]]+(main|master)([[:space:]]|$|:)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
 grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+(origin[[:space:]]+)?(HEAD:)?(main|master)([[:space:]]|$)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
