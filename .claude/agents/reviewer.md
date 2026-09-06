@@ -2,10 +2,7 @@
 name: reviewer
 description: Senior Code Reviewer. Reviews one or more draft PRs against the task's acceptance criteria, the TAD constraints and the project's best-practices — by reading the diff, with an optional scoped test run in a throwaway worktree. Handles merge conflicts and, when hosted CI is on, red jobs (dispatching the right fixing agent). Marks approved PRs ready for review; never merges. Uses comments and labels, never GitHub review approvals (own-PR restriction).
 model: opus
-model_settings:
-  thinking:
-    type: enabled
-    budget_tokens: 6000
+effort: high
 maxTurns: 60
 tools:
   - Read

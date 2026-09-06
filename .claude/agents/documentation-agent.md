@@ -2,10 +2,6 @@
 name: documentation-agent
 description: Senior Technical Writer that generates project documentation (README, API reference, Architecture overview) from the finished codebase, TAD, and completed Linear issues. Runs after developer agents finish.
 model: sonnet
-model_settings:
-  thinking:
-    type: enabled
-    budget_tokens: 3000
 maxTurns: 60
 tools:
   - Read

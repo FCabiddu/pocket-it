@@ -2,10 +2,7 @@
 name: ux-ui-designer
 description: UX/UI design specialist. Three modes — (1) audits an existing static site against the shared design compass, (2) gives a lightweight design direction for a static-site brief, (3) acts as a pure UX/UI designer for the development pipeline, producing a full enterprise Design Spec from a BAD (design system tokens, component specifications, page/screen specs, information architecture, WCAG 2.1 AA accessibility) that /tech-architect consumes. Critiques and directs; does not build.
 model: opus
-model_settings:
-  thinking:
-    type: enabled
-    budget_tokens: 12000
+effort: high
 tools:
   - Read
   - Write

@@ -12,10 +12,11 @@ Each agent is a Markdown file in `.claude/agents/` with YAML frontmatter:
 ---
 name: agent-name          # matches the filename
 description: ...          # shown in the agent picker; used by the orchestrator to route
-model: sonnet             # alias: sonnet / opus / haiku / inherit
-model_settings:           # optional; verify it is honoured by your Claude Code version
-  thinking: { type: enabled, budget_tokens: 5000 }
-maxTurns: 120             # hard cap on turns — every implementing agent has one
+model: sonnet             # alias: sonnet / opus / haiku / fable / inherit
+effort: high              # optional: low / medium / high / xhigh / max — overrides the session effort
+maxTurns: 120             # hard cap on turns — every implementing agent has one; output comes back "partial" and is resumable
+# NOT supported (verified 2026-09-06 on Claude Code 2.1.263): model_settings / thinking budget —
+# extended thinking is inherited from the session; there is no per-agent setting.
 tools: [Read, Write, ...]
 ---
 ```
@@ -46,7 +47,8 @@ Model rationale: Sonnet for producers of code, Opus where judgement dominates �
 
 - `shared/design-compass.md` — visual language for `mvp-builder` and `ux-ui-designer` (read at runtime; never inline).
 - `shared/implementing-common.md` — config, board helpers, read discipline, test scoping, shared-machine rules, branch/PR flow, stop conditions for the four implementing agents (read at runtime; never inline). Anything that used to be a 140-line block copied into three agents lives here once.
-- `bin/tasks-index.sh` — regenerates `tasks/INDEX.md` from the task files. Nobody edits INDEX.md by hand.
+- `bin/tasks-index.sh` — regenerates `tasks/INDEX.md` from the task files (tolerates both header forms; works from a worktree). Nobody edits INDEX.md by hand.
+- **Worktree agents see only committed files.** `isolation: worktree` checks out HEAD: `.pocket-it.json`, the planning documents and the `tasks/` board must be committed on the base branch before developer/devops/qa are launched, or they report a missing task file and stop.
 - `.claude/hooks/guard.sh` — PreToolUse hook registered in `~/.claude/settings.json`: blocks `gh pr merge`, pushes to main, `pkill/killall`, `APP_STATUS → prod`, `sleep N &&` chains. Hard rules live here, not in prompts.
 - `templates/pocket-it.json` — per-project config template.
 

@@ -2,10 +2,7 @@
 name: tech-architect
 description: Principal Software Architect that produces a concise Technical Architecture Document (TAD) from a business analysis file, folder, or free-text description. Researches current best practices via web before writing. Saves output to ./tech-analysis/{NAME}_TECH_ANALYSIS.md.
 model: opus
-model_settings:
-  thinking:
-    type: enabled
-    budget_tokens: 8000
+effort: high
 tools:
   - Read
   - Write

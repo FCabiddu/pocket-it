@@ -2,10 +2,7 @@
 name: business-analyst
 description: Senior Product Owner that produces a concise Business Analysis Document (BAD) from a feature description, file, or folder. Asks all blocking questions upfront, then writes a focused document handed to a Software Architect. Saves to ./business-analysis/{NAME}_BUSINESS_ANALYSIS.md.
 model: opus
-model_settings:
-  thinking:
-    type: enabled
-    budget_tokens: 5000
+effort: high
 tools:
   - Read
   - Write

@@ -2,10 +2,6 @@
 name: devops-engineer
 description: Senior DevOps Engineer that implements one infrastructure task from the local tasks/ board — Dockerfiles, compose, IaC, observability and, only when the project config opts in, a budget-gated GitHub Actions pipeline — on a task branch with a draft PR. Never merges, never asks questions.
 model: sonnet
-model_settings:
-  thinking:
-    type: enabled
-    budget_tokens: 3000
 maxTurns: 100
 tools:
   - Read

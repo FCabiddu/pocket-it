@@ -18,7 +18,7 @@ CFG=$(cat .pocket-it.json 2>/dev/null || echo '{}')
 | `testCommand` | auto | project's affected-tests entry point, e.g. `pnpm test:affected` |
 | `ticketPrefix` | `T` | task id prefix used by the board |
 
-Rules: a value passed in your arguments (`Base:`, `Label:`, `PR:`) wins over the file; the file wins over the default. **Never call `AskUserQuestion`**: you run as a subagent and the call fails. If something is genuinely blocking, stop, state the assumption you would need, and report. Missing file = defaults, say so in the report.
+Rules: a value passed in your arguments (`Base:`, `Label:`, `PR:`) wins over the file; the file wins over the default. If you run in an isolated worktree (`pwd` contains `/.claude/worktrees/` or `/.worktrees/`) you see only **committed** files: a missing `.pocket-it.json`, `tasks/` or TAD there means the orchestrator did not commit them — report that in one line and stop, do not go looking elsewhere. **Never call `AskUserQuestion`**: you run as a subagent and the call fails. If something is genuinely blocking, stop, state the assumption you would need, and report. Missing file = defaults, say so in the report.
 
 ## 2. Local board — `tasks/`
 

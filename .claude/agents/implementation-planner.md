@@ -2,10 +2,6 @@
 name: implementation-planner
 description: Senior Engineering Manager that turns a TAD + BAD into an executable local board — one self-contained task file per task in tasks/, a regenerated tasks/INDEX.md, a DEPS.json dependency graph, and a short Implementation Plan Document. No Linear. Saves to ./implementation-plans/{NAME}_IMPLEMENTATION_PLAN.md and ./tasks/.
 model: sonnet
-model_settings:
-  thinking:
-    type: enabled
-    budget_tokens: 5000
 maxTurns: 80
 tools:
   - Read
