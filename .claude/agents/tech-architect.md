@@ -33,7 +33,7 @@ Then read the BAD file(s) provided. The business-analyst writes `business-analys
 
 **Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD (produced by `/ux-ui-designer` in Enterprise Design Spec mode). **The Design Spec is the authoritative source of the UI/design (tokens, component contracts, screens, accessibility depth) — do NOT copy that content into the TAD.** Your job is to make the *engineering* decisions that let the frontend **realize** the spec, and to **reference** it. Section 7 stays engineering-only:
 - **Take the spec into account** when choosing the stack: pick a CSS approach and a component-library technology that can implement the spec's tokens and component contracts; pick a rendering strategy and performance budget that meet the spec's screens; pick a routing approach that fits its information architecture. Record these as engineering decisions in 7.1–7.6.
-- **Ratify, don't reproduce**: in **7.4** name the CSS approach + the component-library *technology* and add a pointer "design tokens & component visual/behavioural contracts → see Design Spec (authoritative)". Do not paste the token values or per-component specs. Also in **7.4** record the spec's §6 Motion System *approach* (dial level, page-transition mechanism — native View Transitions when the framework has them) and approve or reject any motion library it asks for; if none is approved, write `none`. **7.5** accounts for it (JS added by motion, `transform`/`opacity`/`clip-path` only so CLS stays untouched).
+- **Ratify, don't reproduce**: in **7.4** name the CSS approach + the component-library *technology* and add a pointer "design tokens & component visual/behavioural contracts → see Design Spec (authoritative)". Do not paste the token values or per-component specs. Also in **7.4** record the spec's §6 Motion System *approach* (dial level, page-transition mechanism — native View Transitions when the framework has them) and approve or reject any motion library it asks for; if none is approved, write `none`. **Signature moments** (compass #16–#27, Design Spec §6 table) are approved here too, by number, each with its library (or `none` for CSS 3D), a **bundle budget in KB gz** and the **lazy-loading rule**: loaded below the fold or on intersection via `next/dynamic` / `import()`, `ssr: false` for anything WebGL (`model-viewer`, R3F, Spline), the server always rendering the poster or the final CSS state. **7.5** accounts for it (JS added by motion, `transform`/`opacity`/`clip-path` only so CLS stays untouched).
 - **Accessibility (7.6)**: carry the conformance **target** (min WCAG 2.1 AA — see the mandatory baseline; never `N/A`) and reference the spec's verification plan into **Section 11** so `/qa-engineer` builds a11y tests.
 - If **no** Design Spec exists (MVP/static scope): Section 7 still records the engineering frontend decisions and 7.6 still carries the WCAG 2.1 AA target — the floor applies regardless.
 Treat the Design Spec's library/CSS recommendations as inputs to ratify, not mandates — you own the final stack decision. For a lightweight/static Design Spec, extract only what applies.
@@ -315,6 +315,7 @@ src/
 | CSS | {Tailwind / CSS Modules / etc.} | {version} |
 | Components | {shadcn/ui / Radix / etc.} | |
 | Motion | {Design Spec §6 dial: none/sober/expressive; page transitions via {View Transitions API / framework equivalent}} | {approved motion library, or `none`} |
+| Signature moments | {#n moment → surface, from Design Spec §6; or `none`} | {library per moment or `none` (CSS 3D); lazy rule: below the fold, `next/dynamic`, `ssr: false` for WebGL; fallback per moment} |
 
 > Design tokens (colour/type/spacing/radius/elevation) and per-component visual & behavioural contracts are **not** duplicated here — the Design Spec in `design-specs/` is authoritative. This subsection records only the *engineering* choice of CSS approach + component-library technology that realizes them. If no Design Spec exists, state the tokens/approach inline at minimum.
 
@@ -327,6 +328,7 @@ src/
 | CLS | < 0.1 |
 | JS bundle (initial, gzipped) | < 150 KB |
 | Motion cost | {0 KB unless 7.4 approves a library; `transform`/`opacity`/`clip-path` only, no layout thrash, CLS unaffected} |
+| Signature-moment budget | {KB gz per approved library, lazy-loaded so it is outside the initial route bundle; asset weight (frames, GLB, `.riv`) and who produces it; LCP stays the poster image} |
 | Lighthouse mobile | ≥ 90 |
 
 ### 7.6 Rendering, SEO & Accessibility

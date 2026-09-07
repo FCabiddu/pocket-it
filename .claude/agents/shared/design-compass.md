@@ -78,6 +78,7 @@ Before picking (or judging) an archetype, find the industry row. Every decision 
 | Tech / SaaS / startup | #12, #8, #11 | Cool: slate, midnight blue + electric accent (mint, cyan, indigo) | Modern grotesque (Space Grotesk, Syne) | Traditional serif, warm tones |
 | Creative agency / studio | #2, #14, #1 | Monochrome or bold two-tone (black + one primary) | Strong contrast: ultra-heavy + ultra-light | Safe mid-weights, multiple accent colours |
 | Legal / finance / consulting | #3, #23, #6 | Restrained: navy, slate, warm white | Classic serif + clean sans | Playful fonts, loud colours |
+| Publisher / book & game studio | #1, #2, #20 (+ signature moments #16 book, #18 box, #25 shelf, #24 ground) | Warm paper: cream, ivory, ink, one cover-derived accent (oxblood, forest, mustard) | Editorial: display serif headlines (Fraunces, Playfair) + readable text serif or humanist sans | Cold SaaS blues, stock-photo people, flat cover grids without an object in 3D |
 
 If the industry doesn't match a row, find its closest neighbour and adjust for tone.
 
@@ -96,7 +97,7 @@ Not animations — static or near-static elements that add visual richness. Ever
 
 ## Animation Catalogue — award-winning techniques
 
-Study all of these. A page should use **3–5** that serve its specific personality — not all, not none. Restraint is the mark of quality. `ux-ui-designer` Mode C picks from this list **by number** (Design Spec §6 Motion System) — keep the numbering stable.
+Study all of these. A page should use **3–5** that serve its specific personality — not all, not none. Restraint is the mark of quality. `ux-ui-designer` Mode C picks from this list **by number** (Design Spec §6 Motion System) — keep the numbering stable. Site-wide narrative animations (books, boxes, 3D, scroll scenes) are a separate class — see **Signature Moments** below (#16–#27).
 
 ### 1. Split-text line reveal
 **Effect:** Each text line slides up from beneath a hidden overflow — cinematic "curtain rise."
@@ -180,6 +181,118 @@ Study all of these. A page should use **3–5** that serve its specific personal
 - `transform` and `opacity` only — never animate `width`, `height`, `top`, `left`, `margin`, or `padding`.
 - No dead `@keyframes` blocks — every block must be referenced by at least one selector. Prefer CSS transitions for single-element effects.
 - Do NOT reflexively pair the marquee ticker (#8) + scroll progress bar (#6). That combo is overused. Consider #14 (cursor glow) for dark backgrounds and #15 (staggered grid entrance) whenever there is a card/grid section.
+
+---
+
+## Signature Moments — site-wide narrative animation
+
+The catalogue above is micro-motion: it makes a page feel finished. A **signature moment** is what makes a site *memorable* — one narrative, often 3D or physical-metaphor animation that the whole site is built around: a book that opens, a box whose lid lifts, a product you can turn, a scene that plays as you scroll. Premium sites have **one or two**, on the surfaces that matter (home hero, flagship product page), never one per section. Numbering continues from the catalogue so Mode C picks **by number**; each entry states its library so the TAD (7.4/7.5) can approve it with a bundle budget. Cost = gzipped JS added + effort (S ≤ 1 day, M 2–3 days, L a week or more, assets excluded). Every library below is lazy-loaded below the fold (`next/dynamic` / `import()`, `ssr: false` for anything WebGL) and never ships to the "where not to animate" surfaces.
+
+### 16. Book that opens (CSS 3D)
+**Use for:** Publisher / book-studio home hero, a single title's product page, "look inside" teaser.
+**Physical metaphor:** A hardcover on a table; the cover swings open on the spine, the first page shows.
+**Technique + library:** No library. `perspective: 1500px` on the wrapper, book `transform-style: preserve-3d`, cover `transform-origin: left; transform: rotateY(-25deg)` at rest → `rotateY(-150deg)` open, `backface-visibility: hidden`, spine and page-block as extra faces, a shadow on `opacity`. Triggered on mount (hero) or on first intersection; hover only as a secondary tease.
+**Cost:** 0 KB · S.
+**Fallback:** reduced-motion → book rendered at its resting angle, cover closed, no transition; no-WebGL n/a; mobile → same, smaller `perspective`, no hover tease.
+**Assets:** front cover ≥ 1200px, spine (or spine colour + title text), first-page or endpaper image, optional back cover.
+
+### 17. Real page leafing (page-flip library)
+**Use for:** "Sfoglia le prime pagine" preview, a catalogue or lookbook, a gamebook / choose-your-path demo.
+**Physical metaphor:** Leafing through a real paperback with a finger — the page curls, follows the drag, snaps.
+**Technique + library:** `page-flip` (StPageFlip, MIT, no deps, ~10 KB gz, touch + mouse, image or HTML pages, soft/hard pages) via `react-pageflip` (MIT wrapper, unmaintained but small — vendor it if it breaks). Client-only: mount after hydration, `ssr: false`. **Never turn.js** (non-commercial BSD, main-thread DOM thrash).
+**Cost:** ~10–12 KB gz · M.
+**Fallback:** reduced-motion → no curl, pages swap on click with a cross-fade; no-JS → the same pages as a plain vertical image list; mobile → single-page (portrait) mode, swipe.
+**Assets:** page spreads as images (≥ 1600px wide per spread, one per page) or the HTML of each page; page count ≤ 12 for a preview.
+
+### 18. Box that lifts its lid (CSS 3D)
+**Use for:** Board-game / puzzle / collectors' edition product hero, unboxing teaser, "what's in the box" section.
+**Physical metaphor:** The lid rises and tilts back, the contents fade up from inside.
+**Technique + library:** No library. Six-face box in CSS (`preserve-3d`, each face a `rotateX/Y` + `translateZ`) textured with the box art; lid is a second `preserve-3d` group with `transform-origin` on its back edge, `rotateX(-110deg) translateY(-20px)` when open; contents (cards, pieces, a booklet) staggered `translateY` + `opacity` from inside. Trigger on intersection or a "Apri la scatola" button — a button makes the moment consented and keyboard-reachable.
+**Cost:** 0 KB · M.
+**Fallback:** reduced-motion → box shown open with contents visible, no motion; mobile → lid opens, contents fade without stagger.
+**Assets:** top, front and one side face of the box (flat scans, ≥ 1200px), 2–4 cut-out contents images (transparent PNG/WebP).
+
+### 19. 3D product turntable (`<model-viewer>` glTF)
+**Use for:** A physical product worth turning in the hand — box, miniature, device, packaging; AR "see it on your table".
+**Physical metaphor:** The object on a turntable; drag to rotate, pinch to zoom.
+**Technique + library:** `@google/model-viewer` (Apache-2.0 web component, three.js bundled, ~70 KB gz on bundlephobia — measure in the real build; budget 100–250 KB). `<model-viewer src=".glb" poster=".webp" loading="lazy" reveal="interaction" camera-controls auto-rotate alt="…" interaction-prompt="auto">`. Register the element client-only (`next/dynamic`, `ssr: false`); the `poster` is what SSR renders, so LCP stays an image.
+**Cost:** ~70–250 KB gz (lazy, below the fold or after the poster) · M (L if the model must be made).
+**Fallback:** reduced-motion → `auto-rotate` off, poster stays until the user interacts; no-WebGL → the component shows the poster; mobile → poster + tap to load, `auto-rotate` off, no AR button unless tested.
+**Assets:** glTF/GLB ≤ 3 MB (Draco/meshopt compressed, ≤ 2048px textures), poster render, alt text; a photogrammetry or 3D-modelled asset — the client rarely has one, budget it.
+
+### 20. Scroll-pinned storytelling scene (GSAP ScrollTrigger)
+**Use for:** "How it works" / "the story of the series" / a product's 3-step reveal — one scene the user scrolls *through*.
+**Physical metaphor:** A stage that stays put while props enter, move and exit as you turn the crank.
+**Technique + library:** `gsap` + `ScrollTrigger` (Standard "No Charge" GSAP licence since 3.13 — free for commercial use, all plugins; core ~27 KB gz + ScrollTrigger ~14 KB gz). `pin: true, scrub: 0.5–1, end: "+=200%"` on the section; a timeline of `transform`/`opacity`/`clip-path` steps. Client-only: `useGSAP` with a scope ref, `gsap.matchMedia()` for the reduced-motion and mobile branches; never run during SSR; kill triggers on unmount.
+**Cost:** ~40 KB gz · M.
+**Fallback:** reduced-motion → no pin, the steps stacked vertically in their final state; mobile → shorter `end`, fewer steps, or the same unpinned stack; no-JS → the stacked steps.
+**Assets:** 3–5 layered images (transparent cut-outs) or an inline SVG scene; the copy of each step.
+
+### 21. Scroll-scrubbed image sequence (canvas + ScrollTrigger)
+**Use for:** A product that transforms — box opening frame by frame, a book unfolding, a device turning (the Apple product-page technique).
+**Physical metaphor:** A flip-book you drive with the scroll wheel.
+**Technique + library:** `gsap` + `ScrollTrigger` scrubbing a frame index, each frame drawn to a `<canvas>` (clear before draw); preload frames with `Promise.all`, `pin` the canvas, `scrub: true`. Serve frames as WebP/AVIF ≤ 1600px, 60–120 frames, two sizes (mobile / desktop) chosen at load.
+**Cost:** ~40 KB gz JS + 3–8 MB of frames (lazy, below the fold) · L.
+**Fallback:** reduced-motion → first and last frame only, cross-fade on intersection; mobile → the small frame set or a poster + short MP4 with `playsinline muted`; no-JS → the last frame as an `<img>`.
+**Assets:** a rendered or photographed sequence (3D render or turntable rig) — the client almost never has it; budget production before promising this.
+
+### 22. Self-drawing illustrations (SVG stroke / Lottie / Rive)
+**Use for:** Storybook and children's brands, indie games, editorial sites — a map that draws itself, a mascot that reacts, a logo that assembles.
+**Physical metaphor:** An ink pen drawing the line in front of you.
+**Technique + library:** Three tiers, pick the lowest that works. (a) Catalogue #7 SVG stroke draw, 0 KB, for line art. (b) Lottie for After-Effects animations: `@lottiefiles/dotlottie-web` (MIT, ~33 KB gz JS + a lazily fetched WASM renderer; `.lottie` files 40–70 % smaller than JSON) or `lottie-web` (MIT, ~60 KB gz). (c) Rive for interactive state machines (mascot follows cursor, reacts to hover/scroll): `@rive-app/canvas` (MIT, ~200 KB gz incl. WASM; `canvas-lite` smaller) — only when interaction is the point.
+**Cost:** 0 / ~35 / ~200 KB gz · S / S / M (plus the illustrator's time in the tool).
+**Fallback:** reduced-motion → final frame rendered (Lottie/Rive `autoplay=false` and seek to end; SVG stroke fully drawn); no-JS → a static SVG/PNG; mobile → same asset, cap to one instance in view.
+**Assets:** SVG line art; or `.lottie`/`.json` export from After Effects (Bodymovin); or a `.riv` file with named state-machine inputs.
+
+### 23. Shared-element page morph (View Transitions)
+**Use for:** Catalogue → product detail: the cover in the grid grows into the hero of its page; series list → series page.
+**Physical metaphor:** Picking the book off the shelf and bringing it to your face.
+**Technique + library:** No library. `view-transition-name: cover-{id}` on the card image and the same name on the detail hero; same-document transitions via the framework's mechanism (Next.js `ViewTransition`, Astro `<ClientRouter>`, `document.startViewTransition`), cross-document via `@view-transition { navigation: auto }`. Same-document is Baseline (Chrome 111, Safari 18, Firefox 133+); cross-document is Chrome 126 / Safari 18.2, Firefox behind a flag — progressive enhancement, never a dependency.
+**Cost:** 0 KB · S.
+**Fallback:** unsupported browser → plain navigation; reduced-motion → transition duration 0 via `@media (prefers-reduced-motion: reduce) { ::view-transition-group(*) { animation: none } }`.
+**Assets:** none beyond consistent cover images (same aspect ratio in list and detail).
+
+### 24. Ambient ground (paper grain, slow gradient drift)
+**Use for:** Every publisher / craft / editorial site — the "table" the objects sit on; the quiet layer that makes 16–18 feel physical.
+**Physical metaphor:** Paper under the book, afternoon light moving across the desk.
+**Technique + library:** No library. Compass "Grain overlay" (SVG `feTurbulence`, `opacity` 0.02–0.045) + one very slow background drift: a `radial-gradient`/`conic-gradient` layer on a pseudo-element animated on `transform: translate/rotate` over 30–60 s, `opacity` ≤ 0.4, one instance per page, `will-change: transform`. Optional paper texture as a tiled WebP ≤ 40 KB.
+**Cost:** 0 KB · S.
+**Fallback:** reduced-motion → gradient static, grain stays (it does not move); mobile → drift off if the page already has a 3D moment in view.
+**Assets:** none, or one paper-texture tile.
+
+### 25. Shelf / carousel with depth (CSS 3D perspective)
+**Use for:** A series or catalogue browser: 5–12 covers on a shelf, the active one facing you, the others angled away (Cover-Flow lineage).
+**Physical metaphor:** Running a finger along the spines on a shelf.
+**Technique + library:** No library. Track `perspective: 1200px`, each item `transform: translateX(calc(var(--d) * 60%)) rotateY(calc(var(--d) * -35deg)) scale(calc(1 - abs(var(--d)) * 0.15))` where `--d` is its distance from the active index; keyboard arrows and scroll-snap move the active index; a drop shadow under the shelf via `opacity`. Works with Embla/Keen only if the project already has one — the transform is the effect, not the slider.
+**Cost:** 0 KB · M.
+**Fallback:** reduced-motion → items still angled but index changes without transition; mobile → flat horizontal scroll-snap row, no `rotateY`; no-JS → the same flat row.
+**Assets:** covers at one aspect ratio, ≥ 600px wide, `alt` per title.
+
+### 26. Smooth-scroll spine (Lenis)
+**Use for:** Only as the carrier of #20/#21 or archetype #10 (horizontal scroll) on a marketing site — it makes scrubbed scenes feel weighted. Never on an app, docs or anything read repeatedly.
+**Physical metaphor:** Inertia — the page has mass.
+**Technique + library:** `lenis` (MIT, ~5 KB gz) wrapping native scroll (sticky, anchors and assistive tech keep working); `lerp` 0.08–0.12; feed `ScrollTrigger.update` from Lenis's `scroll` event and drive Lenis from `gsap.ticker`. Client-only.
+**Cost:** ~5 KB gz · S.
+**Fallback:** reduced-motion → Lenis disables smoothing by default, keep that; mobile → off (native scroll), unless a scrubbed scene needs it and is tested on a real device.
+**Assets:** none.
+
+### 27. Full WebGL scene (React Three Fiber + drei, or Spline)
+**Use for:** The one hero that *is* the brand — a floating product with real lighting, an explorable diorama. Only when 16–21 cannot tell the story and the client funds the 3D asset.
+**Physical metaphor:** The object in a lit room, not a photo of it.
+**Technique + library:** `three` + `@react-three/fiber` + `@react-three/drei` (all MIT; three ~155 KB gz + fiber/drei ~30–60 KB gz, tree-shaken) — `useGLTF`, `Environment`, `PresentationControls`, `Float`. Or `@splinetool/react-spline` (MIT; runtime ~270 KB gz + a 1–5 MB scene, `@splinetool/react-spline/next` renders a blurred placeholder on the server) when the designer builds the scene in Spline and no code control is needed. Both: `next/dynamic` with `ssr: false`, mount on intersection, `<Canvas dpr={[1, 1.5]} frameloop="demand">`, a `<noscript>`/poster fallback carrying the same headline and CTA.
+**Cost:** ~200–450 KB gz + scene assets · L.
+**Fallback:** reduced-motion → static camera, no idle animation (or the poster); no-WebGL / low-end (`navigator.hardwareConcurrency ≤ 4`, `deviceMemory ≤ 4`) → poster image; mobile → poster by default, load the scene only on tap.
+**Assets:** an optimised GLB (≤ 3 MB, Draco/meshopt, baked lighting or an HDRI ≤ 1 MB) or a Spline scene exported at "Performance" quality; poster render; alt text.
+
+### Signature-moment rules
+- **One or two per site**, on the home hero and/or the flagship product page. A third dilutes both.
+- **Metaphor first.** The moment must be the product's own physics (a book opens, a box lifts, an object turns). A generic particle field or floating blobs is decoration, not a signature.
+- **CSS 3D before WebGL.** #16, #18, #24, #25 cost 0 KB and cover most publishers and object brands; reach for #19/#27 only when the object has to be turned freely.
+- **Every moment has a poster.** The server renders an image (or the final CSS state); the moment enhances it after hydration. LCP is never the animation.
+- **Assets are the real cost.** Frame sequences, GLBs and Rive files are produced, not found — write them in the Design Spec's assets line so the TAD and the client budget them.
+- **Reduced-motion and no-JS states are designed, not defaulted** — each entry's fallback is written into the spec and implemented as a branch, never left to the library.
+
+Sources: [StPageFlip](https://github.com/Nodlik/StPageFlip) · [react-pageflip](https://github.com/Nodlik/react-pageflip) · [turn.js licence](https://github.com/blasten/turn.js) · [GSAP licence](https://gsap.com/licensing/) · [GSAP 3.13 free](https://gsap.com/blog/3-13/) · [GSAP image-sequence helper](https://gsap.com/docs/v3/HelperFunctions/helpers/imageSequenceScrub/) · [model-viewer](https://modelviewer.dev/) · [model-viewer on web.dev](https://web.dev/articles/model-viewer) · [R3F + Next.js](https://github.com/pmndrs/react-three-next) · [three.js production fallbacks](https://appscale.blog/en/blog/threejs-production-3d-web-2026-webgpu-realtime-standards) · [Lottie vs Rive sizes](https://unicornicons.com/blog/lottie-vs-rive-performance) · [rive-wasm](https://github.com/rive-app/rive-wasm) · [View Transitions support](https://css-tricks.com/cross-document-view-transitions-part-1/) · [Lenis](https://github.com/darkroomengineering/lenis) · [react-spline](https://github.com/splinetool/react-spline) · [Spline optimisation](https://docs.spline.design/doc/how-to-optimize-your-scene/doczPMIye7Ko) · [CSS 3D book](https://scastiel.dev/animated-3d-book-css/) · [Codrops CSS 3D books](https://tympanus.net/codrops/2013/07/11/animated-books-with-css-3d-transforms/) · sizes from bundlephobia (gsap 3.15, @google/model-viewer 4.3, page-flip 2.0, lenis 1.3, @lottiefiles/dotlottie-web 0.80, @splinetool/runtime 2.0).
 
 ---
 
