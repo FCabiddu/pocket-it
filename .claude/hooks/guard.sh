@@ -19,10 +19,12 @@ print(c)' 2>/dev/null)
 
 block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
 
-# Merges are user-triggered only. The orchestrator may merge on an explicit user instruction by
-# prefixing the command with POCKET_IT_USER_MERGE=1 — the prefix is the audit trail of that authorisation.
+# gh pr merge requires the POCKET_IT_USER_MERGE=1 prefix: the audit trail that the merge is covered by the
+# standing default (automerge: true) or by an explicit user instruction. The orchestrator uses it by default
+# after an approved review; it is never used when the user asked for draft PRs, nor on the epic→main PR of
+# a deployed project without an instruction (that merge is a deploy).
 if ! grep -qE '(^|[;&|[:space:]])POCKET_IT_USER_MERGE=1[[:space:]]' <<<"$CMD"; then
-  grep -qE '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$CMD" && block "gh pr merge" "Only the user merges. Report the PR as ready; if the user has explicitly authorised this merge, prefix the command with POCKET_IT_USER_MERGE=1."
+  grep -qE '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$CMD" && block "gh pr merge" "Prefix the command with POCKET_IT_USER_MERGE=1 — the audit trail that this merge is covered by the automerge default or by an explicit instruction. Never merge when the user asked for draft PRs, nor the epic→main PR of a deployed project without an instruction: report the PR as ready instead."
 fi
 # No direct pushes to main/master (feature branches are fine).
 grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+\S+[[:space:]]+(main|master)([[:space:]]|$|:)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."

@@ -2,7 +2,7 @@
 
 Runs in the main session. The decision of *what* to launch is made by a script, not by you; your job is to turn its output into Agent calls, wait, run one review, and report. Keep the session thin: no reading of task files, TADs or diffs here — that is the agents' work.
 
-Arguments (optional): `$ARGUMENTS` — e.g. `dry-run`, or `only T-3.1.1, T-3.2.1`.
+Arguments (optional): `$ARGUMENTS` — e.g. `dry-run`, `draft` (review only, no merge), or `only T-3.1.1, T-3.2.1`.
 
 ### 1. Pre-flight (zero tokens)
 ```bash
@@ -27,11 +27,11 @@ Then stop and wait for the task notifications. Do not poll, do not read files wh
 When all notifications are in: list per task the branch, PR and one-line outcome from each report. A task that stopped early (partial / maxTurns / blocker) is **resumed** with SendMessage to the same agent when the blocker is something you can answer from the reports; otherwise it is reported to the user, never relaunched from scratch.
 
 ### 4. Review — one reviewer for the wave
-One Agent call: `subagent_type: reviewer`, prompt `Tasks: {all task IDs that opened a PR}`. Wait.
+One Agent call: `subagent_type: reviewer`, prompt `Tasks: {all task IDs that opened a PR}` plus `Draft: yes` when config `automerge` is `false` or the user's request / `$ARGUMENTS` contain `draft`. Wait.
 
 NEEDS WORK items → one developer each, in one message, background, prompt `Issue: {id} — {title}\nLabel: {label}\nBranch: {branch} ALREADY EXISTS\nPR: {n}` plus the reviewer's findings verbatim. Then one more reviewer call for those PRs only. At most two review rounds per wave; what is still red after that goes to the user.
 
 ### 5. Close the wave
-- APPROVED PRs: merge only if config `automerge` is true (`POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch`, the hook's authorised form); otherwise list them for the user.
-- `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh` and `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "wave {n} closed — {approved}/{launched} approved, {needs-work} needs work"`, commit `tasks/` and `docs/` on the base branch, push.
-- Report in ≤ 15 lines: launched / approved / needs work / blocked, PR links, open questions from agent reports. Then stop — the next wave is a new `/run-wave`, after the user has merged.
+- APPROVED PRs: merge them, one by one — `POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch` (the hook's authorised form; the prefix is the audit trail that the merge is covered by the `automerge: true` default). Skip the merge only when config `automerge` is `false` or the user's request / `$ARGUMENTS` contain `draft`: then list the approved PRs for the user, who merges. Never open or merge the epic→main PR of a deployed project here — that is a deploy, done only on explicit instruction.
+- `git pull --ff-only` the base branch, then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh` and `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "wave {n} closed — {merged}/{launched} merged, {approved-draft} awaiting user merge, {needs-work} needs work"`, commit `tasks/` and `docs/` on the base branch, push.
+- Report in ≤ 15 lines: launched / merged (or approved, awaiting the user in draft mode) / needs work / blocked, PR links, open questions from agent reports. Then stop — the next wave is a new `/run-wave`, when the user says "vai" (in draft mode, after the user has merged).

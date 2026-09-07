@@ -109,11 +109,11 @@ Per shared rules §6: commit, push, `gh pr create --draft --base "$BASE"` with t
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-Then `set_status Done`, `set_field PR "$PR_URL"`, `handoff.sh log "{ID} PR #{n} draft — {what} — {n} tests"` (plus `handoff.sh fact` for any gotcha worth keeping), commit the task file and the handoff on the branch, push. Apply the `Auto-merge` label only if config `automerge` is true. **CI-fix mode:** commit on the existing branch, comment on the PR, log `"{ID} CI fix pushed — {what}"`, no status change, no new PR.
+Then `set_status Done`, `set_field PR "$PR_URL"`, `handoff.sh log "{ID} PR #{n} draft — {what} — {n} tests"` (plus `handoff.sh fact` for any gotcha worth keeping), commit the task file and the handoff on the branch, push. Apply the `Auto-merge` label only if config `automerge` is true. The PR is opened as draft because it is not yet reviewed — the reviewer flips it ready and the orchestrator merges; this has nothing to do with the user's «draft» mode (review only, no merge), which the orchestrator handles. **CI-fix mode:** commit on the existing branch, comment on the PR, log `"{ID} CI fix pushed — {what}"`, no status change, no new PR.
 
 ## Step 8 — Report (concise)
 
-- Task ID and status; branch, commit SHA, PR URL (draft, not merged).
+- Task ID and status; branch, commit SHA, PR URL (draft until reviewed, not merged).
 - Tests added and result of the scoped run.
 - Deviations, new env vars, migrations, manual steps. DevOps with a pipeline: current `APP_STATUS`, what runs in each state, flip commands for the user.
 - Anything you stopped on and why, per the stop conditions.

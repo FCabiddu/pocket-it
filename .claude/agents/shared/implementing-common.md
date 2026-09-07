@@ -11,7 +11,7 @@ CFG=$(cat .pocket-it.json 2>/dev/null || echo '{}')
 | Key | Default | Meaning |
 |---|---|---|
 | `scope` | `medium` | simple / medium / full — output depth for planning agents |
-| `automerge` | `false` | apply the `Auto-merge` label to PRs |
+| `automerge` | `true` | apply the `Auto-merge` label to PRs; the orchestrator merges approved PRs (`false` = review only, the user merges) |
 | `pipeline` | `false` | hosted CI/CD wanted (GitHub Actions + `APP_STATUS`) |
 | `baseBranch` | `main` | branch tasks fork from and PRs target (an epic branch if `branching: epic`) |
 | `branching` | `flat` | `flat` = task branches off `baseBranch`; `epic` = `epic/...` branches, orchestrator passes `Base:` |
@@ -79,7 +79,7 @@ git fetch origin && git checkout "$BASE" && git pull --ff-only origin "$BASE"
 git checkout -b {branch}            # or: git checkout {branch} && git pull origin {branch}  if "ALREADY EXISTS"
 ```
 
-Commit early and often (a killed agent loses uncommitted work). Before `git add -A`, check `git status --short` for `.env`/credentials and gitignore them. Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, then open a **draft** PR against `$BASE` with `gh pr create --draft --base "$BASE" …`. Never `gh pr merge`, never push to `main` directly (hooks block both). If `automerge` is true: `gh label create Auto-merge --color 94a3b8 2>/dev/null || true; gh pr edit $PR_NUM --add-label Auto-merge`. Record `$PR_URL` in the task file. Then log the event — this is the project's memory across sessions, and it is mandatory:
+Commit early and often (a killed agent loses uncommitted work). Before `git add -A`, check `git status --short` for `.env`/credentials and gitignore them. Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, then open a **draft** PR against `$BASE` with `gh pr create --draft --base "$BASE" …`. Never `gh pr merge` (the orchestrator merges after the review), never push to `main` directly (hooks block both). If `automerge` is true: `gh label create Auto-merge --color 94a3b8 2>/dev/null || true; gh pr edit $PR_NUM --add-label Auto-merge`. Record `$PR_URL` in the task file. Then log the event — this is the project's memory across sessions, and it is mandatory:
 
 ```bash
 bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{n} draft — {what, six words} — {tests added}"
