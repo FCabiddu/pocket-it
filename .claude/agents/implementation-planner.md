@@ -34,6 +34,7 @@ cat .pocket-it.json 2>/dev/null || echo '{}'
 
 - File path → Read it. Folder → `find "{path}" -type f -name "*.md"` and read the TAD and BAD. Free text → use directly. Empty → stop and report "nothing to plan".
 - **Project TAD + delta.** If `tech-analysis/PROJECT_TECH_ANALYSIS.md` exists, that is the stack and structure; the feature's `tech-analysis/{NAME}_TECH_DELTA.md` holds only what this feature changes (endpoints, schema, decisions). Cite both in the task's `**TAD**:` line as `PROJECT §3, §8.2 · DELTA §5.2`. With a single classic TAD, cite it alone.
+- **Project BAD + delta.** If `business-analysis/PROJECT_BUSINESS_ANALYSIS.md` exists, the feature's stories are in its `business-analysis/{NAME}_BUSINESS_DELTA.md` (numbering continues the project's; a story marked `supersedes US-n` replaces the project one). Plan the delta's stories only; read the project BAD for personas, constraints and glossary. With a single classic `*_BUSINESS_ANALYSIS.md`, use it alone.
 - From the TAD note the **section numbers** you will cite per task (§3 stack, §4.3 schema, §5.2 endpoints, §6.1 auth, §7.x frontend, §8.x backend, §9.x infra, §11 testing). From the BAD take the user stories' **Given/When/Then** acceptance criteria verbatim: they become the task's criteria and, one to one, the test names the developer must write.
 - Check the existing board: `ls tasks/ 2>/dev/null | tail -5`. Continue the numbering (next free EPIC number); never renumber existing tasks.
 

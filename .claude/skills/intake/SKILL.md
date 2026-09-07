@@ -5,7 +5,7 @@ This skill runs **in the main session**, where `AskUserQuestion` works. It repla
 Arguments (free text, optional): `$ARGUMENTS`
 
 ### 1. Read what already exists
-`cat .pocket-it.json 2>/dev/null`, `ls business-analysis tech-analysis tasks 2>/dev/null`, `git remote -v | head -1`, `sed -n 1,40p README.md 2>/dev/null`. Never re-ask what is already answered there.
+`cat .pocket-it.json 2>/dev/null`, `ls business-analysis tech-analysis tasks 2>/dev/null`, `git remote -v | head -1`, `sed -n 1,40p README.md 2>/dev/null`. Never re-ask what is already answered there. If `business-analysis/PROJECT_BUSINESS_ANALYSIS.md` (or a legacy `*_BUSINESS_ANALYSIS.md`) exists this is a later feature: personas, constraints and stack are settled — ask only about the feature, and the business-analyst will write a `{NAME}_BUSINESS_DELTA.md` against it.
 
 ### 2. Ask once, in one `AskUserQuestion` call (max 4 questions), only what is still unknown
 Pick from, in priority order:

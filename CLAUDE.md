@@ -8,7 +8,7 @@ This file is for working on the agents themselves. The rules the *orchestrator* 
 
 ```
 /intake (main session, asks the user once) ─▶ BRIEF.md + .pocket-it.json
-   └▶ business-analyst ─▶ BAD (stories with Given/When/Then, examples, non-goals)
+   └▶ business-analyst ─▶ PROJECT BAD once, then a BUSINESS DELTA per feature (stories with Given/When/Then, examples, non-goals)
         └▶ [ux-ui-designer ─▶ Design Spec]  (Production scope)
              └▶ tech-architect ─▶ PROJECT TAD once, then a DELTA per feature + best-practices/
                   └▶ implementation-planner ─▶ tasks/*.md · INDEX.md · DEPS.json (waves, contract-first, risk)
@@ -45,7 +45,7 @@ tools: [Read, Write, ...]
 
 | File | Model | maxTurns | Role |
 |---|---|---|---|
-| `business-analyst.md` | Opus | — | BAD from BRIEF/description: stories with Given/When/Then criteria, examples table, non-goals. No questions |
+| `business-analyst.md` | Opus | — | First feature: `PROJECT_BUSINESS_ANALYSIS.md`. Later features: `{NAME}_BUSINESS_DELTA.md` with only new/changed stories (Given/When/Then, numbering continued) and the impact on the project BAD. No questions |
 | `ux-ui-designer.md` | Opus | — | (A) audits a static site, (B) static direction, (C) enterprise Design Spec → `design-specs/` |
 | `tech-architect.md` | Opus | — | First feature: `PROJECT_TECH_ANALYSIS.md` (fixed numbering). Later features: `{NAME}_TECH_DELTA.md` with only the changed sections. Writes/updates `best-practices/` per tech group |
 | `implementation-planner.md` | Sonnet | 80 | Board: self-contained task files (Files, TAD §, Contract, Risk, AC1…n as Given/When/Then, Non-goals), `INDEX.md`, `DEPS.json` with waves; contract-first tasks so backend and frontend run in the same wave; runs `doctor.sh`. No Linear |
@@ -115,7 +115,8 @@ Written by `/intake` (or copied from `templates/pocket-it.json`). Every agent re
 | Folder | Created by | Read by |
 |---|---|---|
 | `business-analysis/BRIEF.md` | `/intake` | business-analyst (facts, not assumptions) |
-| `business-analysis/` | business-analyst | ux-ui-designer, tech-architect |
+| `business-analysis/PROJECT_BUSINESS_ANALYSIS.md` | business-analyst, once | ux-ui-designer, tech-architect, planner — personas, constraints, glossary, story numbering |
+| `business-analysis/{NAME}_BUSINESS_DELTA.md` | business-analyst, per feature | ux-ui-designer, tech-architect, planner — the feature's stories; «Impatto» list says which project sections it extends or supersedes |
 | `design-specs/` | ux-ui-designer (C) | tech-architect (§7), developer (Frontend) |
 | `tech-analysis/PROJECT_TECH_ANALYSIS.md` | tech-architect, once | everyone — **by section** (`awk '/^## 5\. /,/^## 6\. /'`) |
 | `tech-analysis/{NAME}_TECH_DELTA.md` | tech-architect, per feature | planner, developer — overrides the project TAD for the cited sections |
