@@ -23,7 +23,7 @@ if os.path.exists(".pocket-it.json"):
     except Exception as e: err(f".pocket-it.json is not valid JSON: {e}")
     if sh("git ls-files .pocket-it.json") == "": err(".pocket-it.json is not committed — agents in worktrees will not see it")
 else:
-    warn(".pocket-it.json missing — agents use defaults (medium / no automerge / no pipeline / main)")
+    warn(".pocket-it.json missing — agents use defaults (medium / automerge on / no pipeline / main)")
 for k, allowed in {"scope": ("simple","medium","full"), "branching": ("flat","epic"), "motion": ("none","sober","expressive")}.items():
     if k in cfg and cfg[k] not in allowed: err(f".pocket-it.json {k}={cfg[k]!r} not in {allowed}")
 for k in ("automerge","pipeline"):

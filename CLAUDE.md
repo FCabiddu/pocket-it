@@ -13,7 +13,7 @@ This file is for working on the agents themselves. The rules the *orchestrator* 
              └▶ tech-architect ─▶ PROJECT TAD once, then a DELTA per feature + best-practices/
                   └▶ implementation-planner ─▶ tasks/*.md · INDEX.md · DEPS.json (waves, contract-first, risk)
                        └▶ 👤 board gate (the one human review)
-                            └▶ /run-wave ×N: doctor → next-wave → developers in worktrees (opus if risk high) → one reviewer (verify.sh first) → 👤 merge
+                            └▶ /run-wave ×N: doctor → next-wave → developers in worktrees (opus if risk high) → one reviewer (verify.sh first) → orchestrator merges (👤 only when `draft` was asked)
                                  └▶ [qa-engineer only for justified QA tasks] ─▶ [documentation-agent] ─▶ retro
 Small change? ─▶ /quickfix: task file → developer → reviewer. No documents.
 ```
@@ -79,7 +79,7 @@ An orchestrator in front of pocket-it (private, not part of this repo) needs not
 | `handoff.sh log|fact|show` | the narrative memory `docs/SESSION_HANDOFF.md`: `log` prepends a dated line (kept to 40), `fact` adds an evergreen fact (cap 30). Agents call it at every PR and review; humans read it after a week away |
 | `tasks-index.sh` | regenerates `tasks/INDEX.md` |
 | `usage-report.py [--days N] [project]` | token/cost report from the transcripts: sessions, subagents by type, runaways, failure signatures. Run it weekly |
-| `.claude/hooks/guard.sh` | PreToolUse hook: blocks `gh pr merge` (unless `POCKET_IT_USER_MERGE=1` on explicit user instruction), pushes to main, `pkill/killall`, `APP_STATUS → prod`, `sleep N &&`. Tests: `guard.test.sh`, `guard.heredoc.test.sh` |
+| `.claude/hooks/guard.sh` | PreToolUse hook: blocks `gh pr merge` without the `POCKET_IT_USER_MERGE=1` prefix (the audit trail that the merge is covered by the `automerge: true` default or by an explicit instruction), pushes to main, `pkill/killall`, `APP_STATUS → prod`, `sleep N &&`. Tests: `guard.test.sh`, `guard.heredoc.test.sh` |
 
 ### Shared files
 
@@ -100,7 +100,7 @@ Written by `/intake` (or copied from `templates/pocket-it.json`). Every agent re
 | Key | Default | Used by |
 |---|---|---|
 | `scope` | `medium` | business-analyst, tech-architect, planner (output depth) |
-| `automerge` | `false` | run-wave and implementing agents (`Auto-merge` label, orchestrator merge) |
+| `automerge` | `true` | `true` (default): the orchestrator merges approved PRs (run-wave, quickfix); `false`, or the word `draft` in the user's request: review only, the user merges. Implementing agents apply the `Auto-merge` label when true |
 | `pipeline` | `false` | tech-architect (§9.3 wording), developer DevOps (may create workflows), reviewer (CI gate) |
 | `baseBranch` / `branching` | `main` / `flat` | branch base and PR target; `epic` = orchestrator passes `Base:` |
 | `testCommand` | auto | affected-tests entry point |
@@ -153,7 +153,7 @@ Skipped sections keep their heading with a one-line `N/A`. A delta uses the same
 |---|---|
 | Task branch | `task/{id-lower}-{slug}` off `baseBranch` (or `epic/...` when `branching: epic`) |
 | PRs | always draft, against the base; approval = `gh pr ready` + comment + `approved` label; rejection = comment + `needs-work` + task `Needs Work` |
-| Merge | user-triggered (hook-enforced); the orchestrator merges only with `automerge: true` or an explicit instruction, using the `POCKET_IT_USER_MERGE=1` prefix |
+| Merge | by the orchestrator after an approved review (`automerge: true`, the default), always with the `POCKET_IT_USER_MERGE=1` prefix the hook requires as audit trail; `automerge: false` or `draft` in the user's request = review only, the user merges. The epic→main PR of a deployed project is a deploy: opened and merged only on explicit instruction |
 | Hosted CI | opt-in via `pipeline: true`; `APP_STATUS` starts `dev`; only a human flips it to `prod` |
 | History log | `docs/SESSION_HANDOFF.md`, **mandatory**, written only through `bin/handoff.sh`: `## Fatti che non scadono` (≤ 30, gotchas and decisions) + `## Log` (≤ 40 dated lines). State is never written here — `status.sh` computes it |
 | Cost rules | task file + cited sections only; read once; capped output; `maxTurns`; one reviewer per wave; resume partial agents, never relaunch; one session per epic on a standard-context model |

@@ -1,6 +1,6 @@
 {
   "scope": "medium",
-  "automerge": false,
+  "automerge": true,
   "pipeline": false,
   "baseBranch": "main",
   "branching": "flat",

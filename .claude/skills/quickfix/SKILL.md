@@ -60,7 +60,10 @@ Issue: QF-{n} — {title}
 Label: {label}
 ```
 
-When it reports, one Agent call: `subagent_type: reviewer`, prompt `Tasks: QF-{n}`.
+When it reports, one Agent call: `subagent_type: reviewer`, prompt `Tasks: QF-{n}` plus `Draft: yes` when config `automerge` is `false` or the user's request contains `draft`.
 
 ### 4. Close
-Report: PR URL, review outcome, what to do next (merge if approved; a second developer round with `Branch: … ALREADY EXISTS` and `PR: n` if NEEDS WORK). Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "QF-{n} PR #{m} {approved|needs work} — {title}"`, and commit the index and the handoff.
+- APPROVED: merge it — `POCKET_IT_USER_MERGE=1 gh pr merge {m} --squash --delete-branch` (the hook's authorised form; the prefix is the audit trail that the merge is covered by the `automerge: true` default). Skip the merge only when config `automerge` is `false` or the user's request contains `draft`: then report the PR as ready for the user to merge. After a merge, `git pull --ff-only` the base branch and make sure `tasks/QF-{n}-*.md` says `**Status**: Done` (set it if the developer left it otherwise).
+- NEEDS WORK: a second developer round with `Branch: … ALREADY EXISTS` and `PR: {m}` plus the reviewer's findings verbatim, then one more reviewer call; at most two rounds, then it goes to the user.
+- Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "QF-{n} PR #{m} {merged|approved, awaiting user merge|needs work} — {title}"`, commit the task file, the index and the handoff on the base branch, push.
+- Report: PR URL, review outcome, merged or awaiting the user (draft), what is next.

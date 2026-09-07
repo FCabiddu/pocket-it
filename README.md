@@ -26,22 +26,22 @@ flowchart TD
       DEV --> PRS[("draft PRs<br/>AC → tests")]
       PRS --> VER[/"verify.sh<br/>lint · types · affected tests"/] --> REV["reviewer ×1<br/>comments + labels"]
       REV -- needs-work ≤ 2 rounds --> DEV
-      REV -- approved --> MERGE{{"👤 merge"}}
+      REV -- approved --> MERGE["merge<br/>orchestrator by default · 👤 if draft"]
     end
     GATE --> NW
     MERGE --> NW
     MERGE --> RT["/retro<br/>findings → rules"]
     subgraph fast["Fast lane — no documents"]
       direction LR
-      QF["/quickfix 'the button does not…'"] --> QT[("tasks/QF-n.md")] --> QD["developer"] --> QV[/"verify.sh"/] --> QR["reviewer"] --> QM{{"👤 merge"}}
+      QF["/quickfix 'the button does not…'"] --> QT[("tasks/QF-n.md")] --> QD["developer"] --> QV[/"verify.sh"/] --> QR["reviewer"] --> QM["merge<br/>orchestrator by default · 👤 if draft"]
     end
     classDef script fill:#e8f1f0,stroke:#0e7c7b,color:#0a3d3c
     class DOC,NW,VER,QV script
 ```
 
-Rounded boxes are agents, cylinders are files on disk, parallelograms are scripts that spend no tokens, hexagons are the two moments that need you.
+Rounded boxes are agents, cylinders are files on disk, parallelograms are scripts that spend no tokens, the hexagon is the one moment that needs you.
 
-Every entry point is a plain command, so pocket-it works on its own or under any orchestrator you put in front of it: `status.sh` tells an orchestrator where the project is, `next-wave.sh` what can be launched, and the three main-session skills (`/intake`, `/quickfix`, `/run-wave`) are the only places that talk to the user. Two things always stay with the human: reviewing the board before wave 1, and merging.
+Every entry point is a plain command, so pocket-it works on its own or under any orchestrator you put in front of it: `status.sh` tells an orchestrator where the project is, `next-wave.sh` what can be launched, and the three main-session skills (`/intake`, `/quickfix`, `/run-wave`) are the only places that talk to the user. One thing always stays with the human: reviewing the board before wave 1. Approved PRs are merged by the orchestrator by default (`automerge: true`); say `draft` in the request, or set `automerge: false`, and it reviews but leaves the merge to you. The epic→main PR of a deployed project is a deploy: opened and merged only when you ask.
 
 No agent asks questions at runtime. `/intake` asks you once; everything else reads `.pocket-it.json` and `BRIEF.md` and writes its assumptions down. Scripts, not agents, decide what is ready to launch and whether a PR is mechanically green. Memory across sessions lives on disk: the board and git for state, `docs/SESSION_HANDOFF.md` (written by agents through `handoff.sh`) for facts and events — never `--resume`.
 
@@ -54,11 +54,11 @@ No agent asks questions at runtime. `/intake` asks you once; everything else rea
 | `/ux-ui-designer` | Design Spec (pipeline), site audit, or a design direction | Opus |
 | `/tech-architect` | first feature: `PROJECT_TECH_ANALYSIS.md`; later: a short `_TECH_DELTA.md`; `best-practices/` per tech group | Opus |
 | `/implementation-planner` | self-contained task files, `INDEX.md`, `DEPS.json` with waves; contract-first so backend and frontend run in the same wave; `Risk` per task | Sonnet |
-| `/run-wave` | launches every ready task in parallel (worktrees; Opus for high risk), one reviewer for the wave, up to two fix rounds, report | — (your session) |
+| `/run-wave` | launches every ready task in parallel (worktrees; Opus for high risk), one reviewer for the wave, up to two fix rounds, merges the approved PRs (unless `draft`), report | — (your session) |
 | `/developer Issue: T-1.2.3 — title Label: Backend\|Frontend\|DevOps` | one task with its unit tests, task branch, draft PR mapping criteria to tests | Sonnet / Opus |
 | `/reviewer Tasks: T-1.2.3, T-1.2.4` | `verify.sh` first, then diff vs criteria, contract, TAD, best practices | Opus |
 | `/qa-engineer` | integration/E2E only for QA tasks the planner justified | Sonnet |
-| `/quickfix {sentence}` | fast lane: task file → developer → reviewer, no documents | — (your session) |
+| `/quickfix {sentence}` | fast lane: task file → developer → reviewer → merge (unless `draft`), no documents | — (your session) |
 | `/retro EPIC-3` | turns repeated review findings into best-practices rules and template proposals | Opus |
 | `/documentation-agent` | README, API reference, architecture overview, on request | Sonnet |
 
@@ -99,8 +99,8 @@ python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days 7   # where the to
 /tech-architect business-analysis/ORDINI_RIVENDITORI_BUSINESS_DELTA.md
 /implementation-planner tech-analysis/ORDINI_RIVENDITORI_TECH_DELTA.md
 # read tasks/INDEX.md — this is what gets built
-/run-wave        # wave 1 … you merge …
-/run-wave        # wave 2 … until next-wave says everything is Done
+/run-wave        # wave 1: approved PRs merged, report … you say "vai" …
+/run-wave        # wave 2 … until next-wave says everything is Done   (add `draft` to review without merging)
 /retro EPIC-3
 ```
 
