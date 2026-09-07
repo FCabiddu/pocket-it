@@ -87,7 +87,7 @@ Once, after all tasks: `{pm} run test --coverage 2>&1 | tail -40` (fast suite). 
 
 ## Step 6 — PR and index
 
-Shared rules §6: commit, push, draft PR against `BASE` titled `test: {IDs}` with a body listing test files and what each covers, coverage vs target, and the bug tasks filed. `set_field PR` on each task done; commit the task files; `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`; commit `tasks/INDEX.md` too. `Auto-merge` label per config. History log if present.
+Shared rules §6: commit, push, draft PR against `BASE` titled `test: {IDs}` with a body listing test files and what each covers, coverage vs target, and the bug tasks filed. `set_field PR` on each task done; commit the task files; `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`; commit `tasks/INDEX.md` too. `Auto-merge` label per config. `handoff.sh log "QA PR #{n} draft — {tasks covered} — {bug tasks filed}"`.
 
 ## Step 7 — Report
 

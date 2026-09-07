@@ -33,7 +33,8 @@ cat .pocket-it.json 2>/dev/null || echo '{}'
 ## Step 1 — Ingest
 
 - File path → Read it. Folder → `find "{path}" -type f -name "*.md"` and read the TAD and BAD. Free text → use directly. Empty → stop and report "nothing to plan".
-- From the TAD note the **section numbers** you will cite per task (§3 stack, §4.3 schema, §5.2 endpoints, §6.1 auth, §7.x frontend, §8.x backend, §9.x infra, §11 testing). From the BAD take user stories and acceptance criteria verbatim where they exist.
+- **Project TAD + delta.** If `tech-analysis/PROJECT_TECH_ANALYSIS.md` exists, that is the stack and structure; the feature's `tech-analysis/{NAME}_TECH_DELTA.md` holds only what this feature changes (endpoints, schema, decisions). Cite both in the task's `**TAD**:` line as `PROJECT §3, §8.2 · DELTA §5.2`. With a single classic TAD, cite it alone.
+- From the TAD note the **section numbers** you will cite per task (§3 stack, §4.3 schema, §5.2 endpoints, §6.1 auth, §7.x frontend, §8.x backend, §9.x infra, §11 testing). From the BAD take the user stories' **Given/When/Then** acceptance criteria verbatim: they become the task's criteria and, one to one, the test names the developer must write.
 - Check the existing board: `ls tasks/ 2>/dev/null | tail -5`. Continue the numbering (next free EPIC number); never renumber existing tasks.
 
 ## Step 2 — Name and paths
@@ -49,7 +50,10 @@ Epic → Story → Task. A task is one engineer, one session, one PR, a clear do
 - Every task carries **acceptance criteria** the reviewer can check by reading a diff, and the **test expectation**: name the unit/component tests the developer ships with the code (scenarios, not file names).
 - **Integration and E2E are not default.** Read `tests` in `.pocket-it.json` (default `on-demand`). Create a QA task only when you can write its justification in one line — money moves, auth/permissions, data integrity across tables, a contract several clients depend on, or the 1–3 journeys the product cannot ship broken. That line goes in the QA task's Goal. No justification, no QA task. With `tests.e2e: off` / `tests.integration: off` never create one; with `on` create one per story.
 - Sizes: XS < 2h, S 2–4h, M 4–8h. Split anything larger. Prefer 6–15 tasks per epic.
-- Backend tasks that expose an endpoint precede the frontend task that consumes it. Migrations are their own task and go first in the wave.
+- **Contract first, then parallel.** For a story with both a backend and a frontend side, the first task is a `Contract` task (label Backend, XS) that writes only the shared types / validation schema / OpenAPI fragment for the story's endpoints, with no logic. Backend and frontend tasks then depend only on the contract task, not on each other, so they land in the **same wave**. Never make the frontend wait for the backend implementation.
+- Migrations are their own task and go first in the wave; the contract task may depend on them when it needs the schema.
+- **Risk.** Every task carries `**Risk**: low | high`. High = migrations, auth/permissions, money, data deletion, anything irreversible or security-relevant. The orchestrator runs high-risk tasks on the stronger model; keep the flag honest — over-marking wastes money, under-marking wastes a week.
+- **DevOps is a label, not an agent.** Dockerfiles, compose, IaC and (only if config `pipeline: true`) CI go to `developer` with `Label: DevOps`.
 
 ## Step 4 — Write the task files
 
@@ -64,10 +68,12 @@ One file per task with **exactly** this header (fields are `**Key**: value`, one
 **Story**: STORY-{e}.{s} — {title}
 **Priority**: Must | Should | Could
 **Estimate**: XS | S | M
+**Risk**: low | high
 **Depends on**: T-x.y.z, T-… | none
 **Wave**: {n}
 **Files**: `path/one.ts`, `path/two.tsx`
-**TAD**: §5.2 (endpoints), §4.3 (schema), §8.2 (patterns)
+**TAD**: §5.2 (endpoints), §4.3 (schema), §8.2 (patterns)   ← or `PROJECT §3, §8.2 · DELTA §5.2`
+**Contract**: `src/contracts/{story}.ts` | none
 **Branch**: 
 **PR**: 
 
@@ -75,8 +81,12 @@ One file per task with **exactly** this header (fields are `**Key**: value`, one
 {2–4 sentences: what exists when this is done and why the story needs it.}
 
 ## Acceptance criteria
-- [ ] {observable, diff-checkable}
-- [ ] {…}
+- [ ] AC1 — Given {state}, when {action}, then {observable outcome}
+- [ ] AC2 — Given …, when …, then …
+{each criterion is diff-checkable and becomes one test; number them so the PR can map tests to criteria}
+
+## Non-goals
+{what this task deliberately does not do — the sibling task that does it, or "out of scope for the story"}
 
 ## Tests expected
 {unit/component scenarios the developer ships with the code — happy path, the edge cases the criteria imply, error paths. Frontend: axe check on the component. Add "Integration/E2E: covered by QA task T-… because {one-line justification}" only when such a task exists; otherwise write "Integration/E2E: not needed for this task".}
@@ -96,7 +106,7 @@ File name: `tasks/T-{e}.{s}.{t}-{slug}.md`, slug ≤ 6 words, lowercase, hyphens
   "project": "{NAME}",
   "generatedAt": "{today}",
   "tasks": {
-    "T-1.1.1": { "title": "…", "label": "Backend", "estimate": "S", "wave": 1, "dependsOn": [], "files": ["…"], "file": "tasks/T-1.1.1-slug.md" }
+    "T-1.1.1": { "title": "…", "label": "Backend", "estimate": "S", "risk": "low", "wave": 1, "dependsOn": [], "files": ["…"], "file": "tasks/T-1.1.1-slug.md" }
   },
   "waves": { "1": ["T-1.1.1", "T-1.2.1"], "2": ["T-1.1.2"] }
 }
@@ -139,9 +149,11 @@ Wave = all tasks whose dependencies are in earlier waves and whose file sets do 
 
 ```bash
 bash ~/.claude/agents/pocket-it/bin/tasks-index.sh
+git add tasks implementation-plans && git commit -q -m "plan: {NAME} board ({n} tasks, {w} waves)" || true
+bash ~/.claude/agents/pocket-it/bin/doctor.sh
 ```
 
-Then verify, fixing immediately: every task in DEPS.json has a file and vice versa; no dependency points to a missing ID; no two tasks in one wave share a file; every task has ≥ 2 acceptance criteria and a `**TAD**:` line; every BAD user story maps to ≥ 1 task.
+`doctor.sh` is the contract check: fix every ERROR it prints and re-run until clean (warnings go in the report). It verifies what you would otherwise verify by hand — every task in DEPS.json has a file and vice versa, no dependency to a missing ID, no shared file inside a wave, committed board. On top of it check: every task has ≥ 2 Given/When/Then criteria, a `**TAD**:` line and a `**Risk**:` line; every BAD user story maps to ≥ 1 task; every backend+frontend story has a contract task.
 
 ## Step 8 — Report
 

@@ -33,7 +33,7 @@ Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the me
 
 **Also check for a Design Spec** — read the file at `design-specs/` if one exists alongside the BAD (produced by `/ux-ui-designer` in Enterprise Design Spec mode). **The Design Spec is the authoritative source of the UI/design (tokens, component contracts, screens, accessibility depth) — do NOT copy that content into the TAD.** Your job is to make the *engineering* decisions that let the frontend **realize** the spec, and to **reference** it. Section 7 stays engineering-only:
 - **Take the spec into account** when choosing the stack: pick a CSS approach and a component-library technology that can implement the spec's tokens and component contracts; pick a rendering strategy and performance budget that meet the spec's screens; pick a routing approach that fits its information architecture. Record these as engineering decisions in 7.1–7.6.
-- **Ratify, don't reproduce**: in **7.4** name the CSS approach + the component-library *technology* and add a pointer "design tokens & component visual/behavioural contracts → see Design Spec (authoritative)". Do not paste the token values or per-component specs.
+- **Ratify, don't reproduce**: in **7.4** name the CSS approach + the component-library *technology* and add a pointer "design tokens & component visual/behavioural contracts → see Design Spec (authoritative)". Do not paste the token values or per-component specs. Also in **7.4** record the spec's §6 Motion System *approach* (dial level, page-transition mechanism — native View Transitions when the framework has them) and approve or reject any motion library it asks for; if none is approved, write `none`. **7.5** accounts for it (JS added by motion, `transform`/`opacity`/`clip-path` only so CLS stays untouched).
 - **Accessibility (7.6)**: carry the conformance **target** (min WCAG 2.1 AA — see the mandatory baseline; never `N/A`) and reference the spec's verification plan into **Section 11** so `/qa-engineer` builds a11y tests.
 - If **no** Design Spec exists (MVP/static scope): Section 7 still records the engineering frontend decisions and 7.6 still carries the WCAG 2.1 AA target — the floor applies regardless.
 Treat the Design Spec's library/CSS recommendations as inputs to ratify, not mandates — you own the final stack decision. For a lightweight/static Design Spec, extract only what applies.
@@ -126,10 +126,12 @@ Read top 1–2 results per search. Synthesise into concrete, versioned recommend
 
 ---
 
-## Step 3 — Derive name and output path
+## Step 3 — Derive name and output path; project TAD or delta
 
-- `SNAKE_CASE` name from project title, max 5 words, all caps.
-- If an explicit output path was given in the arguments, use it exactly. Otherwise: check `./tech-analysis/` exists (`[ -d "./tech-analysis" ] && echo exists || echo missing`), create if missing, output to `./tech-analysis/{NAME}_TECH_ANALYSIS.md`.
+- `SNAKE_CASE` name from the feature title, max 5 words, all caps. `mkdir -p tech-analysis`.
+- **First feature on a project (no TAD exists yet):** write the full document below as `tech-analysis/PROJECT_TECH_ANALYSIS.md` — this is the **project TAD**: stack, structure, conventions, infra, testing. It is written once and updated in place.
+- **Later features (a project TAD or any `*_TECH_ANALYSIS.md` exists):** do **not** write a new full TAD. Read the existing one (§3, §7.1, §8.1, §11 at least) and write `tech-analysis/{NAME}_TECH_DELTA.md`: same section numbering, but **only the sections this feature changes or adds** — typically §4.3 (new tables/columns), §5.2 (new endpoints), §2.4 (new ADRs), §8.3 (new jobs), and one line per untouched section: `unchanged — see PROJECT_TECH_ANALYSIS.md`. A delta is 60–200 lines. If the feature genuinely changes the stack or the architecture style, update the project TAD's affected sections in place and say so in the report.
+- Legacy projects with several per-feature TADs and no `PROJECT_TECH_ANALYSIS.md`: treat the newest full TAD as the project TAD, write the delta against it, and recommend in the report that the user consolidate (`/tech-architect consolidate` rewrites the project TAD from the existing ones).
 - Save incrementally after each section — overwrite each time.
 
 ---
@@ -312,6 +314,7 @@ src/
 |---|---|---|
 | CSS | {Tailwind / CSS Modules / etc.} | {version} |
 | Components | {shadcn/ui / Radix / etc.} | |
+| Motion | {Design Spec §6 dial: none/sober/expressive; page transitions via {View Transitions API / framework equivalent}} | {approved motion library, or `none`} |
 
 > Design tokens (colour/type/spacing/radius/elevation) and per-component visual & behavioural contracts are **not** duplicated here — the Design Spec in `design-specs/` is authoritative. This subsection records only the *engineering* choice of CSS approach + component-library technology that realizes them. If no Design Spec exists, state the tokens/approach inline at minimum.
 
@@ -323,6 +326,7 @@ src/
 | FCP | < 1.8s |
 | CLS | < 0.1 |
 | JS bundle (initial, gzipped) | < 150 KB |
+| Motion cost | {0 KB unless 7.4 approves a library; `transform`/`opacity`/`clip-path` only, no layout thrash, CLS unaffected} |
 | Lighthouse mobile | ≥ 90 |
 
 ### 7.6 Rendering, SEO & Accessibility
@@ -516,7 +520,7 @@ Then do a final Write with Version **1.1** and add a Revision History note at th
 
 ## Step 6 — Best-practices files
 
-Create `best-practices/` in the same output directory. Write **one file per technology group** — `frontend.md`, `backend.md`, `devops.md`, `testing.md` (or a single `BEST_PRACTICES.md` for `medium`). Cap each at **120 lines**. Run all research in parallel.
+Create `best-practices/` in the same output directory. Write **one file per technology group** — `frontend.md`, `backend.md`, `devops.md`, `testing.md` (or a single `BEST_PRACTICES.md` for `medium`). Cap each at **120 lines**. Run all research in parallel. `frontend.md` carries the motion constraints from Design Spec §6 (properties, reduced-motion, stagger cap, pausable infinite animations, no library beyond 7.4) so the developer's Motion rules and the project's agree.
 
 **Update in place, never per feature.** If the folder already exists (a later feature on the same project), read the existing group file and edit it: add the few rules this feature introduces, remove nothing that still applies. Do not create `{FEATURE}.md` files — developers read every file for their label, and a folder that grows one file per feature is what made a real project read eight of them per task.
 

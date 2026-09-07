@@ -1,49 +1,85 @@
 # pocket-it
 
-An agent toolkit for [Claude Code](https://claude.ai/code) that takes a feature from business analysis to reviewed pull requests, plus standalone tools that build and audit static sites and write the legal pages a client site needs.
+An agent toolkit for [Claude Code](https://claude.ai/code) that takes a feature from one round of questions to reviewed pull requests, wave by wave and in parallel, plus a fast lane for small fixes, standalone tools that build and audit static sites, and the legal pages a client site needs.
 
 ---
 
-## How it works
+## Two lanes
 
 ```mermaid
 flowchart TD
-    A(["/business-analyst"]) --> B[("BAD")]
-    B --> UX(["/ux-ui-designer (Design Spec)"]) --> UXD[("Design Spec")]
-    B --> C(["/tech-architect"])
-    UXD -. TAD §7 .-> C
-    C --> D[("TAD + best-practices/")]
-    D --> E(["/implementation-planner"])
-    E --> F[("tasks/*.md · INDEX.md · DEPS.json")]
-    F --> W{{"orchestrator: wave by wave, parallel, worktrees"}}
-    W --> H(["/developer ×n"]) & I(["/devops-engineer"]) & J(["/qa-engineer"])
-    H & I & J --> K(["/reviewer (batch)"])
-    K --> M{{"👤 merge"}}
-    M --> L(["/documentation-agent"])
+    subgraph docs["1 · Understand — once per feature"]
+      direction LR
+      IN["/intake<br/>4 questions, in your session"] --> BR[("BRIEF.md<br/>.pocket-it.json")]
+      BR --> BA["business-analyst"] --> BAD[("BAD<br/>Given/When/Then · examples · non-goals")]
+      BAD --> UX["ux-ui-designer<br/>(Production scope)"] -.-> TA
+      BAD --> TA["tech-architect"] --> TAD[("PROJECT TAD once<br/>DELTA per feature<br/>best-practices/")]
+    end
+    subgraph plan["2 · Plan"]
+      direction LR
+      TAD --> PL["implementation-planner"] --> BOARD[("tasks/*.md · INDEX.md · DEPS.json<br/>waves · contracts · risk")]
+      BOARD --> DOC[/"doctor.sh"/] --> GATE{{"👤 review the board<br/>the one human gate"}}
+    end
+    subgraph wave["3 · /run-wave — repeat until next-wave says Done"]
+      direction LR
+      NW[/"next-wave.sh<br/>what is ready"/] --> DEV["developer ×N<br/>worktrees, in parallel<br/>opus if Risk: high"]
+      DEV --> PRS[("draft PRs<br/>AC → tests")]
+      PRS --> VER[/"verify.sh<br/>lint · types · affected tests"/] --> REV["reviewer ×1<br/>comments + labels"]
+      REV -- needs-work ≤ 2 rounds --> DEV
+      REV -- approved --> MERGE{{"👤 merge"}}
+    end
+    GATE --> NW
+    MERGE --> NW
+    MERGE --> RT["/retro<br/>findings → rules"]
+    subgraph fast["Fast lane — no documents"]
+      direction LR
+      QF["/quickfix 'the button does not…'"] --> QT[("tasks/QF-n.md")] --> QD["developer"] --> QV[/"verify.sh"/] --> QR["reviewer"] --> QM{{"👤 merge"}}
+    end
+    classDef script fill:#e8f1f0,stroke:#0e7c7b,color:#0a3d3c
+    class DOC,NW,VER,QV script
 ```
 
-Every stage is a subagent that reads the artefacts of the previous one from disk. No agent asks questions at runtime: a `.pocket-it.json` in the target repo answers them, and anything still unknown is written down as an assumption for you to confirm.
+Rounded boxes are agents, cylinders are files on disk, parallelograms are scripts that spend no tokens, hexagons are the two moments that need you.
 
-## Agents
+Every entry point is a plain command, so pocket-it works on its own or under any orchestrator you put in front of it: `status.sh` tells an orchestrator where the project is, `next-wave.sh` what can be launched, and the three main-session skills (`/intake`, `/quickfix`, `/run-wave`) are the only places that talk to the user. Two things always stay with the human: reviewing the board before wave 1, and merging.
 
-| Skill | Produces | Model |
+No agent asks questions at runtime. `/intake` asks you once; everything else reads `.pocket-it.json` and `BRIEF.md` and writes its assumptions down. Scripts, not agents, decide what is ready to launch and whether a PR is mechanically green. Memory across sessions lives on disk: the board and git for state, `docs/SESSION_HANDOFF.md` (written by agents through `handoff.sh`) for facts and events — never `--resume`.
+
+## Skills
+
+| Skill | What it does | Model |
 |---|---|---|
-| `/business-analyst {brief}` | `business-analysis/{NAME}_BUSINESS_ANALYSIS.md` | Opus |
-| `/ux-ui-designer {BAD path \| site \| brief}` | Design Spec (pipeline), audit `UX_UI_REVIEW.md`, or a design direction | Opus |
-| `/tech-architect {BAD path}` | `tech-analysis/{NAME}_TECH_ANALYSIS.md` + `best-practices/` | Opus |
-| `/implementation-planner {TAD path}` | `tasks/T-*.md`, `tasks/INDEX.md`, `implementation-plans/{NAME}_DEPS.json`, short IPD | Sonnet |
-| `/developer Issue: T-1.2.3 — title Label: Backend` | one task with tests, task branch, draft PR | Sonnet |
-| `/devops-engineer Issue: T-1.1.2 — title` | one infra task, draft PR | Sonnet |
-| `/qa-engineer` | integration/E2E tests for the QA tasks the planner justified (on-demand by default; unit tests are the developer's), draft PR, bug tasks | Sonnet |
-| `/reviewer PRs: 12, 13` or `Tasks: T-1.2.3` | review by diff vs task criteria, TAD, best practices; conflicts; CI routing | Opus |
-| `/documentation-agent` | README, `docs/API.md`, `docs/ARCHITECTURE.md`, draft PR | Sonnet |
-| `/mvp-builder {brief}` | static site in `~/Desktop/clients/{slug}/` | Sonnet |
-| `/legal-advisor {client}` | privacy, cookie, terms pages + `LEGAL_CHECKLIST.md` | Opus |
+| `/intake {one sentence}` | asks up to 4 questions, writes `business-analysis/BRIEF.md` + `.pocket-it.json`, commits, hands off | — (your session) |
+| `/business-analyst` | BAD with stories as Given/When/Then criteria, examples table, non-goals | Opus |
+| `/ux-ui-designer` | Design Spec (pipeline), site audit, or a design direction | Opus |
+| `/tech-architect` | first feature: `PROJECT_TECH_ANALYSIS.md`; later: a short `_TECH_DELTA.md`; `best-practices/` per tech group | Opus |
+| `/implementation-planner` | self-contained task files, `INDEX.md`, `DEPS.json` with waves; contract-first so backend and frontend run in the same wave; `Risk` per task | Sonnet |
+| `/run-wave` | launches every ready task in parallel (worktrees; Opus for high risk), one reviewer for the wave, up to two fix rounds, report | — (your session) |
+| `/developer Issue: T-1.2.3 — title Label: Backend\|Frontend\|DevOps` | one task with its unit tests, task branch, draft PR mapping criteria to tests | Sonnet / Opus |
+| `/reviewer Tasks: T-1.2.3, T-1.2.4` | `verify.sh` first, then diff vs criteria, contract, TAD, best practices | Opus |
+| `/qa-engineer` | integration/E2E only for QA tasks the planner justified | Sonnet |
+| `/quickfix {sentence}` | fast lane: task file → developer → reviewer, no documents | — (your session) |
+| `/retro EPIC-3` | turns repeated review findings into best-practices rules and template proposals | Opus |
+| `/documentation-agent` | README, API reference, architecture overview, on request | Sonnet |
+
+`/ux-ui-designer` also works standalone on a static site (audit with scores and copy-pasteable fixes, or a design direction from a brief), reading the shared `design-compass.md`.
+
+## Scripts (no tokens)
+
+```bash
+bash ~/.claude/agents/pocket-it/bin/doctor.sh          # pre-flight: config, board, DEPS.json, TAD numbering, hygiene
+bash ~/.claude/agents/pocket-it/bin/next-wave.sh       # what can be launched right now, as JSON lines
+bash ~/.claude/agents/pocket-it/bin/verify.sh 42       # lint + type-check + affected tests on PR #42, in a throwaway worktree
+bash ~/.claude/agents/pocket-it/bin/status.sh          # project state from disk, ~25 lines (what an orchestrator reads first)
+bash ~/.claude/agents/pocket-it/bin/handoff.sh log "…"   # append to docs/SESSION_HANDOFF.md (agents do this; `fact "…"` for gotchas)
+bash ~/.claude/agents/pocket-it/bin/tasks-index.sh     # regenerate tasks/INDEX.md
+python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days 7   # where the tokens went this week
+```
 
 ## Setup
 
-1. Clone and let Claude Code see the agents (this repo is designed to live at `~/.claude/agents/pocket-it`, e.g. via a symlink from `~/Desktop/agents`).
-2. Register the guard hook and drop the 1M-context model for orchestration in `~/.claude/settings.json`:
+1. Clone so that the repo is reachable at `~/.claude/agents/pocket-it` (e.g. `~/.claude/agents` is a symlink to the folder that contains it) and make the skills global: `~/.claude/skills` as a symlink to `pocket-it/.claude/skills`, or one symlink per skill inside it.
+2. In `~/.claude/settings.json`: a standard-context model for orchestration and the guard hook.
 
 ```json
 {
@@ -52,38 +88,35 @@ Every stage is a subagent that reads the artefacts of the previous one from disk
 }
 ```
 
-3. In each target project: `cp pocket-it/templates/pocket-it.json ./.pocket-it.json` and set `scope`, `automerge`, `pipeline`, `baseBranch`, `testCommand`.
+3. In each target project, `/intake` once (or `cp pocket-it/templates/pocket-it.json ./.pocket-it.json` and commit it).
 4. Optional: `bash .claude/hooks/install.sh` in the target repo installs the pre-push secret scanner.
 
-## Running a feature
+## A feature, end to end
 
 ```bash
-/business-analyst  Gestione ordini rivenditori con email di conferma
-/tech-architect    business-analysis/ORDINI_RIVENDITORI_TECH_ANALYSIS.md
-/implementation-planner tech-analysis/ORDINI_RIVENDITORI_TECH_ANALYSIS.md
-# then, wave by wave from DEPS.json — one message, several agents, isolation: worktree
-/developer Issue: T-3.1.1 — Migrazione tabella ordini  Label: Backend
-/developer Issue: T-3.2.1 — Form ordine rivenditore   Label: Frontend
-/reviewer  Tasks: T-3.1.1, T-3.2.1
-# you merge; next wave; at the end
-/qa-engineer
-/documentation-agent
+/intake Gestione ordini rivenditori con email di conferma
+# → BRIEF.md, .pocket-it.json, then business-analyst runs
+/tech-architect business-analysis/ORDINI_RIVENDITORI_BUSINESS_ANALYSIS.md
+/implementation-planner tech-analysis/ORDINI_RIVENDITORI_TECH_DELTA.md
+# read tasks/INDEX.md — this is what gets built
+/run-wave        # wave 1 … you merge …
+/run-wave        # wave 2 … until next-wave says everything is Done
+/retro EPIC-3
 ```
 
 ## Cost model
 
-The 2026-09 audit found the bill dominated by two things: an orchestration session on a 1M-context model, kept open for a day and implementing tasks itself, and implementing agents that re-read files and ran 400+ turns. The current design counters both: the orchestrator delegates and stays small (one session per epic, standard context), agents read the task file plus cited TAD sections only, have `maxTurns`, and the reviewer runs per batch. Tests follow one default policy: unit and component tests are required and ship with each task; integration and E2E are on-demand, created only where the planner can justify them in a line (`tests` in `.pocket-it.json` overrides per project). Hard rules (no merge, no push to main, no `pkill`, no CI flips, no sleep-polling) are enforced by a hook, not by prompt text.
+The 2026-09 audit found the bill dominated by an orchestration session on a 1M-context model, kept open for a day and implementing tasks itself, and by implementing agents that re-read files and ran 400+ turns. v2 counters both: the orchestrator stays thin (`/run-wave` is a recipe around two scripts), agents read the task file plus cited sections only and have `maxTurns`, unit tests ship with the code while integration/E2E are on-demand, the reviewer runs once per wave after a mechanical `verify.sh`, and hard rules live in a hook. `usage-report.py` tells you every week whether that is still true.
 
 ## Repository structure
 
 ```
 .claude/
-  agents/               one .md per agent
-    shared/             design-compass.md · implementing-common.md
-  skills/               /launchers (forward $ARGUMENTS to the native agent)
-  hooks/                guard.sh (PreToolUse) · pre-push secret scanner + install.sh
-bin/tasks-index.sh      regenerates tasks/INDEX.md
+  agents/               one .md per agent · shared/ (design-compass, implementing-common)
+  skills/               launchers + main-session skills (intake, quickfix, run-wave)
+  hooks/                guard.sh (PreToolUse) + tests · pre-push secret scanner + install.sh
+bin/                    doctor · next-wave · verify · tasks-index · usage-report
 templates/pocket-it.json
-docs/agent-reviews/     audits and change logs
+docs/agent-reviews/     design notes (current: PIPELINE-V2-2026-09-06.md)
 CLAUDE.md               maintenance guide for the agents
 ```
