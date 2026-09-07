@@ -73,6 +73,7 @@ bash ~/.claude/agents/pocket-it/bin/verify.sh 42       # lint + type-check + aff
 bash ~/.claude/agents/pocket-it/bin/status.sh          # project state from disk, ~25 lines (what an orchestrator reads first)
 bash ~/.claude/agents/pocket-it/bin/handoff.sh log "…"   # append to docs/SESSION_HANDOFF.md (agents do this; `fact "…"` for gotchas)
 bash ~/.claude/agents/pocket-it/bin/tasks-index.sh     # regenerate tasks/INDEX.md
+bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh [--dry-run] [--all]   # remove worktrees + local branches of merged PRs (run-wave/quickfix do it after each merge)
 python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days 7   # where the tokens went this week
 ```
 
@@ -115,7 +116,7 @@ The 2026-09 audit found the bill dominated by an orchestration session on a 1M-c
   agents/               one .md per agent · shared/ (design-compass, implementing-common)
   skills/               launchers + main-session skills (intake, quickfix, run-wave)
   hooks/                guard.sh (PreToolUse) + tests · pre-push secret scanner + install.sh
-bin/                    doctor · next-wave · verify · tasks-index · usage-report
+bin/                    doctor · next-wave · verify · tasks-index · cleanup-merged (+ test) · usage-report
 templates/pocket-it.json
 docs/agent-reviews/     design notes (current: PIPELINE-V2-2026-09-06.md)
 CLAUDE.md               maintenance guide for the agents
