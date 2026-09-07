@@ -83,7 +83,20 @@ for df in deps_files:
             st = tasks.get(tid, {}).get("fields", {}).get("Status","?")
             if st.lower() == "done": warn(f"wave {wave}: {tid} already Done")
 
-# 4. TAD numbering contract
+# 4a. BAD: project document + deltas
+bad_project = os.path.exists("business-analysis/PROJECT_BUSINESS_ANALYSIS.md")
+bad_full = sorted(glob.glob("business-analysis/*_BUSINESS_ANALYSIS.md"))
+bad_deltas = sorted(glob.glob("business-analysis/*_BUSINESS_DELTA.md"))
+if not bad_project and len(bad_full) > 1:
+    warn(f"business-analysis/: {len(bad_full)} per-feature BADs and no PROJECT_BUSINESS_ANALYSIS.md — consolidation pending (/business-analyst consolidate)")
+for bd in bad_deltas:
+    if not bad_project and not bad_full: warn(f"{bd}: delta without a project BAD (PROJECT_BUSINESS_ANALYSIS.md) or a legacy *_BUSINESS_ANALYSIS.md to apply it to")
+    txt = open(bd, errors="ignore").read()
+    if not re.search(r"^## .*Impatto sul documento di progetto", txt, re.M): warn(f"{bd}: missing «Impatto sul documento di progetto» section")
+    if not re.search(r"Given .*, when .*, then ", txt, re.I): warn(f"{bd}: no Given/When/Then acceptance criteria")
+    if "US-1:" in txt and (bad_project or bad_full) and not re.search(r"supersedes US-1\b", txt): warn(f"{bd}: US-1 — story numbering restarted instead of continuing the project sequence")
+
+# 4b. TAD numbering contract
 for tad in glob.glob("tech-analysis/*_TECH_ANALYSIS.md"):
     txt = open(tad, errors="ignore").read()
     heads = re.findall(r"^## (\d+)\.", txt, re.M)

@@ -27,7 +27,7 @@ cat .pocket-it.json 2>/dev/null || echo '{}'
 
 `PROJECT_SCOPE` = first word of `{{ARGUMENTS}}` if `simple|medium|full`, else config `scope`, else inferred (record `[ASSUMPTION]`). Delivery context for §9.3/§11.3 comes from config too: `teamSize` (default 1), `pipeline` (default `false` = no hosted CI, local validation only). **Never call `AskUserQuestion`** — you run as a subagent and it fails; unresolved facts go into §13 as blocking questions with the conservative choice applied meanwhile.
 
-Then read the BAD file(s) provided. Look for a `| Project Scope |` row in the metadata table.
+Then read the BAD file(s) provided. The business-analyst writes `business-analysis/PROJECT_BUSINESS_ANALYSIS.md` once, then a `{NAME}_BUSINESS_DELTA.md` per feature: given a delta, read the project BAD too (personas, constraints, glossary, the stories the delta supersedes — its «Impatto sul documento di progetto» list says which sections); given a legacy `*_BUSINESS_ANALYSIS.md`, read it alone. Look for a `| Project Scope |` row in the metadata table.
 - **Found** → extract `MVP` or `Full Production` — use it for **architecture style decisions** (managed platforms vs full infra, monolith vs microservices).
 - **Not found** → infer from the project description. Do not ask again — `PROJECT_SCOPE` already covers output depth.
 

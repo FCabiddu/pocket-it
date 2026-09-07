@@ -11,7 +11,7 @@ flowchart TD
     subgraph docs["1 · Understand — once per feature"]
       direction LR
       IN["/intake<br/>4 questions, in your session"] --> BR[("BRIEF.md<br/>.pocket-it.json")]
-      BR --> BA["business-analyst"] --> BAD[("BAD<br/>Given/When/Then · examples · non-goals")]
+      BR --> BA["business-analyst"] --> BAD[("PROJECT BAD once<br/>DELTA per feature<br/>Given/When/Then · examples · non-goals")]
       BAD --> UX["ux-ui-designer<br/>(Production scope)"] -.-> TA
       BAD --> TA["tech-architect"] --> TAD[("PROJECT TAD once<br/>DELTA per feature<br/>best-practices/")]
     end
@@ -50,7 +50,7 @@ No agent asks questions at runtime. `/intake` asks you once; everything else rea
 | Skill | What it does | Model |
 |---|---|---|
 | `/intake {one sentence}` | asks up to 4 questions, writes `business-analysis/BRIEF.md` + `.pocket-it.json`, commits, hands off | — (your session) |
-| `/business-analyst` | BAD with stories as Given/When/Then criteria, examples table, non-goals | Opus |
+| `/business-analyst` | first feature: `PROJECT_BUSINESS_ANALYSIS.md`; later: a short `_BUSINESS_DELTA.md` (new/changed stories as Given/When/Then, numbering continued, impact on the project BAD) | Opus |
 | `/ux-ui-designer` | Design Spec (pipeline), site audit, or a design direction | Opus |
 | `/tech-architect` | first feature: `PROJECT_TECH_ANALYSIS.md`; later: a short `_TECH_DELTA.md`; `best-practices/` per tech group | Opus |
 | `/implementation-planner` | self-contained task files, `INDEX.md`, `DEPS.json` with waves; contract-first so backend and frontend run in the same wave; `Risk` per task | Sonnet |
@@ -67,7 +67,7 @@ No agent asks questions at runtime. `/intake` asks you once; everything else rea
 ## Scripts (no tokens)
 
 ```bash
-bash ~/.claude/agents/pocket-it/bin/doctor.sh          # pre-flight: config, board, DEPS.json, TAD numbering, hygiene
+bash ~/.claude/agents/pocket-it/bin/doctor.sh          # pre-flight: config, board, DEPS.json, BAD project/delta, TAD numbering, hygiene
 bash ~/.claude/agents/pocket-it/bin/next-wave.sh       # what can be launched right now, as JSON lines
 bash ~/.claude/agents/pocket-it/bin/verify.sh 42       # lint + type-check + affected tests on PR #42, in a throwaway worktree
 bash ~/.claude/agents/pocket-it/bin/status.sh          # project state from disk, ~25 lines (what an orchestrator reads first)
@@ -95,8 +95,8 @@ python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days 7   # where the to
 
 ```bash
 /intake Gestione ordini rivenditori con email di conferma
-# → BRIEF.md, .pocket-it.json, then business-analyst runs
-/tech-architect business-analysis/ORDINI_RIVENDITORI_BUSINESS_ANALYSIS.md
+# → BRIEF.md, .pocket-it.json, then business-analyst runs: PROJECT_BUSINESS_ANALYSIS.md the first time, a delta after
+/tech-architect business-analysis/ORDINI_RIVENDITORI_BUSINESS_DELTA.md
 /implementation-planner tech-analysis/ORDINI_RIVENDITORI_TECH_DELTA.md
 # read tasks/INDEX.md — this is what gets built
 /run-wave        # wave 1 … you merge …

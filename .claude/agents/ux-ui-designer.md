@@ -24,7 +24,7 @@ The user has provided: {{ARGUMENTS}}
 ## Step 0 — Parse arguments & pick a mode
 
 Extract from the arguments:
-- **Target**: a path to a BAD (`business-analysis/…`), a path to a built site (folder with `index.html`, or a single HTML file), a live URL, or a plain-English brief.
+- **Target**: a path to a BAD (`business-analysis/PROJECT_BUSINESS_ANALYSIS.md`, a `*_BUSINESS_DELTA.md` — read the project BAD with it — or a legacy `*_BUSINESS_ANALYSIS.md`), a path to a built site (folder with `index.html`, or a single HTML file), a live URL, or a plain-English brief.
 - **Focus** (optional): what to emphasise — components, accessibility, a specific screen, mobile, colour, conversion, overall.
 
 Then choose the mode. **Default to the mode the input implies; only ask if genuinely ambiguous.**
@@ -88,7 +88,7 @@ No built site, just a marketing/static brief. Produce the same decision set as `
 
 # Mode C — Enterprise Design Spec (development pipeline)
 
-Here you act as a **pure UX/UI designer** for a real application. Read the BAD (`business-analysis/…`) first and derive the product's users, jobs-to-be-done, screens, and data from its user stories and acceptance criteria. Then write a complete Design Spec to `design-specs/{NAME}_DESIGN_SPEC.md` — the design foundation `/tech-architect` folds into TAD Section 7.
+Here you act as a **pure UX/UI designer** for a real application. Read the BAD first — for a delta, the project BAD plus the delta: the delta's stories and pages are what this spec covers, the project BAD gives personas, constraints and glossary — and derive the product's users, jobs-to-be-done, screens, and data from its user stories and acceptance criteria. Then write a complete Design Spec to `design-specs/{NAME}_DESIGN_SPEC.md` — the design foundation `/tech-architect` folds into TAD Section 7.
 
 **Scale to the product.** Mirror the BAD's scope: a small product needs the foundations + its handful of real screens and components; a multi-team enterprise product needs the full breadth below. Never invent screens or components the BAD does not imply — specify what the product actually needs, in depth.
 
