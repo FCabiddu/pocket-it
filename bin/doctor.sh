@@ -58,14 +58,16 @@ for f in files:
     for dep in re.split(r"[,\s]+", fields.get("Depends on", fields.get("Depends On",""))):
         dep = dep.strip()
         if dep and dep.lower() not in ("none","nessuna","-") and re.match(r"^[A-Z]+-", dep) and dep not in tasks and not glob.glob(f"tasks/{dep}-*.md"):
-            err(f"{f}: depends on {dep} which has no task file")
+            (warn if fields.get("Status","").lower().startswith("done") else err)(f"{f}: depends on {dep} which has no task file")
 
 # 3. DEPS.json
 deps_files = glob.glob("implementation-plans/*_DEPS.json")
 for df in deps_files:
     try: d = json.load(open(df))
     except Exception as e: err(f"{df}: invalid JSON: {e}"); continue
-    dt = d.get("tasks", {})
+    dt = d.get("tasks")
+    if not isinstance(dt, dict) or not isinstance(d.get("waves", {}), dict):
+        warn(f"{df}: legacy DEPS format (no tasks/waves maps) — skipped, not used by next-wave.sh"); continue
     for tid, t in dt.items():
         if not glob.glob(f"tasks/{tid}-*.md"): err(f"{df}: task {tid} has no file in tasks/")
         for dep in t.get("dependsOn", []):
