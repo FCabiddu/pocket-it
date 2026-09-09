@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Self-test for worktree.sh against a scratch repo: a fake origin, a fresh branch created off origin/main, an
-# existing remote branch checked out tracking, idempotent re-runs, the .git/info/exclude line, and usage errors.
+# existing remote branch checked out tracking, an existing local branch with an unpushed commit that must
+# survive a re-run, idempotent re-runs, a stale non-worktree directory, the .git/info/exclude line, and usage
+# errors.
 cd "$(dirname "$0")"
 SCRIPT="$PWD/worktree.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/worktree-test.XXXXXX")
@@ -55,7 +57,26 @@ OUT2=$(bash "$SCRIPT" "$M" task/new1 2>/dev/null); rc=$?
 ok "AC3 second run exit 0" "[[ $rc -eq 0 ]]"
 ok "AC3 second run prints the same path" "[[ \"$OUT2\" == \"$WT1\" ]]"
 
-# 5. AC4 — .git/info/exclude has the line once, not duplicated across branches
+# 5. AC2 (reviewer finding 1) — a local branch with an unpushed commit must survive a re-run, never be reset
+OUT=$(bash "$SCRIPT" "$M" task/wip); WTWIP="$M/.claude/worktrees/task-wip"
+q git -C "$M" push -q origin task/wip                                    # origin/task/wip now exists, at the base tip
+echo wip > "$WTWIP/wip"; q git -C "$WTWIP" add wip; q git -C "$WTWIP" commit -qm "UNPUSHED WIP"
+WIP_SHA=$(git -C "$WTWIP" rev-parse HEAD)
+q git -C "$M" worktree remove "$WTWIP"                                    # branch task/wip stays, worktree gone
+OUT2=$(bash "$SCRIPT" "$M" task/wip); rc=$?
+ok "local branch with unpushed commit: exit 0" "[[ $rc -eq 0 ]]"
+ok "local branch with unpushed commit: worktree recreated" "[[ \"$OUT2\" == \"$WTWIP\" ]] && [[ -d $WTWIP ]]"
+ok "local branch with unpushed commit: NOT reset to origin — WIP survives" "[[ \$(git -C $WTWIP rev-parse HEAD) == $WIP_SHA ]]"
+
+# 6. AC3 (reviewer finding 3) — a stale directory that is not a registered worktree is rejected, not reused
+STALE_WT="$M/.claude/worktrees/task-stale"
+mkdir -p "$STALE_WT"; echo leftover > "$STALE_WT/leftover"
+ERR=$(bash "$SCRIPT" "$M" task/stale 2>&1 >/dev/null); rc=$?
+ok "stale non-worktree directory exits 2" "[[ $rc -eq 2 ]]"
+ok "stale non-worktree directory: error says why" "grep -q 'not a registered git worktree' <<<\"$ERR\""
+ok "stale non-worktree directory: left untouched" "[[ -f $STALE_WT/leftover ]]"
+
+# 7. AC4 — .git/info/exclude has the line once, not duplicated across branches
 ok "AC4 exclude has the line" "grep -qxF '.claude/worktrees/' $M/.git/info/exclude"
 ok "AC4 exclude has it exactly once" "[[ \$(grep -cxF '.claude/worktrees/' $M/.git/info/exclude) -eq 1 ]]"
 
