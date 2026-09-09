@@ -4,7 +4,7 @@
 #   bash ~/.claude/agents/pocket-it/bin/handoff.sh log  "T-3.1.2 PR #41 draft — contratto ordini, 2 test"   # prepend a log line (dated)
 #   bash ~/.claude/agents/pocket-it/bin/handoff.sh fact "Le migrazioni Supabase vanno applicate a mano: supabase db push"   # add an evergreen fact
 #   bash ~/.claude/agents/pocket-it/bin/handoff.sh show
-# Creates docs/SESSION_HANDOFF.md if missing. Log keeps the last 40 lines; facts are capped at 30 (oldest dropped with a warning).
+# Creates docs/SESSION_HANDOFF.md if missing. Log keeps the last 40 lines; facts are capped at 30 — at the cap a new fact is refused (exit 3), it does not drop the oldest.
 set -uo pipefail
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "handoff: not a git repository" >&2; exit 1; }
 F="$ROOT/docs/SESSION_HANDOFF.md"; mkdir -p "$ROOT/docs"
@@ -36,19 +36,32 @@ open(p,"w").write(head+sep+title+"\n"+"\n".join(lines)+"\n")
 PY
     echo "handoff: logged";;
   fact)
-    python3 - "$F" "- $*" <<'PY'
+    python3 - "$F" "$*" <<'PY'
 import sys
-p,line=sys.argv[1],sys.argv[2]; s=open(p).read()
+p,text=sys.argv[1],sys.argv[2]; s=open(p).read()
 head,sep,tail=s.partition("## Fatti che non scadono")
 body,sep2,rest=tail.partition("\n## ")
 lines=[l for l in body.splitlines() if l.startswith("- ")]
-if line in lines: print("handoff: fact already present"); sys.exit(0)
+line="- "+text
+CAP=30
+if line in lines:
+    print("handoff: fact already present"); sys.exit(0)
+if len(lines)>=CAP:
+    print(f"handoff: facts at cap ({CAP}/{CAP}) — not added. Ask the retro to promote stable facts to best-practices, or remove one line by hand: {text}", file=sys.stderr)
+    sys.exit(3)
 lines.append(line)
-if len(lines)>30: print("handoff: facts cap (30) reached — dropped the oldest: "+lines[0]); lines=lines[1:]
 comment="\n<!-- max 30 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->\n"
 open(p,"w").write(head+sep+comment+"\n".join(lines)+"\n\n"+("## "+rest if sep2 else ""))
+if len(lines)==CAP:
+    print(f"handoff: facts {CAP}/{CAP} — cap reached, next fact will be refused", file=sys.stderr)
+else:
+    print("handoff: fact added")
 PY
-    echo "handoff: fact added";;
-  show) cat "$F";;
+    exit $?;;
+  show)
+    cat "$F"
+    n=$(awk '/^## Fatti che non scadono/{f=1;next} /^## /{f=0} f && /^- /{c++} END{print c+0}' "$F")
+    [[ "$n" -eq 30 ]] && echo "facts: 30/30 (cap)"
+    true;;
   *) echo "usage: handoff.sh log|fact|show …" >&2; exit 2;;
 esac

@@ -61,6 +61,28 @@ for f in files:
         if dep and dep.lower() not in ("none","nessuna","-") and re.match(r"^[A-Z]+-", dep) and dep not in tasks and not (glob.glob(f"tasks/**/{dep}-*.md", recursive=True) or glob.glob(f"tasks/**/{dep}.md", recursive=True)):
             (warn if fields.get("Status","").lower().startswith("done") else err)(f"{f}: depends on {dep} which has no task file")
 
+# 2b. legacy nested board: EPIC.md / STORY-n.m.md status vs their T-*.md children (summaries nobody updates)
+status_re = re.compile(r"^\*\*Status(\*\*:|:\*\*)\s*(.*)$", re.M)
+def summary_status(path):
+    m = status_re.search(open(path, errors="ignore").read())
+    return m.group(2).strip() if m else ""
+for epic_dir in sorted(d for d in glob.glob("tasks/EPIC-*") if os.path.isdir(d)):
+    epic_children = sorted(glob.glob(os.path.join(epic_dir, "T-*.md")))
+    epic_file = os.path.join(epic_dir, "EPIC.md")
+    if epic_children and os.path.exists(epic_file):
+        st = summary_status(epic_file)
+        if not st.lower().startswith("done") and all(summary_status(c).lower().startswith("done") for c in epic_children):
+            warn(f'{epic_file}: says "{st}" but all {len(epic_children)} children are Done — update the summary')
+    for story_file in sorted(glob.glob(os.path.join(epic_dir, "STORY-*.md"))):
+        sm = re.match(r"STORY-([\d.]+)\.md$", os.path.basename(story_file))
+        if not sm: continue
+        prefix = f"T-{sm.group(1)}."
+        story_children = sorted(c for c in epic_children if os.path.basename(c).startswith(prefix))
+        if not story_children: continue
+        st = summary_status(story_file)
+        if not st.lower().startswith("done") and all(summary_status(c).lower().startswith("done") for c in story_children):
+            warn(f'{story_file}: says "{st}" but all {len(story_children)} children are Done — update the summary')
+
 # 3. DEPS.json
 deps_files = glob.glob("implementation-plans/*_DEPS.json")
 for df in deps_files:
