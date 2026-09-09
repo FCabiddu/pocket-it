@@ -1,0 +1,12 @@
+{
+  "scope": "simple",
+  "automerge": true,
+  "pipeline": false,
+  "baseBranch": "main",
+  "branching": "flat",
+  "testCommand": "bash bin/cleanup-merged.test.sh && bash .claude/hooks/guard.test.sh && bash .claude/hooks/guard.heredoc.test.sh",
+  "tests": { "unit": "required", "integration": "off", "e2e": "off" },
+  "ticketPrefix": "PI",
+  "teamSize": 1,
+  "language": "en"
+}
