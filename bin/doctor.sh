@@ -37,7 +37,7 @@ if sh(f"git rev-parse --verify --quiet {base}") == "" and sh(f"git rev-parse --v
 
 # 2. board
 tasks = {}
-files = [f for f in glob.glob("tasks/*.md") if not f.endswith("INDEX.md")]
+files = [f for f in glob.glob("tasks/**/*.md", recursive=True) if not f.endswith(("INDEX.md","README.md","/EPIC.md")) and not re.search(r"/(EPIC|STORY)-[^/]*\.md$", f)]
 if not files: warn("tasks/ has no task files (run implementation-planner or quickfix first)")
 hdr = re.compile(r"^\*\*([A-Za-z ]+?)(\*\*:|:\*\*)\s*(.*)$")
 required = ["Status","Label","Files","TAD"]
@@ -50,6 +50,7 @@ for f in files:
         h = hdr.match(line)
         if h: fields[h.group(1).strip()] = h.group(3).strip()
     tasks[tid] = {"file": f, "fields": fields}
+    if "Status" not in fields: warn(f"{f}: no **Status** line — ignored by next-wave.sh (set Done or Todo)")
     if fields.get("Status","").lower() in ("todo","to do","in coda","in progress","needs work"):
         for r in required:
             if r not in fields: warn(f"{f}: missing **{r}** line (developer needs it)")
@@ -57,7 +58,7 @@ for f in files:
     if sh(f"git ls-files '{f}'") == "": err(f"{f} is not committed — a developer in a worktree will not find it")
     for dep in re.split(r"[,\s]+", fields.get("Depends on", fields.get("Depends On",""))):
         dep = dep.strip()
-        if dep and dep.lower() not in ("none","nessuna","-") and re.match(r"^[A-Z]+-", dep) and dep not in tasks and not glob.glob(f"tasks/{dep}-*.md"):
+        if dep and dep.lower() not in ("none","nessuna","-") and re.match(r"^[A-Z]+-", dep) and dep not in tasks and not (glob.glob(f"tasks/**/{dep}-*.md", recursive=True) or glob.glob(f"tasks/**/{dep}.md", recursive=True)):
             (warn if fields.get("Status","").lower().startswith("done") else err)(f"{f}: depends on {dep} which has no task file")
 
 # 3. DEPS.json
@@ -69,9 +70,9 @@ for df in deps_files:
     if not isinstance(dt, dict) or not isinstance(d.get("waves", {}), dict):
         warn(f"{df}: legacy DEPS format (no tasks/waves maps) — skipped, not used by next-wave.sh"); continue
     for tid, t in dt.items():
-        if not glob.glob(f"tasks/{tid}-*.md"): err(f"{df}: task {tid} has no file in tasks/")
+        if not (glob.glob(f"tasks/**/{tid}-*.md", recursive=True) or glob.glob(f"tasks/**/{tid}.md", recursive=True)): err(f"{df}: task {tid} has no file in tasks/")
         for dep in t.get("dependsOn", []):
-            if dep not in dt and not glob.glob(f"tasks/{dep}-*.md"): err(f"{df}: {tid} depends on unknown {dep}")
+            if dep not in dt and not (glob.glob(f"tasks/**/{dep}-*.md", recursive=True) or glob.glob(f"tasks/**/{dep}.md", recursive=True)): err(f"{df}: {tid} depends on unknown {dep}")
     for w, ids in (d.get("waves") or {}).items():
         seen = {}
         for tid in ids:
