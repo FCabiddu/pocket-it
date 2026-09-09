@@ -16,7 +16,7 @@ Any `ERROR` from doctor → stop and show it; do not launch. `next-wave` prints 
 For every JSON line, one Agent call in the same message:
 - `subagent_type`: the `agent` field (`developer` or `qa-engineer`) — **never `general-purpose`**: it has no rules, no budget and no read discipline; a task that fits no named agent is a missing agent, not a reason to improvise a prompt
 - `model`: the `model` field (`opus` only for `risk: high`)
-- `isolation`: `worktree`
+- `isolation`: `worktree` — **only if the session cwd is the project repo** (`git rev-parse --show-toplevel` = the project). From any other folder (Jarvis in the hub) the Agent tool would create a worktree of the wrong repo: instead run `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh <project-path> task/{issue}-{slug})` first, omit `isolation`, and add `Worktree: $WT` to the prompt (the agent `cd`s there; shared rules §5).
 - `run_in_background`: `true`
 - `description`: `{issue} {label}`
 - `prompt`: `Issue: {issue} — {title from tasks/}\nLabel: {label}` plus `Base: {epic branch}` when config `branching` is `epic`.
@@ -29,7 +29,7 @@ When all notifications are in: list per task the branch, PR and one-line outcome
 ### 4. Review — one reviewer for the wave
 One Agent call: `subagent_type: reviewer`, prompt `Tasks: {all task IDs that opened a PR}` plus `Draft: yes` when config `automerge` is `false` or the user's request / `$ARGUMENTS` contain `draft`. Wait.
 
-NEEDS WORK items → one developer each, in one message, background, prompt `Issue: {id} — {title}\nLabel: {label}\nBranch: {branch} ALREADY EXISTS\nPR: {n}` plus the reviewer's findings verbatim. Then one more reviewer call for those PRs only. At most two review rounds per wave; what is still red after that goes to the user.
+NEEDS WORK items → one developer each, in one message, background, prompt `Issue: {id} — {title}\nLabel: {label}\nBranch: {branch} ALREADY EXISTS\nPR: {n}` plus the reviewer's findings verbatim. Then one more reviewer call for those PRs only with `Mode: delta` (reads only the fix commits — cheap). At most two review rounds per wave; what is still red after that goes to the user. **Never merge a PR that carries `needs-work` without that delta re-review**, however small the fix: the reviewer swaps the labels, and a merged PR left with `needs-work` corrupts the retro's numbers.
 
 ### 5. Close the wave
 - APPROVED PRs: merge them, one by one — `POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch` (the hook's authorised form; the prefix is the audit trail that the merge is covered by the `automerge: true` default). Skip the merge only when config `automerge` is `false` or the user's request / `$ARGUMENTS` contain `draft`: then list the approved PRs for the user, who merges. Never open or merge the epic→main PR of a deployed project here — that is a deploy, done only on explicit instruction.

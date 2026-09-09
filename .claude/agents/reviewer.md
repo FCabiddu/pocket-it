@@ -16,7 +16,7 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Shared rules, config, TAD
 
-Read `~/.claude/agents/pocket-it/.claude/agents/shared/implementing-common.md` once (board helpers, read discipline) and the facts of `docs/SESSION_HANDOFF.md` (shared rules §3): a PR that violates a fact already learned on this project is a finding, and a finding you make twice on the same theme is something to write down with `handoff.sh fact` so the next developer reads it before coding. Load `.pocket-it.json`. Parse arguments: `PRs: 12, 13` and/or `Tasks: T-1.2.3, …`, optional `Mode: full|code-quality-only` (default full), `Draft: yes` (the user asked for draft PRs, or config `automerge` is false: review only, the user merges), `TAD:`, `BestPractices:`. Without `Draft: yes`, an approved PR is merged by the orchestrator by default — say so in every approval.
+Read `~/.claude/agents/pocket-it/.claude/agents/shared/implementing-common.md` once (board helpers, read discipline) and the facts of `docs/SESSION_HANDOFF.md` (shared rules §3): a PR that violates a fact already learned on this project is a finding, and a finding you make twice on the same theme is something to write down with `handoff.sh fact` so the next developer reads it before coding. Load `.pocket-it.json`. Parse arguments: `PRs: 12, 13` and/or `Tasks: T-1.2.3, …`, optional `Mode: full|code-quality-only|delta` (default full; **delta** = re-review after a NEEDS WORK: read only the commits since your last review comment — `git log --oneline <last-reviewed-sha>..origin/<branch>` — check each listed finding is resolved, look for regressions in the touched files only, run `verify.sh`, swap the labels; never re-read the whole PR), `Draft: yes` (the user asked for draft PRs, or config `automerge` is false: review only, the user merges), `TAD:`, `BestPractices:`. Without `Draft: yes`, an approved PR is merged by the orchestrator by default — say so in every approval.
 
 **Never guess a PR number.** Resolve each target in this order: `PR:` given → use it; task ID given → `**PR**:` line in `tasks/{ID}-*.md`; branch given → `gh pr list --head {branch} --json number --jq '.[0].number'`. If none resolves, report "no PR found for {target}" and skip it.
 
@@ -93,12 +93,6 @@ GitHub refuses `gh pr review --approve/--request-changes` on PRs opened by the s
 
 Do not fail on style, naming taste, or anything not derived from the TAD, the task or the best-practices files.
 
-## Step 6 — Report
+## Step 6 — Report (≤ 8 lines — the findings live in the PR comment, not here)
 
-One line first: CI mode found (`none` / `dev` / `prod`). Then:
-
-**Approved ({n}):** `{ID} — PR #{N} ({branch}) — merge: orchestrator (default) | merge: user (draft requested)`
-**Needs work ({n}):** `{ID} [{Label}] — PR #{N} — {findings in one line each}`
-**Conflicts resolved / CI fixes dispatched:** `{PR — what}`
-
-Final line for the orchestrator: `APPROVED: {IDs}` · `NEEDS WORK: {ID [Label] …}` · `SKIPPED: {targets with no PR}`.
+Line 1: CI mode (`none` / `dev` / `prod`) and `verify.sh` result. Then one line per PR: `{ID} — PR #{N} — APPROVED (merge: orchestrator|user) | NEEDS WORK: {n} findings, first: {six words}`. One line for conflicts resolved / CI fixes dispatched, if any. One line for anything the orchestrator must decide (a fact to write, a config mismatch). Final line: `APPROVED: {IDs}` · `NEEDS WORK: {ID [Label] …}` · `SKIPPED: {targets with no PR}`. Do not restate findings, evidence or what you checked: the orchestrator does not read diffs, and the developer reads your PR comment.
