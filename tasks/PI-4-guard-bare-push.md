@@ -1,6 +1,6 @@
 # PI-4 — guard.sh: block a bare `git push` (no refspec) when the current branch is main/master
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/PI-4-guard-bare-push
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/19
 
 ## Goal
 The PreToolUse hook blocks `git push origin main` but not `git push`, `git push origin HEAD` or `git push -u origin HEAD` run while the checkout is on `main`. On 2026-09-09 the orchestrator pushed a commit straight to main this way by accident (a `cd` had failed and the command ran in the main checkout). The hook must resolve the branch the push would update and block it when it is `main` or `master`.
