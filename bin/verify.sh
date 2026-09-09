@@ -26,12 +26,14 @@ fi
 PM=pnpm; [[ -f package-lock.json ]] && PM=npm; [[ -f yarn.lock ]] && PM=yarn; [[ -f bun.lockb ]] && PM=bun
 has(){ python3 -c "import json,sys;print('$1' in json.load(open('package.json')).get('scripts',{}))" 2>/dev/null | grep -q True; }
 CHANGED=$(git diff --name-only "origin/$BASE...HEAD" | grep -vE '^(tasks|docs|implementation-plans|tech-analysis|business-analysis|design-specs)/' || true)
+QUOTED=$(printf "'%s' " $CHANGED)   # paths like src/app/(app)/page.tsx must reach the runner quoted
+PYQUOTED=$(printf "'%s' " $(echo "$CHANGED" | grep -E '\.py$'))
 TESTCMD=$(python3 -c 'import json;print(json.load(open(".pocket-it.json")).get("testCommand",""))' 2>/dev/null)
 [[ -z "$TESTCMD" ]] && has test:affected && TESTCMD="$PM run test:affected --base origin/$BASE"
 if [[ -z "$TESTCMD" ]]; then
-  if [[ -f vitest.config.ts || -f vitest.config.mts || -f vitest.config.js ]]; then TESTCMD="npx vitest related --run --reporter=dot --silent=passed-only $CHANGED";
-  elif grep -q '"jest"' package.json 2>/dev/null; then TESTCMD="npx jest --findRelatedTests --reporters=summary $CHANGED";
-  elif [[ -f pyproject.toml || -f pytest.ini ]]; then TESTCMD="python3 -m pytest -q $(echo "$CHANGED" | grep -E '\.py$' | tr '\n' ' ')";
+  if [[ -f vitest.config.ts || -f vitest.config.mts || -f vitest.config.js ]]; then TESTCMD="npx vitest related --run --reporter=dot --silent=passed-only $QUOTED";
+  elif grep -q '"jest"' package.json 2>/dev/null; then TESTCMD="npx jest --findRelatedTests --reporters=summary $QUOTED";
+  elif [[ -f pyproject.toml || -f pytest.ini ]]; then TESTCMD="python3 -m pytest -q $PYQUOTED";
   elif [[ -f go.mod ]]; then TESTCMD="go test ./..."; fi
 fi
 run(){ # run <label> <cmd>
