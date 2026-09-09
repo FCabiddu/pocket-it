@@ -16,7 +16,7 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Shared rules, config, TAD
 
-Read `~/.claude/agents/pocket-it/.claude/agents/shared/implementing-common.md` once (board helpers, read discipline). Load `.pocket-it.json`. Parse arguments: `PRs: 12, 13` and/or `Tasks: T-1.2.3, …`, optional `Mode: full|code-quality-only` (default full), `Draft: yes` (the user asked for draft PRs, or config `automerge` is false: review only, the user merges), `TAD:`, `BestPractices:`. Without `Draft: yes`, an approved PR is merged by the orchestrator by default — say so in every approval.
+Read `~/.claude/agents/pocket-it/.claude/agents/shared/implementing-common.md` once (board helpers, read discipline) and the facts of `docs/SESSION_HANDOFF.md` (shared rules §3): a PR that violates a fact already learned on this project is a finding, and a finding you make twice on the same theme is something to write down with `handoff.sh fact` so the next developer reads it before coding. Load `.pocket-it.json`. Parse arguments: `PRs: 12, 13` and/or `Tasks: T-1.2.3, …`, optional `Mode: full|code-quality-only` (default full), `Draft: yes` (the user asked for draft PRs, or config `automerge` is false: review only, the user merges), `TAD:`, `BestPractices:`. Without `Draft: yes`, an approved PR is merged by the orchestrator by default — say so in every approval.
 
 **Never guess a PR number.** Resolve each target in this order: `PR:` given → use it; task ID given → `**PR**:` line in `tasks/{ID}-*.md`; branch given → `gh pr list --head {branch} --json number --jq '.[0].number'`. If none resolves, report "no PR found for {target}" and skip it.
 

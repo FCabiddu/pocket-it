@@ -12,7 +12,7 @@ deps_path = sys.argv[1]
 d = json.load(open(deps_path)) if deps_path and os.path.exists(deps_path) else {"tasks": {}}
 dt = d.get("tasks", {})
 hdr = re.compile(r"^\*\*([A-Za-z ]+?)(\*\*:|:\*\*)\s*(.*)$")
-status, label, files_of, deps_of, risk = {}, {}, {}, {}, {}
+status, label, files_of, deps_of, risk, budget = {}, {}, {}, {}, {}, {}
 for f in glob.glob("tasks/*.md"):
     if f.endswith("INDEX.md"): continue
     txt = open(f, errors="ignore").read()
@@ -25,6 +25,7 @@ for f in glob.glob("tasks/*.md"):
     status[tid] = re.split(r"\s+[\u2014\u2013-]\s+|\s*\(", fields.get("status", "Todo"))[0].strip() or "Todo"
     label[tid] = fields.get("label", "")
     risk[tid] = fields.get("risk", "low")
+    budget[tid] = fields.get("budget", "")
     files_of[tid] = [x.strip("` ") for x in fields.get("files", "").split(",") if x.strip()]
     dep = fields.get("depends on", fields.get("depends On", ""))
     deps_of[tid] = [x for x in re.split(r"[,\s]+", dep) if re.match(r"^[A-Z]+-", x)]
@@ -45,7 +46,7 @@ for tid in sorted(status, key=lambda s: [int(x) if x.isdigit() else x for x in r
     ready.append(tid)
 for tid in ready:
     print(json.dumps({"issue": tid, "label": label[tid], "risk": risk[tid], "status": status[tid],
-                      "model": "opus" if risk[tid].lower() == "high" else "sonnet",
+                      "model": "opus" if risk[tid].lower() == "high" else "sonnet", "budget": budget.get(tid, ""),
                       "agent": "qa-engineer" if label[tid].upper() == "QA" else "developer",
                       "files": files_of.get(tid, [])}, ensure_ascii=False))
 inprog = [t for t in status if status[t].lower() == "in progress"]

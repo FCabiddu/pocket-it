@@ -14,7 +14,7 @@ Any `ERROR` from doctor → stop and show it; do not launch. `next-wave` prints 
 
 ### 2. Launch — all ready tasks in ONE message
 For every JSON line, one Agent call in the same message:
-- `subagent_type`: the `agent` field (`developer` or `qa-engineer`)
+- `subagent_type`: the `agent` field (`developer` or `qa-engineer`) — **never `general-purpose`**: it has no rules, no budget and no read discipline; a task that fits no named agent is a missing agent, not a reason to improvise a prompt
 - `model`: the `model` field (`opus` only for `risk: high`)
 - `isolation`: `worktree`
 - `run_in_background`: `true`
@@ -35,4 +35,6 @@ NEEDS WORK items → one developer each, in one message, background, prompt `Iss
 - APPROVED PRs: merge them, one by one — `POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch` (the hook's authorised form; the prefix is the audit trail that the merge is covered by the `automerge: true` default). Skip the merge only when config `automerge` is `false` or the user's request / `$ARGUMENTS` contain `draft`: then list the approved PRs for the user, who merges. Never open or merge the epic→main PR of a deployed project here — that is a deploy, done only on explicit instruction.
 - `git pull --ff-only` the base branch, then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh` and `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "wave {n} closed — {merged}/{launched} merged, {approved-draft} awaiting user merge, {needs-work} needs work"`, commit `tasks/` and `docs/` on the base branch, push.
 - Then `bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh`: removes the worktrees and local branches of the merged PRs (dirty, locked and unmerged ones are kept and listed). Report its summary line (`cleanup-merged: N worktrees removed, … freed X MB`).
-- Report in ≤ 15 lines: launched / merged (or approved, awaiting the user in draft mode) / needs work / blocked, PR links, open questions from agent reports. Then stop — the next wave is a new `/run-wave`, when the user says "vai" (in draft mode, after the user has merged).
+- **Learning hooks.** Read the wave's `BUDGET` and `STALL` lines from the handoff log (`grep -E "^- .*(BUDGET|STALL) " docs/SESSION_HANDOFF.md | head`) and list them in the report: they are the raw material of the retro. If `next-wave.sh` now reports everything Done (the board is complete), launch the retro **now**, before reporting: one Agent call `subagent_type: retro`, prompt `{epic id or "board completed {date}"}`, wait, and include its summary — nobody else will launch it once the session closes.
+- **Session hygiene.** Count the `wave … closed` lines logged today by this session. After the **second** closed wave, end the report with: "Due wave in questa sessione: prima della prossima, `/compact` (o una sessione nuova) — lo stato è su disco, non si perde nulla." Do not launch a third wave in the same session without it.
+- Report in ≤ 15 lines: launched / merged (or approved, awaiting the user in draft mode) / needs work / blocked, PR links, BUDGET/STALL lines, open questions from agent reports. Then stop — the next wave is a new `/run-wave`, when the user says "vai" (in draft mode, after the user has merged).

@@ -2,7 +2,7 @@
 name: qa-engineer
 description: Senior QA Engineer that implements the QA tasks of the local tasks/ board — integration, E2E and mandatory accessibility tests (unit tests are written by developers with their code) — on a task branch with a draft PR. Files a bug task for every source defect found; never fixes source code, never asks questions.
 model: sonnet
-maxTurns: 150
+maxTurns: 300
 tools:
   - Read
   - Write

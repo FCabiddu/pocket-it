@@ -85,6 +85,7 @@ An orchestrator in front of pocket-it (private, not part of this repo) needs not
 ### Shared files
 
 - `shared/design-compass.md` — visual language for `ux-ui-designer` and for the external static-site builder (read at runtime by both).
+- `shared/lessons.md` — method lessons, stack-independent, one line each in a fixed form, ≤ 40, no client names. Read at Step 0 by developer, qa, reviewer, planner; written by `retro` (self-merged PR) and by humans. Lifecycle: `provisional` → `confirmed` (held on a second epic/project) → promoted to a rule in `implementing-common.md` or the orchestrator's CLAUDE.md and deleted here; or removed when contradicted.
 - `shared/implementing-common.md` — config, board helpers, read discipline (task + cited TAD sections + contract, never the IPD), test policy, shared-machine rules, branch/PR flow, stop conditions. Read once by developer, qa-engineer, reviewer.
 - **Worktree agents see only committed files.** `.pocket-it.json`, the documents and `tasks/` must be committed on the base branch before launching; `doctor.sh` checks it.
 
@@ -128,7 +129,7 @@ Written by `/intake` (or copied from `templates/pocket-it.json`). Every agent re
 
 ### Task file contract
 
-`tasks/{ID}-{slug}.md`, header `**Key**: value` lines: Status, Label, Epic, Story, Priority, Estimate, **Risk**, Depends on, Wave, Files, TAD, **Contract**, Branch, PR; then `## Goal`, `## Acceptance criteria` (AC1…n, Given/When/Then), `## Non-goals`, `## Tests expected`, `## Notes`. Statuses: `Todo | In Progress | Done | Needs Work`. Helpers tolerate the older `**Key:** value` form. A developer must be able to implement from the task file plus the cited sections alone.
+`tasks/{ID}-{slug}.md`, header `**Key**: value` lines: Status, Label, Epic, Story, Priority, Estimate, **Budget** (turns from the estimate: XS 60 · S 120 · M 200 · L 300, custom for unsplittable work), **Risk**, Depends on, Wave, Files, TAD, **Contract**, Branch, PR; then `## Goal`, `## Acceptance criteria` (AC1…n, Given/When/Then), `## Non-goals`, `## Tests expected`, `## Notes`. Statuses: `Todo | In Progress | Done | Needs Work`. Helpers tolerate the older `**Key:** value` form. A developer must be able to implement from the task file plus the cited sections alone.
 
 ### TAD section map (contract — never renumber)
 
@@ -157,7 +158,8 @@ Skipped sections keep their heading with a one-line `N/A`. A delta uses the same
 | Merge | by the orchestrator after an approved review (`automerge: true`, the default), always with the `POCKET_IT_USER_MERGE=1` prefix the hook requires as audit trail; `automerge: false` or `draft` in the user's request = review only, the user merges. The epic→main PR of a deployed project is a deploy: opened and merged only on explicit instruction |
 | Hosted CI | opt-in via `pipeline: true`; `APP_STATUS` starts `dev`; only a human flips it to `prod` |
 | History log | `docs/SESSION_HANDOFF.md`, **mandatory**, written only through `bin/handoff.sh`: `## Fatti che non scadono` (≤ 30, gotchas and decisions) + `## Log` (≤ 40 dated lines). State is never written here — `status.sh` computes it |
-| Cost rules | task file + cited sections only; read once; capped output; `maxTurns`; one reviewer per wave; resume partial agents, never relaunch; one session per epic on a standard-context model |
+| Cost rules | task file + cited sections only; read once; capped output; budget per task (stop on stall, not on size; `maxTurns` 300 is the safety net); one reviewer per wave; resume partial agents, never relaunch; two waves per session, then `/compact`; only named agents, never `general-purpose` |
+| Learning loop | three layers of memory, each read by the agents that need it: **facts** (this project, `docs/SESSION_HANDOFF.md`, ≤ 30), **best-practices** (this stack, per project), **lessons** (method, every project, `shared/lessons.md`, ≤ 40, `provisional` → `confirmed` → promoted to a rule). Developers log `BUDGET`/`STALL`; the reviewer writes repeated findings as facts; `run-wave` launches `retro` when the board is complete; retro writes all three layers and **merges its own text-only PRs immediately** (audit prefix) so nothing waits on a human — unless `automerge: false` or draft mode. Promotion of a lesson to a rule in this repo is the only step a human does |
 
 ---
 

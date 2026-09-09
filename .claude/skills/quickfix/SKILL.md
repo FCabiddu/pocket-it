@@ -20,7 +20,8 @@ ID: `QF-{n}` where n = 1 + the highest existing `QF-` number in `tasks/` (start 
 **Epic**: quickfix
 **Story**: quickfix
 **Priority**: Must
-**Estimate**: XS | S
+**Estimate**: XS | S | M
+**Budget**: 60 | 120 | 200   ← turns from the estimate; custom (and say why in Notes) for work that cannot be split, e.g. "run the suite, fix the reds"
 **Risk**: low | high   ← high if it touches auth, money, migrations, deletion
 **Depends on**: none
 **Wave**: 1

@@ -1,6 +1,6 @@
 # Implementing agents — shared rules
 
-Read once at start by `developer`, `devops-engineer`, `qa-engineer`, `reviewer`. Edit here, never copy into an agent file.
+Read once at start by `developer`, `qa-engineer`, `reviewer`. Edit here, never copy into an agent file.
 
 ## 1. Project config — never ask, read `.pocket-it.json`
 
@@ -35,6 +35,8 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 
 ## 3. Read discipline — the cost is what you read back
 
+- **Zeroth, the method lessons:** `~/.claude/agents/pocket-it/.claude/agents/shared/lessons.md` (≤ 40 one-line lessons, stack-independent, written by the retro across projects). They apply to you whatever the project; a `provisional` one is still followed.
+- **First, the facts other agents paid for.** `awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /' docs/SESSION_HANDOFF.md 2>/dev/null` — at most 30 lines: invariants, gotchas and decisions written by previous agents (a `cache()` that is a pass-through in tests, a route that must be listed in a census test, a token that must not be redefined). Reading them is how the pipeline learns; if one of them is wrong today, fix it with `handoff.sh fact` and say so in the report.
 - Read the task file, then only the TAD sections it references. Extract a section by number, never the whole document:
   `awk '/^## 5\. /,/^## 6\. /' tech-analysis/X_TECH_ANALYSIS.md`
   When the task cites `PROJECT §… · DELTA §…`, the delta (`tech-analysis/{NAME}_TECH_DELTA.md`) overrides the project TAD (`tech-analysis/PROJECT_TECH_ANALYSIS.md`) for those sections.
@@ -69,7 +71,9 @@ Full suite at most once, as the gate before the PR, and not at all if hosted CI 
 
 ## 5. Shared machine and worktrees
 
-Other agents and the user's app share this machine. Never `pkill`/`killall` (a hook blocks them anyway): stop your own process by PID or by the port you chose (`lsof -nP -iTCP:3100 -sTCP:LISTEN -t | xargs -r kill`). Port 3000 is the user's. Stay inside your worktree; never edit the main checkout or another worktree. Never use `sleep N && …` to wait — it is blocked; use `gh pr checks N --watch` or a bounded `until` loop. Admit any breach in the report.
+Other agents and the user's app share this machine. Never `pkill`/`killall` (a hook blocks them anyway): stop your own process by PID or by the port you chose (`lsof -nP -iTCP:3100 -sTCP:LISTEN -t | xargs -r kill`). Port 3000 is the user's. Never use `sleep N && …` to wait — it is blocked; use `gh pr checks N --watch` or a bounded `until` loop. Admit any breach in the report.
+
+**Paths in a worktree.** You are in `$(git rev-parse --show-toplevel)` and that is the only tree you may touch. Every path you type is **relative to it** (`tasks/…`, `src/…`, `docs/…`): never an absolute path into the project's main checkout (`…/Astro-games/src/…`, `…/.worktrees/other/…`), never `cd` into another checkout, never `git -C <other path>`. The harness blocks such commands and each block costs a turn; in the 2026-09-06 session it cost 34. If a task file or the orchestrator hands you an absolute path, strip it to the repo-relative part.
 
 ## 6. Branch, commit, PR
 
@@ -89,6 +93,13 @@ bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{n} draft — {what
 
 **CI-fix mode** (`CI Failure:` in arguments): do not touch task status, do not open a new PR; commit on the existing branch and `gh pr comment $PR "🔧 CI fix — {what}"`.
 
-## 7. Stop conditions
+## 7. Budget and stop conditions — stop on stall, not on size
 
-You have a turn budget. Stop early and report partial progress, with the branch pushed, when: the same error survives three fix attempts; the task needs a decision only the user can make; a best-practice conflict appears; or the scope turns out to be several tasks. A clean partial report is cheaper than a runaway.
+Every task carries `**Budget**: N` turns, set by the planner from its estimate (XS 60 · S 120 · M 200 · L 300, or a custom value for work that cannot be split, e.g. "run the whole suite and fix the reds"). Missing → assume 120. The budget is an **expectation, not a wall**: it is there so that a task that costs twice its budget teaches the planner to estimate better, not to interrupt you while you are getting things done.
+
+Two different signals, two different actions:
+
+- **Budget exceeded while progressing** (commits landing, tests turning green): keep going. Log once — `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "BUDGET {ID} ~{turns} turns vs {budget} — progressing: {commits} commits, {tests} tests green — {why bigger than estimated}"` — and finish. The retro reads these lines to correct the estimates.
+- **Stall**: no new commit and no additional passing test in the last ~30 turns, or the same error surviving three fix attempts. Stop: commit what is coherent, push, log `handoff.sh log "STALL {ID} ~{turns} turns — {what is stuck, one line}"` and report. A clean partial report is cheaper than a runaway.
+
+Also stop, with the branch pushed, when the task needs a decision only the user can make, a best-practice conflict appears, or the scope turns out to be several tasks (say which). The agent's `maxTurns` (300) is a safety net far above any budget, never the plan; if you hit it, something above already went wrong.
