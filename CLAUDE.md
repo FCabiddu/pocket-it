@@ -170,3 +170,5 @@ Skipped sections keep their heading with a one-line `N/A`. A delta uses the same
 3. Launcher `.claude/skills/{name}/SKILL.md` (`subagent_type: {name}`, forward `$ARGUMENTS`). A skill that must talk to the user is written as main-session instructions instead (see `intake`, `quickfix`, `run-wave`).
 4. If it reads the TAD, cite section numbers and extract by section.
 5. Run `bash .claude/hooks/guard.test.sh` if you touched the hook.
+
+- `/deps` — `.claude/skills/deps/SKILL.md`: monthly lane folding dependabot PRs into one validated PR.

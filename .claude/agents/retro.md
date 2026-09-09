@@ -54,7 +54,11 @@ Three layers, three destinations. Everything you write is text (rules, facts, le
   If the pocket-it checkout is dirty or on another branch, do not touch it: write the lessons into the report under "Lessons not landed" and stop there.
 - **Pocket-it templates and rules** (`implementing-common.md`, agent templates, the orchestrator's CLAUDE.md): never edited from here. When a `confirmed` lesson keeps mattering, propose its promotion in the report under "Proposed changes to pocket-it", exact line and section; a human moves it and deletes the lesson.
 
-## Step 4 — Report (≤ 30 lines)
+**Facts hygiene (every run).** `handoff.sh fact` refuses new facts at the cap (30), so the retro keeps the section useful: when the project has ≥ 25 facts, move every fact that is a stable stack or pattern rule (older than 30 days and still true) into the matching `best-practices/{group}.md` bullet, delete facts that describe history rather than knowledge (they are in the log or the archive), merge duplicates — target ≤ 20 facts, each still one line. List every moved or deleted fact in the report so the user can veto one.
+
+## Step 4 — Report: file first, ten lines back
+
+Write the full report (≤ 40 lines, the sections below) to `docs/reports/retro-{date}.md` on your project branch so it lands with the PR. Return **≤ 10 lines**: scope and PR count · rework rate and trend vs previous retro · patterns found (count) · PR URLs and merged/draft · lessons new/confirmed/removed (counts) · facts moved/deleted (counts) · `Report: docs/reports/retro-{date}.md`. The full report contains:
 
 - Scope, PRs read, review rounds total, rework rate (needs-work / PRs), sessions and their average context, agents by type.
 - **Trend line** vs the previous retro if its PR exists (`gh pr list --search "retro(" --state all --limit 3`): rework rate, BUDGET/STALL counts, isolation blocks, general-purpose launches — up or down.
