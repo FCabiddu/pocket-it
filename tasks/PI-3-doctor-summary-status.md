@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/PI-3-doctor-summary-status
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/17
 
 ## Goal
 Legacy nested boards (`tasks/EPIC-n-slug/EPIC.md`, `tasks/EPIC-n-slug/STORY-n.m.md`, children `T-n.m.k*.md`) have summary files nobody updates: today three said "Not Started" while every child was Done. `doctor.sh` already skips these files as non-tasks; it should additionally warn on the mismatch so the retro fixes it.
