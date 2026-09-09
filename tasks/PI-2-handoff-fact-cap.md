@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/PI-2-handoff-fact-cap
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/15
 
 ## Goal
 `bin/handoff.sh fact "…"` caps the facts section at 30 lines by dropping the oldest with only a warning. A project reached 30/30 today, so the next fact would erase knowledge silently. At the cap the command must fail loudly so the agent reports it and the retro prunes (retro promotes stable facts to best-practices; that is a separate change).
