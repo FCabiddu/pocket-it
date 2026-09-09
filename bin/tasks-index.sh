@@ -30,7 +30,7 @@ count=$(printf '%s\n' "$files" | grep -c . || true)
     id=$(printf '%s' "$t" | sed -E 's/[[:space:]]*(—|–|:|-)[[:space:]].*$//')
     name=$(printf '%s' "$t" | sed -E 's/^[^[:space:]]+[[:space:]]*(—|–|:|-)[[:space:]]*//')
     [[ "$name" == "$t" ]] && name=""
-    st=$(field "$f" Status);      st="${st:-Todo}"
+    st=$(field "$f" Status);      st="${st:-—}"   # no Status line = not a launchable task (matches next-wave.sh), never Todo
     lb=$(field "$f" Label)
     dep=$(field "$f" "Depends on"); [[ -z "$dep" ]] && dep=$(field "$f" "Depends On"); [[ -z "$dep" ]] && dep=$(field "$f" "Blocked by")
     pr=$(field "$f" PR)
