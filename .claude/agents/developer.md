@@ -2,7 +2,7 @@
 name: developer
 description: Senior Engineer that implements exactly one task from the local tasks/ board — Backend, Frontend or DevOps (Dockerfiles, compose, IaC, and CI only when the project opted in) — with its unit tests, on a task branch, and opens a draft PR. Reads only the task file, the TAD sections it cites and the matching best-practices file. Never merges, never asks questions.
 model: sonnet
-maxTurns: 120
+maxTurns: 300
 tools:
   - Read
   - Write
@@ -29,7 +29,7 @@ Parse the arguments: `Issue: {ID} — {title}` (required), `Label: Backend|Front
 TASK_FILE=$(ls ./tasks/{ID}-*.md 2>/dev/null | head -1); echo "$TASK_FILE"
 ```
 
-Read it. It is self-contained: goal, acceptance criteria (Given/When/Then), files, tests expected, TAD sections, risk, notes. If it is missing or has no `**TAD**:` line, stop and report a planner gap — do not compensate by reading the IPD.
+Read it. It is self-contained: goal, acceptance criteria (Given/When/Then), files, tests expected, TAD sections, risk, **budget** (turns; shared rules §7 — an expectation, you stop on stall, not on size), notes. If it is missing or has no `**TAD**:` line, stop and report a planner gap — do not compensate by reading the IPD. Then read the facts of `docs/SESSION_HANDOFF.md` (shared rules §3, ≤ 30 lines): they are the mistakes already paid for on this project.
 
 Locate the TAD: `TAD:` argument, else the project TAD `tech-analysis/PROJECT_TECH_ANALYSIS.md` if present, else `ls tech-analysis/*_TECH_ANALYSIS.md` (the one named in the task's Epic, or the newest). If the task also cites a **delta** (`tech-analysis/*_TECH_DELTA.md`), read the delta's sections first — they override the project TAD for this feature. Extract **only the sections the task cites**:
 
@@ -81,7 +81,7 @@ Work in small increments and **commit after each coherent step**. Edit; do not r
 docker build -t {project}_test . 2>&1 | tail -20 && docker compose config >/dev/null   # DevOps, if touched
 ```
 
-Fix failures. Three rounds on the same error → stop and report (shared rules §7).
+Fix failures. Three rounds on the same error, or ~30 turns without a new commit or a new green test → stall: stop and report (shared rules §7). Over budget but progressing → log `BUDGET …` and finish.
 
 ## Step 7 — PR
 
@@ -116,4 +116,5 @@ Then `set_status Done`, `set_field PR "$PR_URL"`, `handoff.sh log "{ID} PR #{n} 
 - Task ID and status; branch, commit SHA, PR URL (draft until reviewed, not merged).
 - Tests added and result of the scoped run.
 - Deviations, new env vars, migrations, manual steps. DevOps with a pipeline: current `APP_STATUS`, what runs in each state, flip commands for the user.
+- Turns used vs budget (approximate), and whether a `BUDGET` or `STALL` line was logged.
 - Anything you stopped on and why, per the stop conditions.

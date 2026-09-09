@@ -128,7 +128,7 @@ Written by `/intake` (or copied from `templates/pocket-it.json`). Every agent re
 
 ### Task file contract
 
-`tasks/{ID}-{slug}.md`, header `**Key**: value` lines: Status, Label, Epic, Story, Priority, Estimate, **Risk**, Depends on, Wave, Files, TAD, **Contract**, Branch, PR; then `## Goal`, `## Acceptance criteria` (AC1…n, Given/When/Then), `## Non-goals`, `## Tests expected`, `## Notes`. Statuses: `Todo | In Progress | Done | Needs Work`. Helpers tolerate the older `**Key:** value` form. A developer must be able to implement from the task file plus the cited sections alone.
+`tasks/{ID}-{slug}.md`, header `**Key**: value` lines: Status, Label, Epic, Story, Priority, Estimate, **Budget** (turns from the estimate: XS 60 · S 120 · M 200 · L 300, custom for unsplittable work), **Risk**, Depends on, Wave, Files, TAD, **Contract**, Branch, PR; then `## Goal`, `## Acceptance criteria` (AC1…n, Given/When/Then), `## Non-goals`, `## Tests expected`, `## Notes`. Statuses: `Todo | In Progress | Done | Needs Work`. Helpers tolerate the older `**Key:** value` form. A developer must be able to implement from the task file plus the cited sections alone.
 
 ### TAD section map (contract — never renumber)
 
@@ -157,7 +157,8 @@ Skipped sections keep their heading with a one-line `N/A`. A delta uses the same
 | Merge | by the orchestrator after an approved review (`automerge: true`, the default), always with the `POCKET_IT_USER_MERGE=1` prefix the hook requires as audit trail; `automerge: false` or `draft` in the user's request = review only, the user merges. The epic→main PR of a deployed project is a deploy: opened and merged only on explicit instruction |
 | Hosted CI | opt-in via `pipeline: true`; `APP_STATUS` starts `dev`; only a human flips it to `prod` |
 | History log | `docs/SESSION_HANDOFF.md`, **mandatory**, written only through `bin/handoff.sh`: `## Fatti che non scadono` (≤ 30, gotchas and decisions) + `## Log` (≤ 40 dated lines). State is never written here — `status.sh` computes it |
-| Cost rules | task file + cited sections only; read once; capped output; `maxTurns`; one reviewer per wave; resume partial agents, never relaunch; one session per epic on a standard-context model |
+| Cost rules | task file + cited sections only; read once; capped output; budget per task (stop on stall, not on size; `maxTurns` 300 is the safety net); one reviewer per wave; resume partial agents, never relaunch; two waves per session, then `/compact`; only named agents, never `general-purpose` |
+| Learning loop | every implementing agent reads the handoff **facts** at Step 1; developers log `BUDGET`/`STALL` lines; the reviewer writes repeated findings as facts; `run-wave` launches `retro` when the board is complete; retro turns findings into best-practices rules and estimate corrections (facts), and proposes template lines for this repo |
 
 ---
 
