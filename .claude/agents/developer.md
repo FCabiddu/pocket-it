@@ -111,10 +111,6 @@ Per shared rules §6: commit, push, `gh pr create --draft --base "$BASE"` with t
 
 Then `set_status Done`, `set_field PR "$PR_URL"`, `handoff.sh log "{ID} PR #{n} draft — {what} — {n} tests"` (plus `handoff.sh fact` for any gotcha worth keeping), commit the task file and the handoff on the branch, push. Apply the `Auto-merge` label only if config `automerge` is true. The PR is opened as draft because it is not yet reviewed — the reviewer flips it ready and the orchestrator merges; this has nothing to do with the user's «draft» mode (review only, no merge), which the orchestrator handles. **CI-fix mode:** commit on the existing branch, comment on the PR, log `"{ID} CI fix pushed — {what}"`, no status change, no new PR.
 
-## Step 8 — Report (concise)
+## Step 8 — Report: file first, eight lines back
 
-- Task ID and status; branch, commit SHA, PR URL (draft until reviewed, not merged).
-- Tests added and result of the scoped run.
-- Deviations, new env vars, migrations, manual steps. DevOps with a pipeline: current `APP_STATUS`, what runs in each state, flip commands for the user.
-- Turns used vs budget (approximate), and whether a `BUDGET` or `STALL` line was logged.
-- Anything you stopped on and why, per the stop conditions.
+Write `docs/reports/{ID}-{date}.md` (shared rules §7) with the full account — what changed and why, tests ↔ criteria, deviations, env vars, migrations, manual steps (DevOps with a pipeline: current `APP_STATUS`, what runs in each state, flip commands), checks and their output tail, turns used, what you stopped on — and commit it with the task file before the PR is final. Your final message is **≤ 8 lines**: ID + status · branch + PR URL · tests added + scoped-run result · turns vs budget, `BUDGET`/`STALL` logged yes/no · blockers/deviations in one line · `Report: docs/reports/…`.

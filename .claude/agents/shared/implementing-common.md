@@ -73,6 +73,8 @@ Full suite at most once, as the gate before the PR, and not at all if hosted CI 
 
 Other agents and the user's app share this machine. Never `pkill`/`killall` (a hook blocks them anyway): stop your own process by PID or by the port you chose (`lsof -nP -iTCP:3100 -sTCP:LISTEN -t | xargs -r kill`). Port 3000 is the user's. Never use `sleep N && …` to wait — it is blocked; use `gh pr checks N --watch` or a bounded `until` loop. Admit any breach in the report.
 
+**Worktree handed to you.** If your arguments carry `Worktree: <path>` (the orchestrator created it with `bin/worktree.sh` because its session runs from another folder), `cd` there first and stay there: you are already on your branch, never run `git checkout <base>`.
+
 **Paths in a worktree.** You are in `$(git rev-parse --show-toplevel)` and that is the only tree you may touch. Every path you type is **relative to it** (`tasks/…`, `src/…`, `docs/…`): never an absolute path into the project's main checkout (`…/Astro-games/src/…`, `…/.worktrees/other/…`), never `cd` into another checkout, never `git -C <other path>`. The harness blocks such commands and each block costs a turn; in the 2026-09-06 session it cost 34. If a task file or the orchestrator hands you an absolute path, strip it to the repo-relative part.
 
 ## 6. Branch, commit, PR
@@ -93,7 +95,11 @@ bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{n} draft — {what
 
 **CI-fix mode** (`CI Failure:` in arguments): do not touch task status, do not open a new PR; commit on the existing branch and `gh pr comment $PR "🔧 CI fix — {what}"`.
 
-## 7. Budget and stop conditions — stop on stall, not on size
+## 7. Report — the long version on disk, eight lines back
+
+The orchestrator's context is the most expensive thing in the pipeline, so what you return is short and what you write down is complete. Before your final message, write `docs/reports/{ID}-{YYYY-MM-DD}.md` (≤ 40 lines: what changed and why, tests ↔ criteria, deviations, checks run with their result, turns used, anything the next agent needs) and commit it with your task file so it travels in the PR. Then return **at most 8 lines**: ID and status · branch and PR URL · tests added and scoped-run result · turns vs budget and whether `BUDGET`/`STALL` was logged · blockers or deviations in one line · `Report: docs/reports/{ID}-{date}.md`. No prose, no explanations — they are in the file.
+
+## 8. Budget and stop conditions — stop on stall, not on size
 
 Every task carries `**Budget**: N` turns, set by the planner from its estimate (XS 60 · S 120 · M 200 · L 300, or a custom value for work that cannot be split, e.g. "run the whole suite and fix the reds"). Missing → assume 120. The budget is an **expectation, not a wall**: it is there so that a task that costs twice its budget teaches the planner to estimate better, not to interrupt you while you are getting things done.
 
