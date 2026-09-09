@@ -29,6 +29,89 @@ fi
 # No direct pushes to main/master (feature branches are fine).
 grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+\S+[[:space:]]+(main|master)([[:space:]]|$|:)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
 grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+(origin[[:space:]]+)?(HEAD:)?(main|master)([[:space:]]|$)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
+# A bare `git push`, `git push origin HEAD`/`-u origin HEAD` or a refspec whose destination is
+# main/master (even under a refs/heads/ prefix) is only safe when the branch it resolves to isn't
+# main/master. Resolve the repo (a `-C <path>` on the same `git` invocation, else the nearest
+# preceding `cd <path>` in the command, else the hook's own cwd) and its current branch cheaply.
+if grep -qE 'git[[:space:]]+(-C[[:space:]]+\S+[[:space:]]+)?push\b' <<<"$CMD"; then
+  PUSH_VERDICT=$(python3 - "$CMD" "$PWD" <<'PYEOF'
+import sys, re, os, subprocess, shlex
+
+cmd, hook_cwd = sys.argv[1], sys.argv[2]
+
+def branch_of(path):
+    try:
+        r = subprocess.run(["git", "-C", path, "symbolic-ref", "--short", "-q", "HEAD"],
+                            capture_output=True, text=True, timeout=3)
+        return r.stdout.strip() if r.returncode == 0 else None
+    except Exception:
+        return None
+
+def resolve_dir(path):
+    if path is None:
+        return hook_cwd
+    p = path if path.startswith("/") else hook_cwd.rstrip("/") + "/" + path
+    return p if os.path.isdir(p) else hook_cwd
+
+def norm(ref):
+    return re.sub(r'^refs/heads/', '', ref)
+
+verdict = ""
+tracked_cd = None
+for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
+    seg = seg.strip()
+    m = re.match(r'^cd\s+(\S+)', seg)
+    if m:
+        tracked_cd = m.group(1)
+        continue
+    m = re.match(r'^git\s+(?:-C\s+(\S+)\s+)?push\b(.*)$', seg)
+    if not m:
+        continue
+    c_path, rest = m.group(1), m.group(2)
+    try:
+        tokens = shlex.split(rest)
+    except ValueError:
+        tokens = rest.split()
+    positional = [t for t in tokens if not t.startswith('-')]
+
+    implicit, explicit_main = False, False
+    if len(positional) == 0:
+        implicit = True
+    elif len(positional) == 1:
+        if ':' in positional[0]:
+            _, dst = positional[0].split(':', 1)
+            if dst and norm(dst) in ('main', 'master'):
+                explicit_main = True
+        else:
+            implicit = True
+    else:
+        ref = positional[1]
+        if ':' in ref:
+            _, dst = ref.split(':', 1)
+            if dst and norm(dst) in ('main', 'master'):
+                explicit_main = True
+        elif ref == 'HEAD':
+            implicit = True
+        elif norm(ref) in ('main', 'master'):
+            explicit_main = True
+
+    if explicit_main:
+        verdict = "EXPLICIT"
+        break
+    if implicit:
+        b = branch_of(resolve_dir(c_path or tracked_cd))
+        if b in ('main', 'master'):
+            verdict = "IMPLICIT"
+            break
+
+print(verdict)
+PYEOF
+)
+  case "$PUSH_VERDICT" in
+    IMPLICIT) block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
+    EXPLICIT) block "git push to main/master" "Push a task branch and open a draft PR." ;;
+  esac
+fi
 # Never kill by pattern on a shared machine.
 grep -qE '(^|[;&|[:space:]])(pkill|killall)\b' <<<"$CMD" && block "pkill/killall" "Kill your own process by PID or by port: lsof -nP -iTCP:PORT -sTCP:LISTEN -t | xargs -r kill."
 # CI budget switch is a human decision.
