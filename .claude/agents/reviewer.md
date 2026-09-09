@@ -70,6 +70,8 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 
 **Local verification, only when reading cannot settle a claim** (a runtime behaviour, a test count): throwaway worktree `git worktree add /tmp/{repo}-{branch} {branch} --detach`, symlink `node_modules` from the main checkout if the lockfile is unchanged, run the **scoped** tests only (`vitest related --run <files>` / `test:affected`, compact reporter), then `git worktree remove`. Never the full suite, never DB/browser suites, never in the main checkout.
 
+**Tests count only if you saw them run.** An APPROVED cites test names as evidence for acceptance criteria only when `verify.sh` (or your own scoped run in the throwaway worktree) executed them green in this review. A PR body's "suite green" is a claim, not evidence — on one project two of three audited PRs were merged with red tests the body called green. When the PR changes a shared value read elsewhere — a design token, a CSS variable, a constant, a schema — `git grep -l` the name across `src/` and `tests/`, and run every test file that reads it, not just the runner's "related" set: the regression lives where the value is consumed, not where it is defined.
+
 ## Step 4 — Criteria (binary, evidence in the diff, no style nits)
 
 **Security (§6.2):** auth guard on every protected route the TAD names; no secrets committed; input validated before DB/shell/HTML.
