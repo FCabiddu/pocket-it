@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Self-test for cleanup-merged.sh against a scratch repo: a fake origin with a merged branch, a squash-merged
-# branch (remote deleted, PR reported merged by a fake gh), a live branch, a dirty worktree, a locked worktree,
-# a protected epic branch, an old detached scratch worktree under /tmp, and the current worktree.
+# branch (remote deleted, PR reported merged by a fake gh), a squash-merged branch at a worktree.sh-style path
+# (<repo>/.claude/worktrees/<branch-slug>, no agent- prefix — AC6), a live branch, a dirty worktree, a locked
+# worktree, a protected epic branch, an old detached scratch worktree under /tmp, and the current worktree.
 cd "$(dirname "$0")"
 SCRIPT="$PWD/cleanup-merged.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/cleanup-merged-test.XXXXXX")
@@ -14,10 +15,14 @@ has(){ grep -qE "$1" <<<"$OUT"; }
 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 q(){ "$@" >/dev/null 2>&1; }
-# fake gh: only the squash-merged branch has a merged PR
+# fake gh: only the squash-merged branches have a merged PR
 mkdir -p "$S/bin"; cat > "$S/bin/gh" <<'GH'
 #!/usr/bin/env bash
-case "$*" in *"--head task/squash"*) case "$*" in *--jq*) echo 7;; *) echo '[{"number":7}]';; esac;; *) case "$*" in *--jq*) echo null;; *) echo '[]';; esac;; esac
+case "$*" in
+  *"--head task/squash"*)      case "$*" in *--jq*) echo 7;; *) echo '[{"number":7}]';; esac;;
+  *"--head task/viaworktree"*) case "$*" in *--jq*) echo 8;; *) echo '[{"number":8}]';; esac;;
+  *) case "$*" in *--jq*) echo null;; *) echo '[]';; esac;;
+esac
 GH
 chmod +x "$S/bin/gh"; export PATH="$S/bin:$PATH"
 
@@ -29,8 +34,9 @@ mk(){ # $1 branch, $2 worktree path → branch with one pushed commit, checked o
   q git -C "$M" worktree add -q -b "$1" "$2" main
   echo "$1" > "$2/$(basename "$1")"; q git -C "$2" add -A; q git -C "$2" commit -qm "$1"; q git -C "$2" push -q -u origin "$1"; }
 WT="$M/.claude/worktrees"; OLD="$S/.worktrees"; mkdir -p "$WT" "$OLD"
-mk task/merged  "$WT/agent-merged";  q git -C "$M" merge -q --no-ff task/merged -m "merge task/merged"
-mk task/squash  "$OLD/squash";       q git -C "$M" merge --squash task/squash; q git -C "$M" commit -qm "squash task/squash"; q git -C "$M" push -q origin --delete task/squash
+mk task/merged      "$WT/agent-merged";      q git -C "$M" merge -q --no-ff task/merged -m "merge task/merged"
+mk task/squash      "$OLD/squash";           q git -C "$M" merge --squash task/squash; q git -C "$M" commit -qm "squash task/squash"; q git -C "$M" push -q origin --delete task/squash
+mk task/viaworktree "$WT/task-viaworktree";  q git -C "$M" merge --squash task/viaworktree; q git -C "$M" commit -qm "squash task/viaworktree"; q git -C "$M" push -q origin --delete task/viaworktree
 mk task/live    "$WT/agent-live"
 mk task/dirty   "$WT/agent-dirty";   q git -C "$M" merge -q --no-ff task/dirty -m "merge task/dirty"; echo changed > "$WT/agent-dirty/dirty"
 mk task/locked  "$WT/agent-locked";  q git -C "$M" merge -q --no-ff task/locked -m "merge task/locked"; q git -C "$M" worktree lock "$WT/agent-locked"
@@ -46,9 +52,10 @@ OUT=$(cd "$M" && bash "$SCRIPT" --dry-run); rc=$?
 ok "dry-run exit 0" "[[ $rc -eq 0 ]]"
 ok "dry-run announces the merged worktree" "has 'would remove worktree .*agent-merged \(merged into origin/main\)'"
 ok "dry-run announces the squash-merged worktree via PR" "has 'would remove worktree .*/squash \(PR #7 merged\)'"
-ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 4 worktrees would be removed, 3 branches would be deleted'"
-ok "dry-run leaves the directories" "[[ -d $WT/agent-merged && -d $OLD/squash && -d $SCRATCH_WT ]]"
-ok "dry-run leaves the branches" "q git -C $M rev-parse --verify task/merged && q git -C $M rev-parse --verify task/squash"
+ok "dry-run announces the worktree.sh-style squash-merged worktree via PR (AC6)" "has 'would remove worktree .*/task-viaworktree \(PR #8 merged\)'"
+ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 5 worktrees would be removed, 4 branches would be deleted'"
+ok "dry-run leaves the directories" "[[ -d $WT/agent-merged && -d $OLD/squash && -d $WT/task-viaworktree && -d $SCRATCH_WT ]]"
+ok "dry-run leaves the branches" "q git -C $M rev-parse --verify task/merged && q git -C $M rev-parse --verify task/squash && q git -C $M rev-parse --verify task/viaworktree"
 # 3. real run from a non-main worktree whose own branch is merged
 OUT=$(cd "$WT/agent-current" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
@@ -58,12 +65,14 @@ ok "merged worktree removed" "has 'removed worktree .*agent-merged \(merged into
 ok "merged branch deleted" "has 'deleted branch task/merged' && ! q git -C $M rev-parse --verify task/merged"
 ok "squash-merged worktree removed (old layout, remote gone, PR merged)" "has 'removed worktree .*/squash \(PR #7 merged\)' && [[ ! -d $OLD/squash ]]"
 ok "squash-merged branch deleted" "has 'deleted branch task/squash' && ! q git -C $M rev-parse --verify task/squash"
+ok "worktree.sh-style squash-merged worktree removed (AC6: discovery not limited to agent-*)" "has 'removed worktree .*/task-viaworktree \(PR #8 merged\)' && [[ ! -d $WT/task-viaworktree ]]"
+ok "worktree.sh-style branch deleted" "has 'deleted branch task/viaworktree' && ! q git -C $M rev-parse --verify task/viaworktree"
 ok "live worktree kept" "has 'kept .*agent-live \(not merged\)' && [[ -d $WT/agent-live ]] && q git -C $M rev-parse --verify task/live"
 ok "dirty worktree kept" "has 'kept .*agent-dirty \(dirty\)' && [[ -f $WT/agent-dirty/dirty ]] && q git -C $M rev-parse --verify task/dirty"
 ok "locked worktree kept" "has 'kept .*agent-locked \(locked\)' && [[ -d $WT/agent-locked ]] && q git -C $M rev-parse --verify task/locked"
 ok "epic worktree kept without --all" "has 'kept .*epic-e1 \(protected branch epic/e1\)' && [[ -d $OLD/epic-e1 ]]"
 ok "old detached scratch under /tmp removed" "has 'removed worktree .*pocket-it-cleanup-test-$$ \(detached scratch older than 24 h\)' && [[ ! -d $SCRATCH_WT ]]"
-ok "summary line" "has '^cleanup-merged: 3 worktrees removed, 2 branches deleted, 5 kept, freed [0-9.]+ MB$'"
+ok "summary line" "has '^cleanup-merged: 4 worktrees removed, 3 branches deleted, 5 kept, freed [0-9.]+ MB$'"
 ok "main checkout untouched" "[[ -d $M && \$(git -C $M branch --show-current) == main ]]"
 # 4. run again from main: the former current worktree goes, nothing else changes (idempotent)
 OUT=$(cd "$M" && bash "$SCRIPT")

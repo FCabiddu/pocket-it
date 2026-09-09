@@ -1,6 +1,6 @@
 # PI-1 — bin/worktree.sh: create an isolated worktree for an agent from any cwd
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: `bin/worktree.sh`, `bin/worktree.test.sh`, `bin/cleanup-merged.sh`, `bin/cleanup-merged.test.sh`
 **TAD**: none — follow the style of `bin/cleanup-merged.sh` and `bin/verify.sh`
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/PI-1-worktree-script
+**PR**: https://github.com/FCabiddu/pocket-it/pull/18
 
 ## Goal
 The Agent tool's `isolation: worktree` only works when the session cwd is the target repo. Jarvis runs from a hub folder and governs several projects, so today the orchestrator created worktrees by hand four times. Provide `bash bin/worktree.sh <repo-path> <branch> [base]` that does it deterministically and prints the worktree path on stdout, so a launcher can pass `Worktree: <path>` to a developer.
