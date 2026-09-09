@@ -40,18 +40,26 @@ For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json 
 | Process | `general-purpose` launches, sessions with average context > 200k, agents relaunched instead of resumed | the orchestrator's rules (`~/.claude/CLAUDE.md` or its entry skill) — propose the line, with the count |
 | Noise | one-off, no pattern | list under "not actioned" |
 
-## Step 3 — Write the smallest diff, where it will be read
+## Step 3 — Write the smallest diff, where it will be read — and land it, nothing waits on a human
 
-- **Best-practices** (read by developer, qa, reviewer at every task): add or sharpen bullets in the existing group file; never a new file; keep each within its 120-line cap by removing what no longer applies.
-- **Facts** (read by every implementing agent at Step 1): `handoff.sh fact` for estimate corrections and for gotchas that are true for this project and not general rules. Keep the section ≤ 30 lines: replace a fact that is now covered by a best-practice rule.
-- **Pocket-it templates and rules** live in `~/.claude/agents/pocket-it/` — another repo. Do not edit them from here: put the exact proposed lines in the report under "Proposed changes to pocket-it", file and section named.
-- Commit best-practices + handoff on a branch `retro/{scope}-{date}`, push, open a **draft** PR titled `retro({scope}): {n} rules, {m} estimate corrections from {k} findings`, body = finding → rule table.
+Three layers, three destinations. Everything you write is text (rules, facts, lessons), never product code, so your PRs are merged by you, immediately, with the audit prefix — a lesson nobody can read yet is a lesson lost. The exceptions: config `automerge: false`, or `Draft: yes` in your arguments → leave the PRs in draft and say so.
+
+- **Project facts** (this project only; read by every implementing agent at Step 1): `handoff.sh fact` for estimate corrections and gotchas true here and not general. Keep the section ≤ 30 lines: replace a fact now covered by a rule.
+- **Best-practices** (this stack; read by developer, qa, reviewer): add or sharpen bullets in the existing group file; never a new file; keep each within its 120-line cap by removing what no longer applies.
+  Commit facts + best-practices on a branch `retro/{scope}-{date}` in the project, push, `gh pr create --base {baseBranch} --title "retro({scope}): {n} rules, {m} estimate corrections from {k} findings"` with the finding → rule table as body, then `POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch`.
+- **Method lessons** (every project, any stack; read by all agents at Step 0): `~/.claude/agents/pocket-it/.claude/agents/shared/lessons.md`. A finding earns a lesson when it is about *how we work*, not about this code or this stack (splitting, budgets, review order, tooling, process). Write it in the file's fixed form, status `provisional`, no client or project names ("project A"). Also **update existing lessons**: a `provisional` one you have now seen hold on a second epic/project becomes `confirmed`; one contradicted by the evidence is removed (say why in the PR). Keep ≤ 40 lines. Then, in that repo:
+  ```bash
+  cd ~/.claude/agents/pocket-it && git fetch -q origin && git checkout -q -b retro/lessons-{date} origin/main && {edit lessons.md} && git commit -qam "retro(lessons): {n} new, {m} confirmed, {k} removed" && git push -q -u origin retro/lessons-{date} && N=$(gh pr create --base main --title "retro(lessons): {n} new, {m} confirmed, {k} removed" --body "{lesson → evidence table}" | grep -oE '[0-9]+$') && POCKET_IT_USER_MERGE=1 gh pr merge "$N" --squash --delete-branch && git checkout -q main && git pull -q --ff-only origin main
+  ```
+  If the pocket-it checkout is dirty or on another branch, do not touch it: write the lessons into the report under "Lessons not landed" and stop there.
+- **Pocket-it templates and rules** (`implementing-common.md`, agent templates, the orchestrator's CLAUDE.md): never edited from here. When a `confirmed` lesson keeps mattering, propose its promotion in the report under "Proposed changes to pocket-it", exact line and section; a human moves it and deletes the lesson.
 
 ## Step 4 — Report (≤ 30 lines)
 
 - Scope, PRs read, review rounds total, rework rate (needs-work / PRs), sessions and their average context, agents by type.
 - **Trend line** vs the previous retro if its PR exists (`gh pr list --search "retro(" --state all --limit 3`): rework rate, BUDGET/STALL counts, isolation blocks, general-purpose launches — up or down.
 - Patterns found, each with count and the rule written (or proposed).
-- The PR URL.
-- "Proposed changes to pocket-it" — exact lines, copy-pasteable.
+- The PR URLs (project: merged; pocket-it lessons: merged) — or "left in draft because {automerge false | Draft requested}".
+- Lessons: new (provisional), confirmed, removed — one line each.
+- "Proposed changes to pocket-it" — exact lines, copy-pasteable, only for confirmed lessons that deserve promotion to a rule.
 - "Not actioned" — one-offs, with a word on why.

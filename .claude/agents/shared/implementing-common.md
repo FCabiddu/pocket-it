@@ -35,6 +35,7 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 
 ## 3. Read discipline — the cost is what you read back
 
+- **Zeroth, the method lessons:** `~/.claude/agents/pocket-it/.claude/agents/shared/lessons.md` (≤ 40 one-line lessons, stack-independent, written by the retro across projects). They apply to you whatever the project; a `provisional` one is still followed.
 - **First, the facts other agents paid for.** `awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /' docs/SESSION_HANDOFF.md 2>/dev/null` — at most 30 lines: invariants, gotchas and decisions written by previous agents (a `cache()` that is a pass-through in tests, a route that must be listed in a census test, a token that must not be redefined). Reading them is how the pipeline learns; if one of them is wrong today, fix it with `handoff.sh fact` and say so in the report.
 - Read the task file, then only the TAD sections it references. Extract a section by number, never the whole document:
   `awk '/^## 5\. /,/^## 6\. /' tech-analysis/X_TECH_ANALYSIS.md`
