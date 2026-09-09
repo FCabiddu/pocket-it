@@ -17,10 +17,10 @@ if [[ -d tasks ]]; then
   python3 - <<'PY'
 import glob,re,collections
 c=collections.Counter(); hi=[]
-for f in glob.glob("tasks/*.md"):
-    if f.endswith("INDEX.md"): continue
+for f in glob.glob("tasks/**/*.md", recursive=True):
+    if f.endswith(("INDEX.md","README.md","/EPIC.md")) or re.search(r"/(EPIC|STORY)-[^/]*\.md$", f): continue
     t=open(f,errors="ignore").read()
-    m=re.search(r"^\*\*Status(\*\*:|:\*\*)\s*([A-Za-z ]+)",t,re.M); st=(m.group(2).strip() if m else "Todo")
+    m=re.search(r"^\*\*Status(\*\*:|:\*\*)\s*([A-Za-z ]+)",t,re.M); st=(m.group(2).strip() if m else "Unknown")
     st={"to do":"Todo","in coda":"Todo"}.get(st.lower(),st.title() if st.lower() in("todo","done") else st)
     c[st]+=1
     if re.search(r"^\*\*Risk(\*\*:|:\*\*)\s*high",t,re.M|re.I) and st.lower()!="done": hi.append(re.match(r"^#\s*(\S+)",t).group(1))

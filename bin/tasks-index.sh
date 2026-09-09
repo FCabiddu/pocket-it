@@ -15,7 +15,7 @@ field() { # field <file> <name> — first match of **Name**: or **Name:**, case-
   grep -m1 -iE "^\*\*$2(\*\*:|:\*\*)" "$1" 2>/dev/null | sed -E "s/^\*\*[^*:]+(\*\*:|:\*\*)[[:space:]]*//; s/[[:space:]]+$//" || true
 }
 
-files=$(ls "$DIR"/*.md 2>/dev/null | grep -v '/INDEX\.md$' | sort -V)
+files=$(find "$DIR" -name '*.md' ! -name INDEX.md ! -name README.md ! -name EPIC.md ! -name 'EPIC-*.md' ! -name 'STORY-*.md' 2>/dev/null | sort -V)   # nested boards (tasks/EPIC-n/T-x.md) count too; epic/story summaries are not tasks
 count=$(printf '%s\n' "$files" | grep -c . || true)
 
 {

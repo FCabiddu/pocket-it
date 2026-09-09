@@ -13,16 +13,16 @@ d = json.load(open(deps_path)) if deps_path and os.path.exists(deps_path) else {
 dt = d.get("tasks", {})
 hdr = re.compile(r"^\*\*([A-Za-z ]+?)(\*\*:|:\*\*)\s*(.*)$")
 status, label, files_of, deps_of, risk, budget = {}, {}, {}, {}, {}, {}
-for f in glob.glob("tasks/*.md"):
-    if f.endswith("INDEX.md"): continue
+for f in glob.glob("tasks/**/*.md", recursive=True):
+    if f.endswith(("INDEX.md","README.md","/EPIC.md")) or re.search(r"/(EPIC|STORY)-[^/]*\.md$", f): continue
     txt = open(f, errors="ignore").read()
-    m = re.match(r"^#\s*(\S+)", txt); tid = m.group(1) if m else None
+    m = re.match(r"^#\s*([A-Za-z]+-[\w.]+)", txt); tid = m.group(1) if m else None   # "# T-1.2.3: title" → T-1.2.3
     if not tid: continue
     fields = {}
     for line in txt.splitlines()[:40]:
         h = hdr.match(line)
         if h: fields[h.group(1).strip().lower()] = h.group(3).strip()
-    status[tid] = re.split(r"\s+[\u2014\u2013-]\s+|\s*\(", fields.get("status", "Todo"))[0].strip() or "Todo"
+    status[tid] = re.split(r"\s+[\u2014\u2013-]\s+|\s*\(", fields.get("status", "Unknown"))[0].strip() or "Unknown"   # no Status line = not launchable (pre-board file), never Todo
     label[tid] = fields.get("label", "")
     risk[tid] = fields.get("risk", "low")
     budget[tid] = fields.get("budget", "")
