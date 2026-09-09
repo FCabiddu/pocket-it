@@ -18,7 +18,7 @@ since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=d
 targets = args or [os.getcwd()]
 
 def proj_dir(path):
-    return os.path.join(ROOT, "-" + os.path.abspath(path).strip("/").replace("/", "-"))
+    return os.path.join(ROOT, "-" + os.path.abspath(path).strip("/").replace("/", "-").replace(".", "-"))
 def load(p):
     out = []
     with open(p, errors="ignore") as f:
