@@ -1,6 +1,6 @@
 # PI-1 — bin/worktree.sh: create an isolated worktree for an agent from any cwd
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
