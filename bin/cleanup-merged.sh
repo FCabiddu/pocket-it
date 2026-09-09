@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # pocket-it cleanup-merged — removes the worktrees and local branches left behind by merged task PRs
-# (developer/reviewer worktrees under <repo>/.claude/worktrees/agent-* or <parent>/.worktrees/<task>, hundreds
-# of MB each with node_modules), so that cleanup is a step of the flow instead of a manual chore.
+# (developer/reviewer worktrees anywhere under <repo>/.claude/worktrees/* — worktree.sh names them after the
+# branch slug, older ones used agent-* — or the legacy <parent>/.worktrees/<task>, hundreds of MB each with
+# node_modules), so that cleanup is a step of the flow instead of a manual chore. Discovery is by
+# `git worktree list`, not by directory name, so any path under .claude/worktrees/ is covered.
 # Usage (from any worktree of the project): bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh [--dry-run] [--all]
 #   --dry-run  print what would happen, touch nothing
 #   --all      also consider worktrees on epic/*, main, master and fix-* branches (never the main checkout, never the current one)
