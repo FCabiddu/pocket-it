@@ -52,9 +52,8 @@ pr_merged(){ # $1 branch → prints the merged PR number, if gh can tell
   [[ -n "$n" && "$n" != null ]] && echo "$n"; }
 decide(){ # $1 sha, $2 branch → prints the reason to remove, or nothing
   local m n; m=$(merged_into "$1" "$2") && { echo "merged into $m"; return 0; }
-  if ! g ls-remote --exit-code --heads origin "$2" >/dev/null 2>&1; then
-    n=$(pr_merged "$2") && { echo "PR #$n merged"; return 0; }
-  fi; return 1; }
+  n=$(pr_merged "$2") && { echo "PR #$n merged"; return 0; }   # squash-merged PRs leave no ancestry: ask gh even if the remote branch still exists
+  return 1; }
 protected(){ case "$1" in epic/*|main|master|fix-*) return 0;; esac; return 1; }
 is_scratch(){ case "$1" in /tmp/*|/private/tmp/*) return 0;; esac; return 1; }
 older_24h(){ [[ -n "$(find "$1" -maxdepth 0 -mmin +1440 2>/dev/null)" ]]; }
