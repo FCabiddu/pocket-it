@@ -14,7 +14,7 @@
 **TAD**: none — follow the style of `bin/cleanup-merged.sh` and `bin/verify.sh`
 **Contract**: none
 **Branch**: task/PI-1-worktree-script
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/18
 
 ## Goal
 The Agent tool's `isolation: worktree` only works when the session cwd is the target repo. Jarvis runs from a hub folder and governs several projects, so today the orchestrator created worktrees by hand four times. Provide `bash bin/worktree.sh <repo-path> <branch> [base]` that does it deterministically and prints the worktree path on stdout, so a launcher can pass `Worktree: <path>` to a developer.
