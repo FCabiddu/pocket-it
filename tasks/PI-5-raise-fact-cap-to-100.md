@@ -1,6 +1,6 @@
 # PI-5 — Raise the handoff fact cap from 30 to 100
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: `bin/handoff.sh`, `bin/handoff.test.sh`, `CLAUDE.md`
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-5-fact-cap
 **PR**: 
 
 ## Goal
