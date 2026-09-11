@@ -1,6 +1,6 @@
-# PI-6 — next-wave.sh va in TypeError con id di task alfanumerici
+# PI-7 — next-wave.sh va in TypeError con id di task alfanumerici
 
-**Status**: Done
+**Status**: Done — rinumerato da PI-6 a PI-7 il 2026-09-11: il numero 6 era già occupato da `PI-6-align-retro-and-read-budget-to-cap-100.md`, e due task con lo stesso id si mascherano a vicenda in `next-wave.sh`
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
