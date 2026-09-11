@@ -1,6 +1,6 @@
 # PI-6 — next-wave.sh va in TypeError con id di task alfanumerici
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/next-wave.sh, bin/next-wave.test.sh
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-6-next-wave-mixed-id-sort
 **PR**: 
 
 ## Goal
