@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
 **Branch**: task/pi-6-next-wave-mixed-id-sort
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/24
 
 ## Goal
 `bin/next-wave.sh` si interrompe con `TypeError: '<' not supported between instances of 'int' and 'str'` e non produce alcun output quando nella board convivono id di task interamente numerici e id con una parte alfabetica.
