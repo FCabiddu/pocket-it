@@ -99,6 +99,20 @@ bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{n} draft — {what
 
 The orchestrator's context is the most expensive thing in the pipeline, so what you return is short and what you write down is complete. Before your final message, write `docs/reports/{ID}-{YYYY-MM-DD}.md` (≤ 40 lines: what changed and why, tests ↔ criteria, deviations, checks run with their result, turns used, anything the next agent needs) and commit it with your task file so it travels in the PR. Then return **at most 8 lines**: ID and status · branch and PR URL · tests added and scoped-run result · turns vs budget and whether `BUDGET`/`STALL` was logged · blockers or deviations in one line · `Report: docs/reports/{ID}-{date}.md`. No prose, no explanations — they are in the file.
 
+## 7b. Write only what belongs to the repo you are in
+
+Every repo you may be launched in falls into one of two kinds, and what you may write down differs.
+
+**A project repo** (the usual case): write freely about that project. Its own names, paths, ids and code are what the task is about.
+
+**This tooling repo** (`pocket-it`): **nothing from any project it works on may appear here — ever, relevant or not.** It is public and the projects are not. Not the project's name, not its product or domain vocabulary, not its file paths, not its PR or issue numbers, not excerpts of its code, documents or data, not a narration of the session it came from. This binds every artefact you produce: the task file, the report, commit messages, the PR title and body, `shared/lessons.md`, `docs/SESSION_HANDOFF.md`.
+
+A tooling bug is almost always found while working on a project. Describe it by its **mechanism** only: the line that breaks, the shape of input that triggers it, the expected behaviour, how to reproduce it from nothing. If you cannot write the diagnosis without naming a project, the diagnosis belongs in that project's report and only the mechanism comes here.
+
+The id shapes this repo defines itself — `T-{e}.{s}.{t}`, `T-BUG-{n}`, `QF-{n}`, `PI-{n}` — are its own conventions, not project data: they stay usable as examples and as test fixtures.
+
+The same care applies to what reaches you: a launch prompt may carry project context because whoever wrote it had that context in mind. Strip it. Nothing obliges you to repeat it, and being told it is not permission to write it down.
+
 ## 8. Budget and stop conditions — stop on stall, not on size
 
 Every task carries `**Budget**: N` turns, set by the planner from its estimate (XS 60 · S 120 · M 200 · L 300, or a custom value for work that cannot be split, e.g. "run the whole suite and fix the reds"). Missing → assume 120. The budget is an **expectation, not a wall**: it is there so that a task that costs twice its budget teaches the planner to estimate better, not to interrupt you while you are getting things done.
