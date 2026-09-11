@@ -1,6 +1,6 @@
 # PI-5 — Raise the handoff fact cap from 30 to 100
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: `bin/handoff.sh`, `bin/handoff.test.sh`, `CLAUDE.md`
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-5-fact-cap
+**PR**: https://github.com/FCabiddu/pocket-it/pull/21
 
 ## Goal
 PI-2 made `handoff.sh fact` refuse a new fact at the cap instead of silently dropping the oldest — the right behaviour, but the cap of 30 is too small. A real project hit 30/30 today: two agents in one wave were refused, one of them worked around the refusal by deleting an older fact on its own initiative, which is exactly the decision the cap is meant to hand to the retro. The owner wants the cap raised to 100. The refusal behaviour at the cap must not change — only the number.
