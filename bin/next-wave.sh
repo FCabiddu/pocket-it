@@ -16,7 +16,7 @@ status, label, files_of, deps_of, risk, budget = {}, {}, {}, {}, {}, {}
 for f in glob.glob("tasks/**/*.md", recursive=True):
     if f.endswith(("INDEX.md","README.md","/EPIC.md")) or re.search(r"/(EPIC|STORY)-[^/]*\.md$", f): continue
     txt = open(f, errors="ignore").read()
-    m = re.match(r"^#\s*([A-Za-z]+-[\w.]+)", txt); tid = m.group(1) if m else None   # "# T-1.2.3: title" → T-1.2.3
+    m = re.match(r"^#\s*([A-Za-z]+(?:-[\w.]+)+)", txt); tid = m.group(1) if m else None   # "# T-BUG-1: title" → T-BUG-1 (repeated -segment so a second hyphen, e.g. a word id, is not truncated)
     if not tid: continue
     fields = {}
     for line in txt.splitlines()[:40]:
@@ -33,8 +33,14 @@ for f in glob.glob("tasks/**/*.md", recursive=True):
         deps_of[tid] = dt[tid].get("dependsOn", deps_of[tid]) or deps_of[tid]
         files_of[tid] = dt[tid].get("files", files_of[tid]) or files_of[tid]
 def done(t): return status.get(t, "").lower() == "done"
+def sort_key(tid):
+    # Total order: every segment becomes a same-shaped (kind, num, word) tuple so numeric segments
+    # never get compared against alphabetic ones directly (that raised TypeError on mixed ids like
+    # T-BUG-1 next to T-28.5.5). Numeric segments (kind 0) sort by value and always before alphabetic
+    # ones (kind 1) at the same position; alphabetic segments (kind 1) sort lexicographically.
+    return [(0, int(x), "") if x.isdigit() else (1, 0, x) for x in re.split(r"[.\-]", tid)]
 ready, blocked, taken = [], [], set()
-for tid in sorted(status, key=lambda s: [int(x) if x.isdigit() else x for x in re.split(r"[.\-]", s)]):
+for tid in sorted(status, key=sort_key):
     st = status[tid].lower()
     if st in ("done", "in progress"): continue
     if st not in ("todo", "to do", "in coda", "needs work"): continue

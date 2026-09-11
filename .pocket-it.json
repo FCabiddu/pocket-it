@@ -4,7 +4,7 @@
   "pipeline": false,
   "baseBranch": "main",
   "branching": "flat",
-  "testCommand": "bash bin/cleanup-merged.test.sh && bash bin/worktree.test.sh && bash bin/doctor.test.sh && bash bin/handoff.test.sh && bash .claude/hooks/guard.test.sh && bash .claude/hooks/guard.heredoc.test.sh",
+  "testCommand": "bash bin/cleanup-merged.test.sh && bash bin/worktree.test.sh && bash bin/doctor.test.sh && bash bin/handoff.test.sh && bash bin/next-wave.test.sh && bash .claude/hooks/guard.test.sh && bash .claude/hooks/guard.heredoc.test.sh",
   "tests": {
     "unit": "required",
     "integration": "off",
