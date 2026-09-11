@@ -27,7 +27,7 @@ sorted(status, key=lambda s: [int(x) if x.isdigit() else x for x in re.split(r"[
 
 Su `T-28.5.5` produce `["T", 28, 5, 5]`, su `T-BUG-1` produce `["T", "BUG", 1]`. Confrontando i due elenchi Python arriva a `28 < "BUG"` e solleva l'eccezione.
 
-È successo l'11/09/2026 su tavern-forge, dove il qa-engineer ha aperto cinque task di bug chiamati `T-BUG-1`…`T-BUG-5` accanto ai `T-28.x.y` dell'epica in corso. Lo script serve all'avvio di ogni sessione e a ogni wave per decidere cosa è pronto, quindi finché quei task esistono la pipeline è cieca.
+È successo l'11/09/2026 su un progetto reale, dove un qa-engineer ha aperto cinque task di bug chiamati `T-BUG-1`…`T-BUG-5` accanto ai `T-28.x.y` dell'epica in corso. Lo script serve all'avvio di ogni sessione e a ogni wave per decidere cosa è pronto, quindi finché quei task esistono la pipeline è cieca.
 
 La chiave va resa **totale**, cioè confrontabile fra segmenti numerici e alfabetici: per esempio `(0, int(x), "")` per i segmenti numerici e `(1, 0, x)` per quelli alfabetici, così i numeri restano ordinati fra loro, le parole fra loro, e i due gruppi non si confrontano mai direttamente. L'ordine fra id puramente numerici non deve cambiare.
 
@@ -43,4 +43,4 @@ Integration/E2E: non servono.
 ## Notes
 `grep -ln 'isdigit()' bin/*.sh` oggi restituisce solo `bin/next-wave.sh`, quindi sembra l'unica occorrenza dello schema, ma **verificalo tu** invece di fidarti di questa riga: gli altri script potrebbero ordinare per id in un altro modo.
 
-Diagnosi fatta nella sessione dell'11/09/2026 su tavern-forge, dove la rottura è comparsa.
+Diagnosi fatta nella sessione dell'11/09/2026, sul progetto dove la rottura è comparsa.
