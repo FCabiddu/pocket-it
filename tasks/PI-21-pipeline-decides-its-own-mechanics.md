@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-21-pipeline-decides-mechanics
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/45
 
 ## Goal
 La pipeline esiste perché il lavoro vada avanti, e i problemi vengano gestiti, senza qualcuno alla tastiera. Oggi in più punti fa il contrario: davanti a un intoppo del proprio funzionamento si ferma e passa la decisione all'utente. Una pipeline che chiede a ogni intoppo non è automatizzata, sposta soltanto il lavoro manuale.
