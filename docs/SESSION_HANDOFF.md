@@ -16,6 +16,8 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - PI-26: a task's Files list can miss occurrences of a repo-wide wording rule (planner didn't grep every phrasing) — before closing such a task, grep the mechanism with several phrasings across the whole repo, not just the cited files.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-27 PR #51 needs work — AC3 forbids the exact file AC4 requires
+- 2026-09-12 PI-26 PR #52 approved — merge: orchestrator
 - 2026-09-12 PI-26 follow-up — README.md and implementation-planner.md aligned, Files completed pre-review
 - 2026-09-12 PI-26 PR draft — model_hint replaces model, orchestrator chooses — 3 new tests
 - 2026-09-12 PI-21 PR #45 approved round 4 — scope ridotto, deps da ritracciare — merge: user
@@ -54,5 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests
 - 2026-09-11 PI-6 PR #24 draft - next-wave.sh total-order sort key for mixed alphanumeric ids - 6 tests
 - 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged
-- 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
-- 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
