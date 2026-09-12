@@ -1,6 +1,6 @@
 # PI-27 — Lo skill `deps` fa modificare all'orchestratore un file di configurazione
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -34,3 +34,5 @@ Nessun test automatico: è prosa. Rileggi lo skill per intero. Integration/E2E: 
 
 ## Notes
 Questo repo è pubblico: niente dei progetti su cui gira la pipeline.
+
+Secondo giro (review): AC3, spostando la modifica di `dependabot.yml` dentro il task di rollup, non aveva aggiornato l'elenco dei file ammessi — contraddiceva la clausola che chiede al developer di modificare proprio quel file e AC4 che ne verifica il contenuto. Corretto aggiungendo `.github/dependabot.yml` all'elenco di AC3, condizionato alla stessa clausola di AC4 ("only when this task's condition triggered its edit").
