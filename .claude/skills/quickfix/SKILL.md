@@ -48,10 +48,10 @@ ID: `QF-{n}` where n = 1 + the highest existing `QF-` number in `tasks/` (start 
 Spend one or two `grep`/`ls` calls to fill **Files** and **Notes** with real paths. Then commit the task file:
 
 ```bash
-git add tasks/QF-{n}-*.md && git commit -q -m "task: QF-{n} {title}" && git push -q
+git add tasks/QF-{n}-*.md && git commit -q -m "task: QF-{n} {title}" && POCKET_IT_ORCHESTRATOR_PUSH=1 git push -q
 ```
 
-(Committed so a worktree-isolated developer can see it.)
+(Committed so a worktree-isolated developer can see it. The prefix is the hook's authorized form for a push to the base branch — see `/quickfix` §4.)
 
 ### 3. Launch
 One Agent call: `subagent_type: developer`, `isolation: worktree` (only when the session cwd is this project's repo — otherwise create the worktree with `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh <project-path> task/QF-{n}-{slug})`, omit `isolation` and add `Worktree: $WT` to the prompt), `model: opus` only if Risk is high, prompt:
@@ -66,6 +66,6 @@ When it reports, one Agent call: `subagent_type: reviewer`, prompt `Tasks: QF-{n
 ### 4. Close
 - APPROVED: merge it — `POCKET_IT_USER_MERGE=1 gh pr merge {m} --squash --delete-branch` (the hook's authorised form; the prefix is the audit trail that the merge is covered by the `automerge: true` default). Skip the merge only when config `automerge` is `false` or the user's request contains `draft`: then report the PR as ready for the user to merge. After a merge, `git pull --ff-only` the base branch and make sure `tasks/QF-{n}-*.md` says `**Status**: Done` (set it if the developer left it otherwise).
 - NEEDS WORK: a second developer round with `Branch: … ALREADY EXISTS` and `PR: {m}` plus the reviewer's findings verbatim, then one more reviewer call with `Mode: delta`; at most two rounds, then it goes to the user. Never merge a `needs-work` PR without that re-review, even for a one-command fix.
-- Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "QF-{n} PR #{m} {merged|approved, awaiting user merge|needs work} — {title}"`, commit the task file, the index and the handoff on the base branch, push.
+- Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "QF-{n} PR #{m} {merged|approved, awaiting user merge|needs work} — {title}"`, commit the task file, the index and the handoff on the base branch, `POCKET_IT_ORCHESTRATOR_PUSH=1 git push` (the hook's authorized form for a push to the base branch, same audit-prefix shape as the merge above).
 - Then `bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh`: removes the worktree and local branch of the merged PR (dirty, locked and unmerged ones are kept and listed). Report its summary line (`cleanup-merged: N worktrees removed, … freed X MB`).
 - Report: PR URL, review outcome, merged or awaiting the user (draft), what is next.

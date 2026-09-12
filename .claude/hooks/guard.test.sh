@@ -34,6 +34,12 @@ ALLOW|gh pr comment 12 --body "never run git push origin main from an agent"
 BLOCK|echo "harmless" && gh pr merge 7
 ALLOW|POCKET_IT_USER_MERGE=1 gh pr merge 8 --merge --delete-branch
 BLOCK|POCKET_IT_USER_MERGE=0 gh pr merge 8 --merge
+BLOCK|git push origin HEAD:main
+ALLOW|POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin main
+ALLOW|POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin HEAD:main
+ALLOW|POCKET_IT_ORCHESTRATOR_PUSH=1 git push -u origin task/pi-10-slug
+BLOCK|POCKET_IT_ORCHESTRATOR_PUSH=1 git push --force origin main
+BLOCK|POCKET_IT_ORCHESTRATOR_PUSH=1 git push -f origin main
 CASES
 
 # --- Fixtures: branch-resolution cases (PI-4). A bare `git push`/`git push origin HEAD` only
@@ -89,5 +95,57 @@ expect_case BLOCK "$TMPROOT/main-repo" "git push --force"
 expect_case BLOCK "$TMPROOT/main-repo" "git push -f origin HEAD"
 expect_case BLOCK "$TMPROOT/feat-repo" "git push --force origin main"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push -f"
+
+# PI-10 AC1-AC4 — the POCKET_IT_ORCHESTRATOR_PUSH=1 prefix authorizes an implicit push to main
+# (bare `git push` resolved from the current branch), but never a force-push, even prefixed.
+expect_case BLOCK "$TMPROOT/main-repo" "git push"
+expect_case ALLOW "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push --force"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -f origin HEAD"
+expect_case ALLOW "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push"
+
+# PI-10 review fix — three forms git accepts as a force-push, each still blocked to
+# main/master even with the authorization prefix: a clustered short flag containing -f
+# (not just a standalone -f token), a long --force(-with-lease) flag, and a leading '+' on
+# the refspec (with or without an explicit src:dst). Each must go red if the corresponding
+# guard is removed (mutation-provable against is_force()/strip_plus()).
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -uf origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -fu origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -qf origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin +main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin +HEAD:main"
+# Not force: a cluster without f, or a '+' on a refspec that does not target main/master.
+expect_case ALLOW "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -uq origin main"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin +task/x:task/y"
+
+# PI-10 delta re-review — two more force/destructive spellings, both reachable only through
+# the prefix (BLOCKED without it, ALLOWED with it before this fix): a short-flag cluster
+# where the letter f sits next to a digit flag (-4/-6), and deleting main/master outright
+# (by flag, by empty-source refspec, or via --mirror/--prune, which can remove it without
+# ever naming it). Mutation-provable: reverting either guard turns its rows red.
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -f4 origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -4f origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -f4 origin master"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -4f"
+
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push --delete origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -d origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -d origin master"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push --delete origin refs/heads/main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin :main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin :refs/heads/main"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push --mirror origin"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push --prune origin +refs/heads/*:refs/heads/*"
+# Same forms without the prefix must still block — the fix must not depend on it.
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --delete origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin :main"
+
+# Controls: deleting a *task* branch, in every one of the same shapes, must stay ALLOW —
+# the fix must not over-tighten cleanup of ordinary branches.
+expect_case ALLOW "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -d origin task/x"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push -d origin task/x"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push --delete origin feat/old"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin :task/x"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin +task/x:task/y"
 
 exit $fail

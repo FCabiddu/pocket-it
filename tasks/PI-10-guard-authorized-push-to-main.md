@@ -1,6 +1,6 @@
 # PI-10 — L'hook vieta all'orchestratore un push che le sue stesse istruzioni gli prescrivono
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: .claude/hooks/guard.sh, .claude/hooks/guard.test.sh, .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, .claude/skills/deps/SKILL.md
 **TAD**: none — segui la forma già usata per `gh pr merge` nello stesso hook
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-10-guard-authorized-push
+**PR**: https://github.com/FCabiddu/pocket-it/pull/36
 
 ## Goal
 `.claude/hooks/guard.sh` blocca ogni `git push` verso `main` o `master`, senza eccezioni. Gli skill della pipeline prescrivono però all'orchestratore di fare esattamente quello a fine lavoro: aggiornare board, indice e memoria sul ramo base e pushare. Le due regole si annullano, e l'orchestratore resta senza una strada praticabile.

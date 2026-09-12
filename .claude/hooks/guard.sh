@@ -26,9 +26,19 @@ block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
 if ! grep -qE '(^|[;&|[:space:]])POCKET_IT_USER_MERGE=1[[:space:]]' <<<"$CMD"; then
   grep -qE '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$CMD" && block "gh pr merge" "Prefix the command with POCKET_IT_USER_MERGE=1 — the audit trail that this merge is covered by the automerge default or by an explicit instruction. Never merge when the user asked for draft PRs, nor the epic→main PR of a deployed project without an instruction: report the PR as ready instead."
 fi
+# git push to main/master is authorized only with the POCKET_IT_ORCHESTRATOR_PUSH=1 prefix: the
+# audit trail that this push is the orchestrator updating the board, index or memory on the base
+# branch after a wave (its standing mandate), not an agent pushing its own work — no agent knows
+# this prefix and none is authorized to use it. A force-push to main/master, or any push that
+# deletes it or rewrites the whole remote (--mirror/--prune), is blocked even with the prefix,
+# below: rewriting or removing the base branch is never authorized, for anyone.
+AUTHORIZED_PUSH=0
+grep -qE '(^|[;&|[:space:]])POCKET_IT_ORCHESTRATOR_PUSH=1[[:space:]]' <<<"$CMD" && AUTHORIZED_PUSH=1
 # No direct pushes to main/master (feature branches are fine).
-grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+\S+[[:space:]]+(main|master)([[:space:]]|$|:)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
-grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+(origin[[:space:]]+)?(HEAD:)?(main|master)([[:space:]]|$)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
+if [[ "$AUTHORIZED_PUSH" -eq 0 ]]; then
+  grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+\S+[[:space:]]+(main|master)([[:space:]]|$|:)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
+  grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+(origin[[:space:]]+)?(HEAD:)?(main|master)([[:space:]]|$)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
+fi
 # A bare `git push`, `git push origin HEAD`/`-u origin HEAD` or a refspec whose destination is
 # main/master (even under a refs/heads/ prefix) is only safe when the branch it resolves to isn't
 # main/master. Resolve the repo (a `-C <path>` on the same `git` invocation, else the nearest
@@ -56,7 +66,49 @@ def resolve_dir(path):
 def norm(ref):
     return re.sub(r'^refs/heads/', '', ref)
 
+def is_force(tokens):
+    # git's parse-options accepts clustered short flags (-uf, -fu, -qf, ...), not just a
+    # standalone -f token: any short-flag cluster containing the letter f is a force-push.
+    # Clusters may also carry a digit flag (-4/-6 for IPv4/IPv6), so the cluster shape itself
+    # must allow digits too, or -f4/-4f slip through unmatched.
+    # No other `git push` short flag uses the letter f, so this cannot false-positive.
+    for t in tokens:
+        if not t.startswith('-'):
+            continue
+        if t == '-f' or t.startswith('--force'):
+            return True
+        if re.fullmatch(r'-[a-zA-Z0-9]+', t) and 'f' in t[1:]:
+            return True
+    return False
+
+def strip_plus(ref):
+    # A leading '+' on a refspec (or on the source side of a src:dst refspec) forces the
+    # push regardless of any -f/--force flag; it must be recognised and stripped before the
+    # destination is compared to main/master, or a forced +HEAD:main / +main slips through
+    # as a plain (non-force) push to main and the authorization prefix wrongly allows it.
+    return (ref[1:], True) if ref.startswith('+') else (ref, False)
+
+def has_delete_flag(tokens):
+    # -d/--delete (or a short cluster containing d, e.g. -ud) removes a remote ref outright.
+    # No other `git push` short flag uses the letter d, so this cannot false-positive.
+    for t in tokens:
+        if not t.startswith('-'):
+            continue
+        if t == '-d' or t.startswith('--delete'):
+            return True
+        if re.fullmatch(r'-[a-zA-Z0-9]+', t) and 'd' in t[1:]:
+            return True
+    return False
+
+def has_mirror_or_prune(tokens):
+    # --mirror pushes and deletes to make the remote match every local ref exactly;
+    # --prune deletes remote refs absent locally. Both can remove main/master without
+    # ever naming it, so they are treated as always touching main — long-flag only,
+    # no short form in git push, so no cluster case to worry about.
+    return any(t.startswith('--mirror') or t.startswith('--prune') for t in tokens if t.startswith('-'))
+
 verdict = ""
+force = False
 tracked_cd = None
 for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     seg = seg.strip()
@@ -64,7 +116,10 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     if m:
         tracked_cd = m.group(1)
         continue
-    m = re.match(r'^git\s+(?:-C\s+(\S+)\s+)?push\b(.*)$', seg)
+    # A leading POCKET_IT_ORCHESTRATOR_PUSH=1 is stripped before matching `git`, so the force
+    # and implicit-main checks below still run when the segment carries the authorization
+    # prefix — the prefix authorizes a plain push to main, never a force-push or a deletion.
+    m = re.match(r'^(?:POCKET_IT_ORCHESTRATOR_PUSH=1\s+)?git\s+(?:-C\s+(\S+)\s+)?push\b(.*)$', seg)
     if not m:
         continue
     c_path, rest = m.group(1), m.group(2)
@@ -73,43 +128,65 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     except ValueError:
         tokens = rest.split()
     positional = [t for t in tokens if not t.startswith('-')]
+    seg_force = is_force(tokens)
+    seg_delete = has_delete_flag(tokens)
 
-    implicit, explicit_main = False, False
+    implicit, explicit_main, destructive = False, False, False
+
+    if has_mirror_or_prune(tokens):
+        # Can wipe main from the remote without a single token naming it (a glob refspec,
+        # or no refspec at all) — always in scope, regardless of the current branch or of
+        # what the positional-ref matching below finds.
+        explicit_main = True
+        destructive = True
+
     if len(positional) == 0:
         implicit = True
     elif len(positional) == 1:
-        if ':' in positional[0]:
-            _, dst = positional[0].split(':', 1)
+        ref0, plus_force = strip_plus(positional[0])
+        seg_force = seg_force or plus_force
+        if ':' in ref0:
+            src, dst = ref0.split(':', 1)
             if dst and norm(dst) in ('main', 'master'):
                 explicit_main = True
+                if not src:
+                    destructive = True  # empty source = delete, e.g. ":main"
         else:
             implicit = True
     else:
-        ref = positional[1]
+        ref, plus_force = strip_plus(positional[1])
+        seg_force = seg_force or plus_force
         if ':' in ref:
-            _, dst = ref.split(':', 1)
+            src, dst = ref.split(':', 1)
             if dst and norm(dst) in ('main', 'master'):
                 explicit_main = True
+                if not src:
+                    destructive = True  # empty source = delete, e.g. "origin :main"
         elif ref == 'HEAD':
             implicit = True
         elif norm(ref) in ('main', 'master'):
             explicit_main = True
+            if seg_delete:
+                destructive = True  # "-d/--delete origin main"
 
     if explicit_main:
         verdict = "EXPLICIT"
+        force = seg_force or destructive
         break
     if implicit:
         b = branch_of(resolve_dir(c_path or tracked_cd))
         if b in ('main', 'master'):
             verdict = "IMPLICIT"
+            force = seg_force
             break
 
-print(verdict)
+print(verdict + ("_FORCE" if force and verdict else ""))
 PYEOF
 )
   case "$PUSH_VERDICT" in
-    IMPLICIT) block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
-    EXPLICIT) block "git push to main/master" "Push a task branch and open a draft PR." ;;
+    IMPLICIT_FORCE|EXPLICIT_FORCE) block "git push to main/master" "Never rewrite main." ;;
+    IMPLICIT) [[ "$AUTHORIZED_PUSH" -eq 0 ]] && block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
+    EXPLICIT) [[ "$AUTHORIZED_PUSH" -eq 0 ]] && block "git push to main/master" "Push a task branch and open a draft PR." ;;
   esac
 fi
 # Never kill by pattern on a shared machine.
