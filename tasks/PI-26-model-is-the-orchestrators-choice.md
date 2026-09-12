@@ -1,6 +1,6 @@
 # PI-26 — Il modello di un agente è deciso da una mappatura sul campo Risk
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
