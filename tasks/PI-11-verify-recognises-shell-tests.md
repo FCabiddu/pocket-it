@@ -1,6 +1,6 @@
 # PI-11 — `verify.sh` non riconosce i test in shell e avvisa a vuoto su ogni diff
 
-**Status**: Todo
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix

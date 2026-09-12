@@ -1,6 +1,6 @@
 # PI-10 — L'hook vieta all'orchestratore un push che le sue stesse istruzioni gli prescrivono
 
-**Status**: Todo
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
