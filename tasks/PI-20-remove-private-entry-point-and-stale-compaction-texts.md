@@ -1,6 +1,6 @@
 # PI-20 — Tre testi ancora pubblici contraddicono le regole appena scritte
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: tasks/PI-1-worktree-script.md, .claude/agents/shared/lessons.md, CLAUDE.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-20-private-name-and-compaction-texts
 **PR**: 
 
 ## Goal
@@ -26,9 +26,9 @@ Le review di PI-19 hanno trovato tre punti del repository che dicono il contrari
 Il secondo e il terzo non sono imprecisioni di stile. È verificato che il modello **non può** avviare una compattazione: la esegue il runtime, non esiste tool né comando, e il modello non può nemmeno leggere il proprio consumo di contesto. Un testo che la presenta come un'azione dell'orchestratore insegna una regola che nessuno può eseguire, e chi la legge smette di cercare la strada che funziona. Come riscritto in PI-19: all'orchestratore appartengono la decisione e il momento, non l'esecuzione.
 
 ## Acceptance criteria
-- [ ] AC1 — Dato `tasks/PI-1-worktree-script.md`, quando lo si legge, allora non nomina l'entry point privato e la frase conserva il suo senso.
-- [ ] AC2 — Dati `shared/lessons.md` e `CLAUDE.md`, quando li si legge, allora non presentano la compattazione come un'azione che l'orchestratore esegue.
-- [ ] AC3 — Dato l'intero repository, quando lo si cerca, allora il nome dell'entry point privato non compare in nessun file che arriva su main, né nei messaggi di commit della PR.
+- [x] AC1 — Dato `tasks/PI-1-worktree-script.md`, quando lo si legge, allora non nomina l'entry point privato e la frase conserva il suo senso.
+- [x] AC2 — Dati `shared/lessons.md` e `CLAUDE.md`, quando li si legge, allora non presentano la compattazione come un'azione che l'orchestratore esegue.
+- [x] AC3 — Dato l'intero repository, quando lo si cerca, allora il nome dell'entry point privato non compare in nessun file che arriva su main, né nei messaggi di commit della PR.
 
 ## Tests expected
 Nessun test automatico: sono file di prosa. AC3 si verifica con una ricerca sull'intero albero, **descritta per effetto nel report senza scrivere il nome**: PI-19 ha dovuto fare un giro in più proprio perché il comando di verifica riportato nel report conteneva il nome che si stava togliendo. Integration/E2E: non servono.
