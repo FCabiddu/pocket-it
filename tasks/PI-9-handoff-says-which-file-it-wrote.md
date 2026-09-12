@@ -1,6 +1,6 @@
 # PI-9 — `handoff.sh` non dice su quale repo ha scritto
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/handoff.sh, bin/handoff.test.sh
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-9-handoff-says-where-it-wrote
+**PR**: https://github.com/FCabiddu/pocket-it/pull/32
 
 ## Goal
 `bin/handoff.sh` risolve il repo su cui scrivere da `git rev-parse --show-toplevel`, cioè dalla directory corrente (riga 10), e poi conferma con un laconico `handoff: logged`.
@@ -24,9 +24,9 @@ Un agente che lavora in un worktree non ha la directory corrente garantita: si a
 Lo script si è comportato come documentato, quindi qui non si cambia la risoluzione del repo. Si cambia il fatto che l'operazione sia invisibile: se `handoff: logged` avesse detto *dove*, l'errore sarebbe saltato all'occhio subito, nello stesso output.
 
 ## Acceptance criteria
-- [ ] AC1 — Dato un qualsiasi `handoff.sh log` andato a buon fine, quando leggo l'output, allora contiene il percorso del file scritto.
-- [ ] AC2 — Dato un qualsiasi `handoff.sh fact` andato a buon fine, quando leggo l'output, allora contiene il percorso del file scritto.
-- [ ] AC3 — Dato uno script chiamante che ridirige l'output (`>/dev/null`), quando lo esegue, allora continua a funzionare e il codice di uscita non cambia: l'aggiunta è sull'output, non sul contratto.
+- [x] AC1 — Dato un qualsiasi `handoff.sh log` andato a buon fine, quando leggo l'output, allora contiene il percorso del file scritto.
+- [x] AC2 — Dato un qualsiasi `handoff.sh fact` andato a buon fine, quando leggo l'output, allora contiene il percorso del file scritto.
+- [x] AC3 — Dato uno script chiamante che ridirige l'output (`>/dev/null`), quando lo esegue, allora continua a funzionare e il codice di uscita non cambia: l'aggiunta è sull'output, non sul contratto.
 
 ## Tests expected
 Un caso per criterio in `bin/handoff.test.sh`. Per AC1 e AC2 basta asserire che l'output contenga il percorso atteso del file, non la stringa fissa. Integration/E2E: non servono.
