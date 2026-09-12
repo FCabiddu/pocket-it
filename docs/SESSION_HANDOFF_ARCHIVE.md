@@ -13,4 +13,3 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-09 PI-4 PR #19 draft — guard.sh resolves branch for bare/HEAD git push — 20 tests
 - 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
 - 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
-- 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged

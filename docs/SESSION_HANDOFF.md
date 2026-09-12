@@ -21,6 +21,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-22 PR #46 round 2 — commits of its own read from branch reflog; worktree guard rule executable — 12 checks added
 - 2026-09-12 PI-22 PR #46 needs work — fresh branch off merged epic removed
 - 2026-09-12 PI-22 PR #46 draft — cleanup-merged keeps no-own-commit worktrees; lost-worktree stop rule — 17 test checks added
+- 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md che una migrazione o una backfill non si applica mai a un database reale prima di review e merge: si prova su una copia, e sul database reale la applica chi mergia. Emerso da un task che l'ha applicata prima della review, lasciando il database in uno stato che il codice in produzione gestiva male. Causa anche nella specifica del task, che diceva di provarla su una copia prima che sul database reale senza dire quando.
+- 2026-09-12 PI-27 PR #51 needs work — AC3 forbids the exact file AC4 requires
+- 2026-09-12 PI-26 PR #52 approved — merge: orchestrator
+- 2026-09-12 PI-27 PR draft — deps skill: dependabot.yml edit folded into rollup task, not user/orchestrator — no tests (prose)
 - 2026-09-12 PI-21 PR #45 approved round 4 — scope ridotto, deps da ritracciare — merge: user
 - 2026-09-12 PI-21 round-3 fix pushed — removed ROUND log and merged-tree test, reverted deps edit, added pocket-it /quickfix routing sentence
 - 2026-09-12 PI-21 PR #45 delta needs work — ROUND non contabile, merged-tree per gruppo
@@ -56,3 +60,4 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-8 PR #30 fix pushed — one archive order, LOGCAP-only hardcode fix — 9 tests
 - 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests
 - 2026-09-11 PI-6 PR #24 draft - next-wave.sh total-order sort key for mixed alphanumeric ids - 6 tests
+- 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged
