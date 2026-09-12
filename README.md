@@ -282,9 +282,9 @@ bash <<'STEP'
 . "$HOME/.claude/pocket-it-switch-backup/env"
 fail=0
 chk() { if eval "$2"; then echo "OK    $1"; else echo "FAIL  $1"; fail=1; fi; }
-LIVE_P=$(cd "$LIVE" && pwd -P)
+LIVE_P=$(cd "$LIVE" 2>/dev/null && pwd -P) && [ -d "$LIVE/.git" ] || { echo "FAIL  the installed copy $LIVE does not exist — SOMETHING FAILED — run Rollback"; exit 1; }
 chk "installed copy is a separate folder" '[ "$LIVE_P" != "$DEV" ]'
-chk "installed copy is clean and at the published main" '[ -z "$(git -C "$LIVE" status --porcelain)" ] && [ "$(git -C "$LIVE" rev-parse HEAD)" = "$(git -C "$LIVE" rev-parse origin/main)" ]'
+chk "installed copy is clean and at the published main" 'h=$(git -C "$LIVE" rev-parse HEAD) && [ "$h" = "$(git -C "$LIVE" rev-parse origin/main)" ] && [ -z "$(git -C "$LIVE" status --porcelain)" ]'
 chk "~/.claude/agents/pocket-it is the installed copy" '[ "$(cd "$HOME/.claude/agents/pocket-it" && pwd -P)" = "$LIVE_P" ]'
 chk "agent files readable through it" '[ -f "$HOME/.claude/agents/pocket-it/.claude/agents/developer.md" ]'
 chk "no skill resolves into the development checkout" '! for l in "$HOME/.claude/skills"/*; do (cd "$l" 2>/dev/null && pwd -P); done | grep -q "^$DEV/"'
@@ -298,7 +298,7 @@ chk "settings.json has a guard.sh hook" '[ -n "$GUARDS" ]'
 chk "no hook command names the development checkout" '! python3 -c "import json,os;print(json.dumps(json.load(open(os.path.expanduser(\"~/.claude/settings.json\"))).get(\"hooks\",{})))" | grep -qF "$DEV/"'
 while IFS= read -r c; do
   [ -n "$c" ] || continue
-  chk "guard hook runs from the installed copy: $c" 'case "$c" in *"$LIVE"/*|*"$LIVE_P"/*) true;; *) false;; esac'
+  chk "guard hook runs from the installed copy: $c" 'case "$c" in *"$LIVE/.claude/hooks/guard.sh"*|*"$LIVE_P/.claude/hooks/guard.sh"*) true;; *) false;; esac'
   printf '%s' '{"tool_name":"Bash","tool_input":{"command":"killall node"}}' | bash -c "$c" >/dev/null 2>&1; rc=$?
   chk "guard hook blocks a forbidden command (exit 2, got $rc)" '[ "$rc" -eq 2 ]'
   printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | bash -c "$c" >/dev/null 2>&1; rc=$?
@@ -314,6 +314,7 @@ If you rebuild `~/.claude/skills` with a script of your own, point it at `~/.cla
 
 ```bash
 bash -eu <<'STEP'
+[ -f "$HOME/.claude/pocket-it-switch-backup/env" ] || { echo "OK rollback: no backup at ~/.claude/pocket-it-switch-backup, nothing was switched"; exit 0; }
 . "$HOME/.claude/pocket-it-switch-backup/env"
 A="$HOME/.claude/agents"; SK="$HOME/.claude/skills"
 if [ -f "$BK/rewrite-hooks.py" ] && [ -e "$LIVE" ]; then python3 "$BK/rewrite-hooks.py" "$LIVE" "$DEV"; fi
