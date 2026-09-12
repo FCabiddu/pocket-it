@@ -56,7 +56,7 @@ if overflow:
         f.write("\n".join(reversed(overflow))+"\n")
     print(f"handoff: archived {len(overflow)} line(s) to docs/SESSION_HANDOFF_ARCHIVE.md")
 PY
-    echo "handoff: logged";;
+    echo "handoff: logged — $F";;
   fact)
     python3 - "$F" "$CAP" "$*" <<'PY'
 import sys
@@ -66,7 +66,7 @@ body,sep2,rest=tail.partition("\n## ")
 lines=[l for l in body.splitlines() if l.startswith("- ")]
 line="- "+text
 if line in lines:
-    print("handoff: fact already present"); sys.exit(0)
+    print(f"handoff: fact already present — {p}"); sys.exit(0)
 if len(lines)>=CAP:
     print(f"handoff: facts at cap ({CAP}/{CAP}) — not added. Ask the retro to promote stable facts to best-practices, or remove one line by hand: {text}", file=sys.stderr)
     sys.exit(3)
@@ -74,9 +74,9 @@ lines.append(line)
 comment=f"\n<!-- max {CAP} righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->\n"
 open(p,"w").write(head+sep+comment+"\n".join(lines)+"\n\n"+("## "+rest if sep2 else ""))
 if len(lines)==CAP:
-    print(f"handoff: facts {CAP}/{CAP} — cap reached, next fact will be refused", file=sys.stderr)
+    print(f"handoff: facts {CAP}/{CAP} — cap reached, next fact will be refused — {p}", file=sys.stderr)
 else:
-    print("handoff: fact added")
+    print(f"handoff: fact added — {p}")
 PY
     exit $?;;
   show)

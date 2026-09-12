@@ -3,11 +3,14 @@
 # Covers AC1 (99th->100th add lands with the cap warning), AC2 (refused past the cap, file unchanged, exit 3),
 # AC3 (show marks the cap, absent below it), AC4 (a stale "max 30 righe" comment is normalised on any run),
 # AC5 (log unaffected by the facts cap).
+# Also covers PI-9 (log/fact confirmations name the path of the file they wrote, exit codes and
+# redirected output unchanged).
 set -uo pipefail
 cd "$(dirname "$0")"
 SCRIPT="$PWD/handoff.sh"
 CAP=100
 S=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test.XXXXXX")
+S=$(cd "$S" && pwd -P)   # resolve any symlink (e.g. macOS /tmp) so it matches git's resolved toplevel
 cleanup(){ rm -rf "$S"; }
 trap cleanup EXIT
 fail=0
@@ -25,7 +28,7 @@ ok "$((CAP - 1)) facts present before the last add" "[[ \"\$(count)\" -eq $((CAP
 # --- AC1: the fact that reaches the cap lands (exit 0) and warns on stderr that the cap is reached ---
 outcap=$(cd "$S" && bash "$SCRIPT" fact "fact number $CAP" 2>&1 1>/dev/null); rccap=$?
 ok "AC1 — fact reaching the cap lands with exit 0" '[[ "$rccap" -eq 0 ]]'
-ok "AC1 — stderr warns the cap is reached" "[[ \"\$outcap\" == \"handoff: facts $CAP/$CAP — cap reached, next fact will be refused\" ]]"
+ok "AC1 — stderr warns the cap is reached" "[[ \"\$outcap\" == \"handoff: facts $CAP/$CAP — cap reached, next fact will be refused — $F\" ]]"
 ok "AC1 — the fact reaching the cap is actually in the file" 'grep -qF "fact number '"$CAP"'" "$F"'
 ok "file has exactly $CAP facts after that add" "[[ \"\$(count)\" -eq $CAP ]]"
 
@@ -44,7 +47,7 @@ ok "AC2 — exact stderr line" '[[ "$out2" == "$expected2" ]]'
 # --- log behaviour is unchanged — it still rotates at 40, silently, regardless of the facts cap ---
 outlog=$(cd "$S" && bash "$SCRIPT" log "some event happened" 2>&1); rclog=$?
 ok "log still exits 0 at the facts cap" '[[ "$rclog" -eq 0 ]]'
-ok "log prints its usual message" '[[ "$outlog" == "handoff: logged" ]]'
+ok "log prints its usual message" "[[ \"\$outlog\" == \"handoff: logged — $F\" ]]"
 for i in $(seq 1 45); do (cd "$S" && bash "$SCRIPT" log "log line $i" >/dev/null 2>&1); done
 loglines=$(awk '/^## Log/{f=1;next} f && /^- /{c++} END{print c+0}' "$F")
 ok "log still caps at 40 lines" '[[ "$loglines" -eq 40 ]]'
@@ -179,6 +182,33 @@ ok "PI-8 F2 — the script's fallback header interpolates {logcap}, it does not 
    '! grep -nE "if not sep:.*ultime 40 righe\)" "$SCRIPT"'
 ok "PI-8 F2 — and it does spell out the interpolation, so the guard above is not vacuous" \
    'grep -nE "if not sep:.*\{logcap\} righe\)" "$SCRIPT" >/dev/null'
+
+# --- PI-9: a successful log/fact call says which file it wrote, so a missing 'cd' into the right
+# worktree is visible in the same output instead of surfacing later as an unexplained change elsewhere.
+S9=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test9.XXXXXX")
+S9=$(cd "$S9" && pwd -P)   # resolve any symlink (e.g. macOS /tmp) so it matches git's resolved toplevel
+git init -q "$S9" >/dev/null
+F9="$S9/docs/SESSION_HANDOFF.md"
+
+# PI-9 AC1 — a successful `log` names the path of the file it wrote, not a fixed string
+outlog9=$(cd "$S9" && bash "$SCRIPT" log "an event")
+ok "PI-9 AC1 — log output contains the written file's path" '[[ "$outlog9" == *"$F9"* ]]'
+
+# PI-9 AC2 — a successful `fact` (first add, cap-reached add, and duplicate) names the path too
+outfact9=$(cd "$S9" && bash "$SCRIPT" fact "a fact")
+ok "PI-9 AC2 — fact-added output contains the written file's path" '[[ "$outfact9" == *"$F9"* ]]'
+outdup9=$(cd "$S9" && bash "$SCRIPT" fact "a fact")
+ok "PI-9 AC2 — duplicate-fact output contains the file's path too" '[[ "$outdup9" == *"$F9"* ]]'
+
+# PI-9 AC3 — a caller that redirects the output still gets the same exit code and the file is still
+# written; the addition is on the output only, never on the contract callers already depend on.
+rcredirlog9=$(cd "$S9" && bash "$SCRIPT" log "redirected event" >/dev/null 2>&1; echo $?)
+ok "PI-9 AC3 — log exit code unchanged when output is redirected" '[[ "$rcredirlog9" -eq 0 ]]'
+ok "PI-9 AC3 — log still wrote the redirected event to the file" 'grep -qF "redirected event" "$F9"'
+rcredirfact9=$(cd "$S9" && bash "$SCRIPT" fact "another fact" >/dev/null 2>&1; echo $?)
+ok "PI-9 AC3 — fact exit code unchanged when output is redirected" '[[ "$rcredirfact9" -eq 0 ]]'
+ok "PI-9 AC3 — fact still wrote the redirected fact to the file" 'grep -qF "another fact" "$F9"'
+rm -rf "$S9"
 
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"
