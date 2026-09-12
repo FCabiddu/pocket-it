@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
 **Branch**: task/pi-11-verify-shell-tests
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/35
 
 ## Goal
 `bin/verify.sh` chiude il suo giro dicendo se nel diff ci sono file di test. Alla riga 51 li riconosce con:
