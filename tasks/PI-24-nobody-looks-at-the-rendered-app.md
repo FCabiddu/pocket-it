@@ -1,6 +1,6 @@
 # PI-24 — Nessun agente della pipeline guarda l'app renderizzata
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: .claude/agents/ux-ui-designer.md, .claude/agents/qa-engineer.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-24-render-the-app
 **PR**: 
 
 ## Goal
