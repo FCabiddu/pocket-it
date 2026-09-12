@@ -8,7 +8,7 @@
 #            pushed · pushed and not merged · fast-forwarded into the base with no PR · new commits after a merge ·
 #            new commits after a squash-merged PR · git status failing · locked · protected epic · detached outside
 #            /tmp · current worktree · missing on disk with no commits of its own (pruned, branch kept)
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 2
 SCRIPT="$PWD/cleanup-merged.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/cleanup-merged-test.XXXXXX")
 SCRATCH_WT="/tmp/pocket-it-cleanup-test-$$"
