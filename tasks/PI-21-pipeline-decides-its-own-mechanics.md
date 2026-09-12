@@ -1,6 +1,6 @@
 # PI-21 — La pipeline rimanda all'utente decisioni sul proprio funzionamento
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix

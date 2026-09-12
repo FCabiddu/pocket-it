@@ -5,3 +5,5 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 ## Log archiviato
 - 2026-09-09 PI-1 PR #18 draft — bin/worktree.sh + cleanup-merged AC6 — 18+21 tests
 - 2026-09-09 PI-3 PR #17 draft — doctor warns on stale EPIC/STORY summary Status — 8 tests
+- 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
+- 2026-09-09 PI-2 PR #15 approved — merge: orchestrator

@@ -15,6 +15,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-21 PR #45 delta needs work — ROUND non contabile, merged-tree per gruppo
 - 2026-09-12 PI-21 round-2 fix pushed — cause-first everywhere, cap 3, ROUND log, CLAUDE/README/deps aligned
 - 2026-09-12 PI-21 PR #45 needs work — escalation opus residua, causa non tracciata
 - 2026-09-12 PI-21 PR #45 draft — pipeline decides own mechanism, root-cause not round-count — no tests (prose)
@@ -54,5 +55,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
