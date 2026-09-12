@@ -1,6 +1,6 @@
 # PI-19 — `run-wave` fa decidere all'utente una cosa che deve decidere l'orchestratore
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
