@@ -15,6 +15,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-19 fix pushed — segnali OR, vincolo assoluto, entry point privato tolto
 - 2026-09-12 PI-19 PR #42 needs work — segnali elencati ma non decidono nulla
 - 2026-09-12 PI-19 PR draft — compaction call is orchestrator's, not user's — no automated tests
 - 2026-09-12 PI-10 PR #36 conflict resolved — unione di fatti e log, 0 righe perse, MERGEABLE
