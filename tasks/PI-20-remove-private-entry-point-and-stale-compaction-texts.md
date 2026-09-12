@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-20-private-name-and-compaction-texts
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/44
 
 ## Goal
 Le review di PI-19 hanno trovato tre punti del repository che dicono il contrario di ciò che PI-19 ha appena stabilito. Sono tutti anteriori a quella PR.
