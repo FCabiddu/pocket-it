@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh push guard is NOT a security boundary: it stops a COOPERATIVE agent pushing to the base branch by MISTAKE in a normal shell form, not a deliberate evasion (eval, bash -c, env -i, wrappers, quoted/escaped git, on-the-fly aliases, push-affecting config, send-pack, newline-separated commands) — those are out of scope and left to server-side branch protection; the threat model is written at the top of guard.sh. It covers, with a red test each: bare/explicit push, HEAD:/main, refs/heads/main and heads/main, glob-dst refspec, : and +: matching refspec, @, --all/--mirror/--prune, force/delete, EVERY refspec of a multi-refspec push, a var/env/`-c` in front of git; the audit prefix authorizes only by its exact value and only on the push's own command word. The classifier splits the RAW command with a quote-aware shlex tokenizer (never a regex on raw text, which split inside quotes/heredocs and blocked legit commits/PR bodies) and heredoc bodies are removed first.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-13 review round 2 pushed — threat model reframed, quote-split regression fixed, F5/F6/F8 closed — 140 guard cases, 5 mutations proven
 - 2026-09-12 PI-13 PR #47 needs work — quoted separators now block legitimate commits
 - 2026-09-12 PI-13 PR #47 draft — guard denies push reaching base branch behind any prefix/unnamed form — 31 guard cases added (113 total)
 - 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md la regola sulle verifiche che reintroducono il difetto (descriverle per effetto nei report) — rinviata per non confliggere con PI-22, emersa dalla review di PI-21
@@ -55,4 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
