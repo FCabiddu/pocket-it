@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh: task-id duplicate detection now uses next-wave.sh's own header regex (a declared id only, never the filename-guess fallback) so both scripts agree on what counts as the same id; a summary EPIC/STORY file is excluded before the check even sees it (same pre-existing files filter).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-25 PR #50 needs work — hyphenated words read as task ids — cause: first-round
 - 2026-09-12 PI-25 PR draft — doctor.sh flags duplicate task ids as ERROR — 8 new tests
 - 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md la regola sulle verifiche che reintroducono il difetto (descriverle per effetto nei report) — rinviata per non confliggere con PI-22, emersa dalla review di PI-21
 - 2026-09-12 retro: shared/lessons.md:17 offre ancora «apri una sessione nuova prima della terza» come azione dell'orchestratore, che non può farlo — da riformulare al prossimo retro (file suo), segnalato dalla review di PI-20
@@ -55,4 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
-- 2026-09-09 PI-3 PR #17 draft — doctor warns on stale EPIC/STORY summary Status — 8 tests
