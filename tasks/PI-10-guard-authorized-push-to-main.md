@@ -1,6 +1,6 @@
 # PI-10 — L'hook vieta all'orchestratore un push che le sue stesse istruzioni gli prescrivono
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: .claude/hooks/guard.sh, .claude/hooks/guard.test.sh, .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, .claude/skills/deps/SKILL.md
 **TAD**: none — segui la forma già usata per `gh pr merge` nello stesso hook
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-10-guard-authorized-push
 **PR**: 
 
 ## Goal
