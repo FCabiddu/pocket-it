@@ -43,9 +43,18 @@ fi
 # main/master (even under a refs/heads/ prefix) is only safe when the branch it resolves to isn't
 # main/master. Resolve the repo (a `-C <path>` on the same `git` invocation, else the nearest
 # preceding `cd <path>` in the command, else the hook's own cwd) and its current branch cheaply.
-if grep -qE 'git[[:space:]]+(-C[[:space:]]+\S+[[:space:]]+)?push\b' <<<"$CMD"; then
+#
+# The classifier below anchors on the `git` token *inside* each segment, after stripping any
+# leading `env`/`NAME=VALUE` assignments and git's own global options: a push must be classified
+# whatever sits in front of it — a variable assignment (`FOO=bar git push`), the audit prefix with
+# any value, or a one-off config (`git -c k=v push`). A form that reaches the base branch but is
+# not recognised is DENIED, never ignored. The gate therefore fires for any command that mentions
+# both `git` and `push`; the classifier returns an empty verdict (ALLOW) for git commands that are
+# not a push, so a broad gate is safe.
+if grep -qE '(^|[^[:alnum:]_])git([^[:alnum:]_]|$)' <<<"$CMD" && grep -qE '(^|[^[:alnum:]_])push([^[:alnum:]_]|$)' <<<"$CMD"; then
   PUSH_VERDICT=$(python3 - "$CMD" "$PWD" <<'PYEOF'
 import sys, re, os, subprocess, shlex
+from fnmatch import fnmatch
 
 cmd, hook_cwd = sys.argv[1], sys.argv[2]
 
@@ -65,6 +74,20 @@ def resolve_dir(path):
 
 def norm(ref):
     return re.sub(r'^refs/heads/', '', ref)
+
+def is_glob(ref):
+    # A refspec destination that is a glob (git's `*`, or shell globs `?`/`[`) can expand to
+    # main/master without the token ever spelling it out — the fourth way a push reaches the
+    # base branch without naming it (alongside --all, --mirror and --prune).
+    return any(ch in ref for ch in '*?[')
+
+def targets_base(ref):
+    # True when a (normalised) destination ref is, or as a glob matches, main/master. Exact
+    # match for a literal branch name; fnmatch so `refs/heads/*` (norm `*`) matches main while
+    # `refs/heads/task/*` (norm `task/*`) does not — that is what keeps ordinary task-branch
+    # cleanup passing while a base-reaching glob is blocked.
+    r = norm(ref)
+    return r in ('main', 'master') or fnmatch('main', r) or fnmatch('master', r)
 
 def is_force(tokens):
     # git's parse-options accepts clustered short flags (-uf, -fu, -qf, ...), not just a
@@ -116,22 +139,52 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     if m:
         tracked_cd = m.group(1)
         continue
-    # A leading POCKET_IT_ORCHESTRATOR_PUSH=1 is stripped before matching `git`, so the force
-    # and implicit-main checks below still run when the segment carries the authorization
-    # prefix — the prefix authorizes a plain push to main, never a force-push or a deletion.
-    m = re.match(r'^(?:POCKET_IT_ORCHESTRATOR_PUSH=1\s+)?git\s+(?:-C\s+(\S+)\s+)?push\b(.*)$', seg)
-    if not m:
-        continue
-    c_path, rest = m.group(1), m.group(2)
     try:
-        tokens = shlex.split(rest)
+        seg_tokens = shlex.split(seg)
     except ValueError:
-        tokens = rest.split()
+        seg_tokens = seg.split()
+    if not seg_tokens:
+        continue
+    # Strip any leading `env` command and NAME=VALUE assignment prefixes so the push is
+    # classified whatever sits in front of it: `FOO=bar git push`, `env X=1 git push`, and
+    # the audit prefix with ANY value (POCKET_IT_ORCHESTRATOR_PUSH=0/2/…). Whether the exact
+    # authorized value was given is decided in the shell (AUTHORIZED_PUSH, equality on `=1`);
+    # here a prefix must never hide the push from classification — that was the fail-open.
+    i = 0
+    while i < len(seg_tokens):
+        t = seg_tokens[i]
+        if t == 'env' or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', t):
+            i += 1
+            continue
+        break
+    if i >= len(seg_tokens) or seg_tokens[i] != 'git':
+        continue
+    i += 1
+    # Consume git's own global options, which precede the subcommand. The value-taking ones
+    # are enumerated so their argument is not mistaken for the subcommand — above all
+    # `git -c key=value push` (the standard one-off config) and `git -C <path> push`.
+    c_path = None
+    value_opts = {'-C', '-c', '--namespace', '--git-dir', '--work-tree',
+                  '--exec-path', '--super-prefix', '--config-env'}
+    while i < len(seg_tokens) and seg_tokens[i].startswith('-'):
+        opt = seg_tokens[i]
+        if opt in value_opts:
+            val = seg_tokens[i + 1] if i + 1 < len(seg_tokens) else None
+            if opt == '-C' and val is not None:
+                c_path = val
+            i += 2
+        else:
+            i += 1
+    if i >= len(seg_tokens) or seg_tokens[i] != 'push':
+        continue
+    tokens = seg_tokens[i + 1:]
     positional = [t for t in tokens if not t.startswith('-')]
     seg_force = is_force(tokens)
     seg_delete = has_delete_flag(tokens)
 
     implicit, explicit_main, destructive = False, False, False
+
+    has_all = any(t == '--all' for t in tokens if t.startswith('-'))
 
     if has_mirror_or_prune(tokens):
         # Can wipe main from the remote without a single token naming it (a glob refspec,
@@ -140,6 +193,13 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
         explicit_main = True
         destructive = True
 
+    if has_all:
+        # --all pushes every local branch, main included, without naming it — reaches the base
+        # branch like a glob refspec does. It is not destructive on its own (an ordinary
+        # fast-forward multi-branch push), so a forced --all is caught by seg_force while a
+        # plain one is a normal push to the base branch: blocked unless authorized.
+        explicit_main = True
+
     if len(positional) == 0:
         implicit = True
     elif len(positional) == 1:
@@ -147,10 +207,13 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
         seg_force = seg_force or plus_force
         if ':' in ref0:
             src, dst = ref0.split(':', 1)
-            if dst and norm(dst) in ('main', 'master'):
+            if dst and targets_base(dst):
                 explicit_main = True
                 if not src:
                     destructive = True  # empty source = delete, e.g. ":main"
+        elif is_glob(ref0):
+            if targets_base(ref0):  # e.g. `refs/heads/*` reaches main; `task/*` does not
+                explicit_main = True
         else:
             implicit = True
     else:
@@ -158,13 +221,16 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
         seg_force = seg_force or plus_force
         if ':' in ref:
             src, dst = ref.split(':', 1)
-            if dst and norm(dst) in ('main', 'master'):
+            if dst and targets_base(dst):
                 explicit_main = True
                 if not src:
                     destructive = True  # empty source = delete, e.g. "origin :main"
         elif ref == 'HEAD':
             implicit = True
-        elif norm(ref) in ('main', 'master'):
+        elif is_glob(ref):
+            if targets_base(ref):  # `origin refs/heads/*` reaches main; `origin task/*` does not
+                explicit_main = True
+        elif targets_base(ref):
             explicit_main = True
             if seg_delete:
                 destructive = True  # "-d/--delete origin main"
