@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - cleanup-merged.sh: ancestry or topology never proves a branch has work of its own — a fresh branch is an ancestor of its base, and the base it came from may since be merged and deleted. 'Commits of its own' is read from the branch's own reflog (a commit/cherry-pick/revert/am/merge-commit entry, or a rebase replaying one, still in the tip's history); fresh (only 'branch: Created from') and no-reflog branches are kept. A merged PR removes only if its headRefOid contains the local tip. Under set -o pipefail never 'producer | grep -q' (the early exit SIGPIPEs the producer and the pipe reads as false).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-22 PR #46 delta needs work — inherited reflog, §5 BR before branch
 - 2026-09-12 PI-22 PR #46 round 2 — commits of its own read from branch reflog; worktree guard rule executable — 12 checks added
 - 2026-09-12 PI-22 PR #46 needs work — fresh branch off merged epic removed
 - 2026-09-12 PI-22 PR #46 draft — cleanup-merged keeps no-own-commit worktrees; lost-worktree stop rule — 17 test checks added
@@ -55,7 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests
 - 2026-09-11 PI-6 PR #24 draft - next-wave.sh total-order sort key for mixed alphanumeric ids - 6 tests
 - 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged
-- 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
-- 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
-- 2026-09-09 PI-4 PR #19 draft — guard.sh resolves branch for bare/HEAD git push — 20 tests
-- 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator

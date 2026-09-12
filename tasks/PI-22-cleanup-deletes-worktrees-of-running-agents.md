@@ -1,6 +1,6 @@
 # PI-22 — `cleanup-merged.sh` cancella il worktree di un agente che sta ancora lavorando
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
