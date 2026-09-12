@@ -52,4 +52,36 @@ OUT=$(cd "$R2" && bash "$SCRIPT"); rc=$?
 ok "AC4 flat board: no summary warning emitted"     '! has "update the summary"'
 ok "AC4 flat board: exit 0, 2 task files counted"   '[[ $rc -eq 0 ]] && has "doctor: 0 error(s), 1 warning(s), 2 task file(s)"'
 
+# --- repo 3: duplicate task ids (PI-25) ---
+# task() ties the header id to the filename, so a real duplicate needs two files declaring the
+# same id in their header with different filenames — write those by hand instead of via task().
+decl(){ # decl <path> <declared-id> [title]
+  mkdir -p "$(dirname "$1")"
+  printf '# %s — %s\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: `x`\n**TAD**: none\n\n## Acceptance criteria\n- ok\n' "$2" "${3:-t}" > "$1"
+}
+R3="$S/repo3"
+q git init -q -b main "$R3"
+decl "$R3/tasks/PI-9-hello.md" "PI-9" "Hello"          # AC1: two files declare PI-9
+decl "$R3/tasks/PI-9-world.md" "PI-9" "World"
+decl "$R3/tasks/PI-19-other.md" "PI-19" "Other"        # AC3: PI-9 vs PI-19 must not collide
+decl "$R3/tasks/EPIC-9-x/EPIC.md" "PI-9" "Epic summary"        # AC4: excluded before duplicate check ever sees it
+decl "$R3/tasks/EPIC-9-x/STORY-9.1.md" "PI-9" "Story summary"  # AC4: same
+q git -C "$R3" add -A; q git -C "$R3" commit -qm board
+OUT=$(cd "$R3" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC1 duplicate id is an ERROR with id and both paths" 'has "ERROR duplicate task id PI-9: tasks/PI-9-hello.md, tasks/PI-9-world.md"'
+ok "AC1 duplicate id fails doctor (exit 1)"               '[[ $rc -eq 1 ]]'
+ok "AC3 PI-9 and PI-19 not treated as the same id"        '! has "duplicate task id PI-19"'
+ok "AC4 epic/story summaries not pulled into the duplicate error" '! has "EPIC.md" && ! has "STORY-9.1.md"'
+
+# --- repo 4: no duplicate ids — the check is silent (AC2) ---
+R4="$S/repo4"
+q git init -q -b main "$R4"
+decl "$R4/tasks/PI-30-a.md" "PI-30" "A"
+decl "$R4/tasks/PI-31-b.md" "PI-31" "B"
+q git -C "$R4" add -A; q git -C "$R4" commit -qm board
+OUT=$(cd "$R4" && bash "$SCRIPT"); rc=$?
+ok "AC2 no duplicates: check produces no output"  '! has "duplicate task id"'
+ok "AC2 no duplicates: doctor stays green"        '[[ $rc -eq 0 ]]'
+
 exit $fail

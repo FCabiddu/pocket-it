@@ -1,6 +1,6 @@
 # PI-25 — `doctor.sh` non si accorge di due task con lo stesso id
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/doctor.sh, bin/doctor.test.sh
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-25-doctor-duplicate-ids
 **PR**: 
 
 ## Goal
