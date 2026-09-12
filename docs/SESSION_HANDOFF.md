@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - cleanup-merged.sh: ancestry never proves a branch merged — a branch just created from a base is its ancestor. Keep condition: tip on a base's first-parent line (checked first); a merged PR removes only if its headRefOid contains the local tip. Under set -o pipefail never 'rev-list | grep -q' (early exit SIGPIPEs rev-list and the pipe reads as false).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-22 PR #46 needs work — fresh branch off merged epic removed
 - 2026-09-12 PI-22 PR #46 draft — cleanup-merged keeps no-own-commit worktrees; lost-worktree stop rule — 17 test checks added
 - 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md la regola sulle verifiche che reintroducono il difetto (descriverle per effetto nei report) — rinviata per non confliggere con PI-22, emersa dalla review di PI-21
 - 2026-09-12 retro: shared/lessons.md:17 offre ancora «apri una sessione nuova prima della terza» come azione dell'orchestratore, che non può farlo — da riformulare al prossimo retro (file suo), segnalato dalla review di PI-20
@@ -55,5 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
-- 2026-09-09 PI-3 PR #17 draft — doctor warns on stale EPIC/STORY summary Status — 8 tests
-- 2026-09-09 PI-1 PR #18 draft — bin/worktree.sh + cleanup-merged AC6 — 18+21 tests
