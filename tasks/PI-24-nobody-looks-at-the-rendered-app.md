@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-24-render-the-app
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/48
 
 ## Goal
 In un progetto reale il proprietario ha aperto l'app nel browser e ha trovato «tantissimi errori grafici», a partire da titoli con le lettere tagliate. Nessun controllo della pipeline li aveva visti, e l'analisi ha trovato perché: **nessun agente ha fra i suoi compiti quello di guardare l'app come la guarda un utente.**
