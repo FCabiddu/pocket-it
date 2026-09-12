@@ -45,3 +45,13 @@ Il difetto sta nel blocco Python delle righe 36-113 di `.claude/hooks/guard.sh`,
 Non allargare la soluzione a «riconosci ogni possibile prefisso»: è una rincorsa che si perde. La direzione giusta è che una forma non riconosciuta venga **negata**, non ignorata — e che il valore del prefisso di audit sia confrontato per uguaglianza esatta, non per presenza.
 
 Dipende da PI-10 perché tocca le stesse righe: va fatto dopo, non insieme.
+
+## Ampliamento dopo la review di PI-10
+
+La review del terzo giro di PI-10 ha misurato due altre forme che passano verso il ramo base, **sia prima sia dopo** quella PR, con e senza prefisso: un refspec con glob che mappa tutti i rami su tutti i rami, e `--all` con force. Sono fail-open preesistenti e non regressioni, e stanno nello stesso secchio di questo task: la guardia non le nega, non le vede.
+
+Hanno in comune con le altre una cosa che è il vero criterio: **raggiungono il ramo base senza nominarlo**. Una guardia che cerca il nome del ramo non le troverà mai.
+
+- [ ] AC6 — Dato un push verso il ramo base espresso con un refspec glob che non nomina il ramo, quando l'hook lo valuta, allora lo blocca.
+- [ ] AC7 — Dato `--all` combinato con una forma di force, quando l'hook lo valuta, allora lo blocca.
+- [ ] AC8 — Dati i push legittimi verso rami di task nelle stesse grafie, quando l'hook li valuta, allora passano: la stretta non deve prendere in mezzo la pulizia ordinaria.
