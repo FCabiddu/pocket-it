@@ -24,8 +24,8 @@ flowchart TD
       direction LR
       NW[/"next-wave.sh<br/>what is ready"/] --> DEV["developer ×N<br/>worktrees, in parallel<br/>opus if Risk: high"]
       DEV --> PRS[("draft PRs<br/>AC → tests")]
-      PRS --> VER[/"verify.sh<br/>lint · types · affected tests"/] --> REV["reviewer ×1<br/>comments + labels"]
-      REV -- needs-work ≤ 2 rounds --> DEV
+      PRS --> VER[/"verify.sh<br/>lint · types · affected tests"/] --> REV["reviewer ×N<br/>grouped by cost<br/>comments + labels"]
+      REV -- needs-work: cause fixed first --> DEV
       REV -- approved --> MERGE["merge<br/>orchestrator by default · 👤 if draft"]
     end
     GATE --> NW
@@ -54,7 +54,7 @@ No agent asks questions at runtime. `/intake` asks you once; everything else rea
 | `/ux-ui-designer` | Design Spec (pipeline), site audit, or a design direction | Opus |
 | `/tech-architect` | first feature: `PROJECT_TECH_ANALYSIS.md`; later: a short `_TECH_DELTA.md`; `best-practices/` per tech group | Opus |
 | `/implementation-planner` | self-contained task files, `INDEX.md`, `DEPS.json` with waves; contract-first so backend and frontend run in the same wave; `Risk` per task | Sonnet |
-| `/run-wave` | launches every ready task in parallel (worktrees; Opus for high risk), one reviewer for the wave, up to two fix rounds, merges the approved PRs (unless `draft`), report | — (your session) |
+| `/run-wave` | launches every ready task in parallel (worktrees; Opus for high risk), reviewers grouped by measured cost, a red PR gets its cause fixed at the source before another round, merges the approved PRs (unless `draft`), report | — (your session) |
 | `/developer Issue: T-1.2.3 — title Label: Backend\|Frontend\|DevOps` | one task with its unit tests, task branch, draft PR mapping criteria to tests | Sonnet / Opus |
 | `/reviewer Tasks: T-1.2.3, T-1.2.4` | `verify.sh` first, then diff vs criteria, contract, TAD, best practices | Opus |
 | `/qa-engineer` | integration/E2E only for QA tasks the planner justified | Sonnet |
@@ -107,7 +107,7 @@ python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days 7   # where the to
 
 ## Cost model
 
-The 2026-09 audit found the bill dominated by an orchestration session on a 1M-context model, kept open for a day and implementing tasks itself, and by implementing agents that re-read files and ran 400+ turns. v2 counters both: the orchestrator stays thin (`/run-wave` is a recipe around two scripts), agents read the task file plus cited sections only and have `maxTurns`, unit tests ship with the code while integration/E2E are on-demand, the reviewer runs once per wave after a mechanical `verify.sh`, and hard rules live in a hook. `usage-report.py` tells you every week whether that is still true.
+The 2026-09 audit found the bill dominated by an orchestration session on a 1M-context model, kept open for a day and implementing tasks itself, and by implementing agents that re-read files and ran 400+ turns. v2 counters both: the orchestrator stays thin (`/run-wave` is a recipe around two scripts), agents read the task file plus cited sections only and have `maxTurns`, unit tests ship with the code while integration/E2E are on-demand, reviewers run in parallel groups sized by cost after a mechanical `verify.sh`, and hard rules live in a hook. `usage-report.py` tells you every week whether that is still true.
 
 ## Repository structure
 
