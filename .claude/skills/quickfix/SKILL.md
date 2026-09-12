@@ -5,7 +5,7 @@ For a bug, a copy change, a small UI fix or a chore that fits in one PR and need
 Arguments: a plain-language description of the change: `$ARGUMENTS`
 
 ### 1. Sanity
-`cat .pocket-it.json 2>/dev/null` (defaults if missing). `git status --short | head` — if the working tree is dirty on tracked files, say so and stop: the developer branches off the base branch and nothing is lost, but the user should know.
+`cat .pocket-it.json 2>/dev/null` (defaults if missing). `git status --short | head` — if the working tree is dirty on tracked files, note it in the report and continue: the developer works in its own worktree off the base branch, so the dirty files never reach it; nothing here is a reason to stop the launch.
 
 If the request is clearly not small (new screens + new tables + new endpoints, or "add a feature that…"), say so in one line and offer `/intake` → pipeline instead. Do not stretch the quickfix lane.
 
@@ -65,7 +65,12 @@ When it reports, one Agent call: `subagent_type: reviewer`, prompt `Tasks: QF-{n
 
 ### 4. Close
 - APPROVED: merge it — `POCKET_IT_USER_MERGE=1 gh pr merge {m} --squash --delete-branch` (the hook's authorised form; the prefix is the audit trail that the merge is covered by the `automerge: true` default). Skip the merge only when config `automerge` is `false` or the user's request contains `draft`: then report the PR as ready for the user to merge. After a merge, `git pull --ff-only` the base branch and make sure `tasks/QF-{n}-*.md` says `**Status**: Done` (set it if the developer left it otherwise).
-- NEEDS WORK: a second developer round with `Branch: … ALREADY EXISTS` and `PR: {m}` plus the reviewer's findings verbatim, then one more reviewer call with `Mode: delta`; at most two rounds, then it goes to the user. Never merge a `needs-work` PR without that re-review, even for a one-command fix.
+- NEEDS WORK: before relaunching, write a few lines on **why** this PR needs another round — a second is a symptom, a third even more. Classify the cause, at least among these, and put the fix where the cause lives, not just in the next developer prompt:
+  - **The finding was an example, not the specification** (the task or finding named one or two cases of a class, bypassed by a third case): fix the acceptance criterion or the finding to enumerate the whole class.
+  - **The base moved under the PR** (main changed while it waited; branch tests were green against the old state): merge/rebase onto the current base and rerun the scoped tests before sending it back.
+  - **The verification reintroduced the defect** (a report or check written to prove something absent contains that same thing): rewrite how the check is described — by its effect, never by repeating the forbidden content.
+  - Any other cause: name it plainly, fix it at its source.
+  Then a developer round with `Branch: … ALREADY EXISTS` and `PR: {m}` plus the reviewer's findings verbatim **and the cause you found**, then one more reviewer call with `Mode: delta`. Only when the cause is not fixable this way, or recurs after being fixed once, park the PR as the last resort — `gh pr comment {m} --body "⏸ parked — {reason}"`, `gh label create parked --color eab308 2>/dev/null || true; gh pr edit {m} --add-label parked`, leave the task `Needs Work`; do this because the analysis says so, never because a round count was reached. Never merge a `needs-work` PR without that re-review, even for a one-command fix.
 - Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "QF-{n} PR #{m} {merged|approved, awaiting user merge|needs work} — {title}"`, commit the task file, the index and the handoff on the base branch, `POCKET_IT_ORCHESTRATOR_PUSH=1 git push` (the hook's authorized form for a push to the base branch, same audit-prefix shape as the merge above).
 - Then `bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh`: removes the worktree and local branch of the merged PR (dirty, locked and unmerged ones are kept and listed). Report its summary line (`cleanup-merged: N worktrees removed, … freed X MB`).
 - Report: PR URL, review outcome, merged or awaiting the user (draft), what is next.

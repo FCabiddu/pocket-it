@@ -25,7 +25,7 @@ awk '/^## Fatti/{f=1;next} /^## /{f=0} f' docs/SESSION_HANDOFF.md               
 gh pr list --state all --limit 100 --search "{scope}" --json number,title,mergedAt,labels,headRefName
 ```
 
-For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json comments --jq '.comments[].body' | head -80`), whether it carried `needs-work`, how many review rounds. From `tasks/`: estimate and budget of each task (`grep -hE '^\*\*(Estimate|Budget)' tasks/{id}-*.md`). Read the best-practices files once.
+For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json comments --jq '.comments[].body' | head -80`), whether it carried `needs-work`, how many review rounds, and — for any PR with more than one round — the cause line a delta review should have stated (Step 0 of `reviewer.md`): an example mistaken for the whole specification, the base moving under the PR, the verification reintroducing the defect, or another one. A round count with no cause read is not evidence yet; the cause is what turns into a rule. From `tasks/`: estimate and budget of each task (`grep -hE '^\*\*(Estimate|Budget)' tasks/{id}-*.md`). Read the best-practices files once.
 
 ## Step 2 — Find the patterns (≥ 2 occurrences, or 1 with high cost)
 
@@ -35,6 +35,7 @@ For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json 
 | Estimation | `BUDGET` lines: a kind of task (label × estimate) that ran over while progressing, ≥ 2 times | a `handoff.sh fact "Stima: {kind} → {next size}, perché …"` the planner reads before estimating; plus the proposed planner line |
 | Stall | `STALL` lines, agents in the usage report with >150 turns and no PR, three-attempt loops | a stop rule or a best-practice ("when X fails three times, do Y"); if the task was too big, a split heuristic for the planner |
 | Weak spec | rework caused by an ambiguous or missing criterion | the BA/planner Given/When/Then wording — propose the exact line |
+| Review rounds | a PR needed a 2nd/3rd round: group them by **cause**, not by count — an example mistaken for the whole specification (a guard finding that named instances, not the class), the base moving under the PR (no merge-and-retest before sending to review), a verification that reintroduced the defect (a check describing content by repeating it instead of by its effect) | the cause's own home: the task/finding wording, a `verify.sh` step (merge base before scoped tests), or a report-writing rule — never a generic "review harder" note |
 | Wrong scope | files outside `**Files**`, tasks that turned out to be two | planner heuristic (split rule, file ownership) |
 | Tooling | worktree-isolation blocks, classifier denials, `verify.sh` gaps, mechanical failures reaching review | the shared rules or a script — propose the exact line; count them so the next retro sees the trend |
 | Process | `general-purpose` launches, sessions with average context > 200k, agents relaunched instead of resumed | the orchestrator's rules (`~/.claude/CLAUDE.md` or its entry skill) — propose the line, with the count |
@@ -65,5 +66,5 @@ Write the full report (≤ 40 lines, the sections below) to `docs/reports/retro-
 - Patterns found, each with count and the rule written (or proposed).
 - The PR URLs (project: merged; pocket-it lessons: merged) — or "left in draft because {automerge false | Draft requested}".
 - Lessons: new (provisional), confirmed, removed — one line each.
-- "Proposed changes to pocket-it" — exact lines, copy-pasteable, only for confirmed lessons that deserve promotion to a rule.
-- "Not actioned" — one-offs, with a word on why.
+- "Proposed changes to pocket-it" — exact lines, copy-pasteable, only for confirmed lessons that deserve promotion to a rule (the promotion itself is the one deliberate human step in this pipeline, by existing design — not a stand-in for every other open point).
+- "Not actioned" — one-offs, with a word on why. Keep this list to genuine one-offs, never a parking spot for a pipeline mechanism you could have fixed in Step 3: a repeated review-grouping, round-limit, retry, model-choice or compaction snag is a pattern you write the rule for now, in this same pass, not a question left open. Only a finding that turned out to need a business/product call, money, credentials, an account, a permission, client-only data, or a physical/human check belongs to the user, and never as an item mixed into "Not actioned" — name it separately and say why it is the exception.

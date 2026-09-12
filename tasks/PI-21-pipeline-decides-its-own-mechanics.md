@@ -1,6 +1,6 @@
 # PI-21 — La pipeline rimanda all'utente decisioni sul proprio funzionamento
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, .claude/agents/reviewer.md, .claude/agents/retro.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-21-pipeline-decides-mechanics
 **PR**: 
 
 ## Goal
@@ -33,11 +33,11 @@ La distinzione da rendere esplicita:
 - **Dell'orchestratore:** tutto ciò che riguarda il meccanismo — limiti di turni e budget, come si raggruppano le review, quanti giri prima di scalare, con quale modello si riprova, quando compattare, conflitti, memoria persa, esecuzioni intermittenti, agenti bloccati. L'orchestratore decide, corregge dalla corsia giusta, e **notifica**. Non chiede.
 
 ## Acceptance criteria
-- [ ] AC1 — Dato `run-wave` con una wave di più PR del massimo che un reviewer gestisce entro i suoi turni, quando si arriva alla review, allora lo skill prescrive più reviewer in parallelo, ciascuno su un gruppo limitato di PR, e dice qual è il limite del gruppo e perché.
-- [ ] AC2 — Dati `run-wave` e `quickfix`, quando una PR è ancora rossa dopo i giri normali di review, allora gli skill prescrivono una scalata eseguibile senza l'utente — per esempio un developer nuovo su `opus` con tutti i finding, oppure la divisione del task, oppure il parcheggio della PR con motivo scritto proseguendo sul resto — e non rimandano la decisione all'utente.
-- [ ] AC3 — Dati `reviewer.md` e `retro.md`, quando un agente chiude il report con punti aperti, allora il file gli prescrive di separarli nelle due categorie, e di non attribuire all'utente una questione sul funzionamento della pipeline.
-- [ ] AC4 — Dato ognuno dei quattro file, quando lo si rilegge per intero, allora non resta nessuna frase che mandi all'utente una decisione sul meccanismo della pipeline.
-- [ ] AC5 — Dati i punti che restano davvero umani, quando uno di essi si presenta, allora i testi dicono di fermare solo quel punto e continuare sul resto, non di fermare tutto.
+- [x] AC1 — Dato `run-wave` con una wave di più PR del massimo che un reviewer gestisce entro i suoi turni, quando si arriva alla review, allora lo skill prescrive più reviewer in parallelo, ciascuno su un gruppo limitato di PR, e dice qual è il limite del gruppo e perché.
+- [x] AC2 — Dati `run-wave` e `quickfix`, quando una PR richiede un secondo giro di review (e a maggior ragione un terzo), allora gli skill prescrivono, prima di rilanciare il developer, un'analisi di causa — perché il giro precedente non ha chiuso il problema — classificata in almeno queste tre famiglie, aperta ad altre: il finding o il task descrivevano un esempio e non l'intera specifica; la base si è mossa sotto la PR nel frattempo; la verifica stessa ha reintrodotto il difetto. La correzione va scritta dove la causa la rende necessaria (il task/finding, il passo di verifica, la regola di stesura dei report), poi si riprende la PR con quella correzione in mano. Il parcheggio della PR con motivo scritto resta come ultima risorsa dopo l'analisi — mai come risposta a un conteggio di giri — e senza rimandare la decisione all'utente.
+- [x] AC3 — Dati `reviewer.md` e `retro.md`, quando un agente chiude il report con punti aperti, allora il file gli prescrive di separarli nelle due categorie, e di non attribuire all'utente una questione sul funzionamento della pipeline.
+- [x] AC4 — Dato ognuno dei quattro file, quando lo si rilegge per intero, allora non resta nessuna frase che mandi all'utente una decisione sul meccanismo della pipeline.
+- [x] AC5 — Dati i punti che restano davvero umani, quando uno di essi si presenta, allora i testi dicono di fermare solo quel punto e continuare sul resto, non di fermare tutto.
 
 ## Tests expected
 Nessun test automatico: sono file di prosa e di configurazione di agenti. AC4 si verifica rileggendo ciascun file per intero e cercando le frasi che rimandano all'utente con più di una formulazione, perché la stessa cosa si può dire senza la parola ovvia. Riporta nel report l'esito di ogni ricerca. Integration/E2E: non servono.
@@ -50,3 +50,5 @@ Non alzare `maxTurns` del reviewer come soluzione: è una rete di sicurezza, e a
 `shared/lessons.md` e `CLAUDE.md` non fanno parte di questo task: li tocca PI-20.
 
 Questo repo è pubblico: niente dei progetti su cui gira la pipeline, né di entry point privati.
+
+**Cambio di scope su AC2, recepito.** La scalata a modello più capace / divisione / parcheggio, come prima risposta a un secondo o terzo giro rosso, corregge il sintomo e non la causa. `run-wave` e `quickfix` ora prescrivono un'analisi di causa prima di rilanciare il developer, classificata almeno in tre famiglie osservate su PR reali arrivate al terzo giro: (1) il finding o il task descrivevano un esempio (due grafie di un comando bloccate da una guardia di sicurezza) e non l'intera classe, bypassata da una terza grafia — corretto enumerando l'insieme nel task/finding, non ripetendo l'istanza; (2) la base si è mossa sotto la PR (una lingua di default cambiata su main dopo l'approvazione) e i test, verdi sul branch, assumevano lo stato vecchio — corretto con un merge/rebase e un nuovo giro di test scoped prima di rimandare in review; (3) la verifica ha reintrodotto il difetto (un comando o un report che dimostra l'assenza di un nome lo ripete letteralmente) — corretto descrivendo la verifica per effetto, mai per contenuto. `reviewer.md` in `Mode: delta` ora dichiara questa causa anche quando la mancanza era sua, e i finding su una classe di problemi elencano l'insieme, non uno o due esempi. `retro.md` raccoglie i giri di review in più per causa, non solo per numero. Il parcheggio resta l'ultima risorsa dopo l'analisi, mai la risposta a un conteggio di giri; i reviewer paralleli su gruppi limitati e la separazione umano/orchestratore restano come nella prima stesura.

@@ -18,6 +18,8 @@ The user has provided: {{ARGUMENTS}}
 
 Read `~/.claude/agents/pocket-it/.claude/agents/shared/implementing-common.md` once (board helpers, read discipline) and the facts of `docs/SESSION_HANDOFF.md` (shared rules §3): a PR that violates a fact already learned on this project is a finding, and a finding you make twice on the same theme is something to write down with `handoff.sh fact` so the next developer reads it before coding. Load `.pocket-it.json`. Parse arguments: `PRs: 12, 13` and/or `Tasks: T-1.2.3, …`, optional `Mode: full|code-quality-only|delta` (default full; **delta** = re-review after a NEEDS WORK: read only the commits since your last review comment — `git log --oneline <last-reviewed-sha>..origin/<branch>` — check each listed finding is resolved, look for regressions in the touched files only, run `verify.sh`, swap the labels; never re-read the whole PR), `Draft: yes` (the user asked for draft PRs, or config `automerge` is false: review only, the user merges), `TAD:`, `BestPractices:`. Without `Draft: yes`, an approved PR is merged by the orchestrator by default — say so in every approval.
 
+**In delta mode, before anything else, say in one line why this round was needed at all** — even when the gap was your own: the previous finding described one or two cases of a class instead of the whole set (a guard closed for two command shapes, open for a third), the base moved under the PR since you last read it (a shared value changed on main, tests green on the branch became stale), the verification itself was the problem (a check written to prove something absent still contained it), or another named cause. This line is what tells the orchestrator where to place the real fix — it is not restating that the PR is still red.
+
 **Never guess a PR number.** Resolve each target in this order: `PR:` given → use it; task ID given → `**PR**:` line in `tasks/{ID}-*.md`; branch given → `gh pr list --head {branch} --json number --jq '.[0].number'`. If none resolves, report "no PR found for {target}" and skip it.
 
 Extract from the TAD only what you check against: §5.2 (contract), §6.2 (security controls), §4.3 + §8.2 (schema/patterns), §7.6 (a11y target):
@@ -84,17 +86,21 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 **Scope:** files touched outside `**Files**:` need a one-line justification in the PR; unexplained drift = finding.
 **Acceptance criteria (full mode):** each criterion has evidence in the diff; absent or contradicted = not met.
 
-Record each failing criterion as `file:line — rule — what to change`.
+Record each failing criterion as `file:line — rule — what to change`. **When the finding is about a class of unsafe forms — a bypass, an injection shape, a forbidden pattern with more than one spelling — enumerate the whole class you found, not one or two instances of it**: a guard rejected for two command shapes and reopened by a third is a finding that named examples instead of the specification, and it is why the same PR comes back a third time. List every shape you can identify now, in the finding itself.
 
 ## Step 5 — Decision
 
 GitHub refuses `gh pr review --approve/--request-changes` on PRs opened by the same account, so use comments and labels:
 
 - **APPROVED:** `gh pr ready $N` · `gh pr comment $N --body "✅ Review passed — {n} criteria checked. {merge: orchestrator (default) | merge: user (draft requested)}"` · `gh label create approved --color 22c55e 2>/dev/null || true; gh pr edit $N --add-label approved --remove-label needs-work 2>/dev/null` · task stays `Done` · `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "{ID} PR #{N} approved — merge: {orchestrator|user}"`.
-- **NEEDS WORK:** (also `handoff.sh log "{ID} PR #{N} needs work — {first finding, six words}"`) `gh pr comment $N --body "$(cat <<'EOF' … EOF)"` with the findings list (file:line · rule · fix), `gh label create needs-work --color ef4444 2>/dev/null || true; gh pr edit $N --add-label needs-work`, and `set_status "Needs Work"` on the task file (tolerant sed from the shared rules — both `**Status**:` and `**Status:**` forms). Never `gh pr merge`.
+- **NEEDS WORK:** (also `handoff.sh log "{ID} PR #{N} needs work — {first finding, six words}"`) `gh pr comment $N --body "$(cat <<'EOF' … EOF)"` with the findings list (file:line · rule · fix) — in `Mode: delta`, lead the comment with the one-line cause from Step 0 — `gh label create needs-work --color ef4444 2>/dev/null || true; gh pr edit $N --add-label needs-work`, and `set_status "Needs Work"` on the task file (tolerant sed from the shared rules — both `**Status**:` and `**Status:**` forms). Never `gh pr merge`.
 
 Do not fail on style, naming taste, or anything not derived from the TAD, the task or the best-practices files.
 
 ## Step 6 — Report (≤ 8 lines — the findings live in the PR comment, not here)
 
-Line 1: CI mode (`none` / `dev` / `prod`) and `verify.sh` result. Then one line per PR: `{ID} — PR #{N} — APPROVED (merge: orchestrator|user) | NEEDS WORK: {n} findings, first: {six words}`. One line for conflicts resolved / CI fixes dispatched, if any. One line for anything the orchestrator must decide (a fact to write, a config mismatch). Final line: `APPROVED: {IDs}` · `NEEDS WORK: {ID [Label] …}` · `SKIPPED: {targets with no PR}`. Do not restate findings, evidence or what you checked: the orchestrator does not read diffs, and the developer reads your PR comment.
+Line 1: CI mode (`none` / `dev` / `prod`) and `verify.sh` result. Then one line per PR: `{ID} — PR #{N} — APPROVED (merge: orchestrator|user) | NEEDS WORK: {n} findings, first: {six words}`. One line for conflicts resolved / CI fixes dispatched, if any.
+
+If you close with open points, keep them in two lists, never blended into one, and never call a pipeline question a decision for the user: `ORCHESTRATOR: {…}` for anything about how the pipeline itself runs — a fact worth writing, a config mismatch, a wave too big for one reviewer, a PR still red after its rounds, a flaky check — the orchestrator reads this and acts, it is never put to the user. `HUMAN: {…}` only for what truly needs the user — a business or product call, money, credentials, an account, a permission, data only the client has, a physical or human check, a production deploy — and name only that one point; it never widens to the rest of the review.
+
+Final line: `APPROVED: {IDs}` · `NEEDS WORK: {ID [Label] …}` · `SKIPPED: {targets with no PR}`. Do not restate findings, evidence or what you checked: the orchestrator does not read diffs, and the developer reads your PR comment.
