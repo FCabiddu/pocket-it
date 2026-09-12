@@ -15,8 +15,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
 - design-compass.md: no line-height formula from font metrics predicts glyph clipping — measured false negative (Rockwell A+D=1.0 clips at lh 1.0, DOM says no overflow) and false positive (Avenir Next A+D=1.366 clean at lh 1.12, DOM says overflow); verify text clipping on pixels only, never getBoundingClientRect/scrollHeight.
 - CSS: to widen a masking box for descender/accent room without changing line pitch, put ALL compensating negative margin on one side (e.g. margin-bottom) — splitting it top+bottom doesn't fully collapse between adjacent lines and the pitch widens anyway (measured 0.92em -> 1.12em).
+- A pixel check for clipped text must neutralise every clipper, not just overflow and clip-path: overflow hidden|clip, clip rect(), contain paint|content|strict, content-visibility, mask / -webkit-mask-* — measured: with contain:paint or mask-image the as-is and overflow:visible+clip-path:none shots are identical while the ink is cut.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-23 PR #49 needs work (delta) — mask offset and clipper class incomplete — cause: example-not-class
 - 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
 - 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
 - 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
@@ -56,4 +58,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
