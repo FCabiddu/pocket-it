@@ -17,4 +17,4 @@ Write `tasks/QF-{n}-deps-rollup-{YYYY-MM}.md` with the quickfix template (`Label
 Same as `/quickfix` §3–§4 (developer → reviewer with `verify.sh` → merge with the audit prefix). After the merge: close every folded dependabot PR with `gh pr close {n} --comment "Folded into #{m}"` and `gh pr list --author app/dependabot --state open` must be empty except majors. Log: `handoff.sh log "deps {YYYY-MM}: {k} bumps folded into PR #{m}, {j} majors left as tasks"`.
 
 ### 4. Reduce the noise at the source (once per project)
-If `.github/dependabot.yml` has `schedule.interval: weekly` and no `groups`, that scheduling is a pipeline setting, not a business one: edit it yourself (monthly + grouped form — one group for minor/patch, majors ungrouped), commit it on the base branch, and report the change made — not a line for the user to approve first.
+If `.github/dependabot.yml` has `schedule.interval: weekly` and no `groups`, propose in the report the monthly + grouped form (one group for minor/patch, majors ungrouped) — as a line the user can approve, not an edit from here.
