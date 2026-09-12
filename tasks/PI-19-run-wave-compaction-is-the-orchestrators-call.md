@@ -1,6 +1,6 @@
 # PI-19 — `run-wave` fa decidere all'utente una cosa che deve decidere l'orchestratore
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: .claude/skills/run-wave/SKILL.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-19-compaction-is-orchestrator-call
 **PR**: 
 
 ## Goal
@@ -30,10 +30,10 @@ Il tono cambia di conseguenza: non una domanda all'utente, ma una riga che const
 La stessa regola è già stata riscritta nell'entry point privato dell'orchestratore: questo task allinea lo skill pubblico, non inventa una regola nuova.
 
 ## Acceptance criteria
-- [ ] AC1 — Dato il testo della sezione, quando lo si legge, allora attribuisce la decisione all'orchestratore e non all'utente, e non è formulata come una domanda.
-- [ ] AC2 — Dato lo stesso testo, quando lo si legge, allora dice esplicitamente che l'esecuzione non è del modello, così nessuno ci legge un'azione eseguibile che non esiste.
-- [ ] AC3 — Dato lo stesso testo, quando lo si legge, allora elenca segnali contabili per decidere, non una soglia di contesto che il modello non può leggere.
-- [ ] AC4 — Dato il resto dello skill, quando lo si rilegge, allora non resta nessun'altra frase che rimandi all'utente la stessa decisione.
+- [x] AC1 — Dato il testo della sezione, quando lo si legge, allora attribuisce la decisione all'orchestratore e non all'utente, e non è formulata come una domanda.
+- [x] AC2 — Dato lo stesso testo, quando lo si legge, allora dice esplicitamente che l'esecuzione non è del modello, così nessuno ci legge un'azione eseguibile che non esiste.
+- [x] AC3 — Dato lo stesso testo, quando lo si legge, allora elenca segnali contabili per decidere, non una soglia di contesto che il modello non può leggere.
+- [x] AC4 — Dato il resto dello skill, quando lo si rilegge, allora non resta nessun'altra frase che rimandi all'utente la stessa decisione.
 
 ## Tests expected
 Nessun test automatico: è un file di prosa. Verifica rileggendo il file intero, e cerca le altre occorrenze con un `grep` su «compact» prima di dichiarare AC4. Integration/E2E: non servono.
