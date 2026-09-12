@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh / next-wave.sh: an id needs a mandatory numeric segment (`^#\s*([A-Za-z]+(?:-[A-Za-z]+)*-\d+(?:\.\d+)*)`, identical in both files) — a plain hyphenated word ("Follow-up") is not an id and the file is skipped, and a trailing "." after the last digit is never swallowed into the id. The looser first-round regex (`[A-Za-z]+(?:-[\w.]+)+`) matched any hyphenated word and produced false "duplicate id" errors on a real board. doctor.sh's duplicate check counts only a declared header id (never the filename-guess fallback); a summary EPIC/STORY file is excluded before the check even sees it (same pre-existing files filter).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-25 PR #50 needs work (delta) — id regex drops alphanumeric real ids — cause: example-not-class
 - 2026-09-12 PI-25 PR #50 fix pushed — id regex now requires a numeric segment, AC3 test hardened
 - 2026-09-12 PI-25 PR #50 needs work — hyphenated words read as task ids — cause: first-round
 - 2026-09-12 PI-25 PR draft — doctor.sh flags duplicate task ids as ERROR — 8 new tests
@@ -55,4 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
