@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-19-compaction-is-orchestrator-call
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/42
 
 ## Goal
 La sezione «Session hygiene» di `.claude/skills/run-wave/SKILL.md` chiude la seconda wave dicendo all'orchestratore di terminare il report con una frase che gira la decisione all'utente: compattare il contesto o aprire una sessione nuova.
