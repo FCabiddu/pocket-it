@@ -83,7 +83,7 @@ ok "dry-run announces the merged worktree" "has 'would remove worktree .*agent-m
 ok "dry-run announces the squash-merged worktree via PR" "has 'would remove worktree .*/squash \(PR #7 merged\)'"
 ok "dry-run announces the worktree.sh-style squash-merged worktree via PR (AC6)" "has 'would remove worktree .*/task-viaworktree \(PR #8 merged\)'"
 ok "dry-run never announces a worktree with no commits of its own (AC1)" "! has 'would remove worktree .*task-(atbase|behind|fromepic|reused)'"
-ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 8 worktrees would be removed, 6 branches would be deleted, 17 kept'"
+ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 8 worktrees would be removed, 6 branches would be deleted, 16 kept'"
 ok "dry-run leaves the directories" "[[ -d $WT/agent-merged && -d $OLD/squash && -d $WT/task-viaworktree && -d $SCRATCH_WT ]]"
 ok "dry-run leaves the branches" "branch_exists task/merged && branch_exists task/squash && branch_exists task/viaworktree && branch_exists task/gone"
 # 3. real run from a non-main worktree whose own branch is merged
