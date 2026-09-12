@@ -1,6 +1,6 @@
 # PI-25 — `doctor.sh` non si accorge di due task con lo stesso id
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
