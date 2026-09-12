@@ -120,5 +120,65 @@ out4=$(cd "$S4" && bash "$SCRIPT" log "line 43" 2>&1)
 ok "PI-8 AC5 — output names the archived count" '[[ "$out4" == *"archived 1 line"* ]]'
 rm -rf "$S4" "$S5"
 
+# --- PI-8 review finding 1 — one order for the whole archive, not "newest-first inside a batch,
+# oldest-first across batches". Hand-build a log already past the cap by 5 (45 lines) so a single
+# rotation evicts 6 lines at once: this is the only way to see within-batch order at all.
+S6=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test6.XXXXXX")
+git init -q "$S6" >/dev/null
+mkdir -p "$S6/docs"
+F6="$S6/docs/SESSION_HANDOFF.md"; ARCHIVE6="$S6/docs/SESSION_HANDOFF_ARCHIVE.md"
+{
+  echo "# Session handoff"; echo
+  echo "## Fatti che non scadono"; echo
+  echo "## Log (più recente in alto, ultime 40 righe)"
+  for i in $(seq 45 -1 1); do echo "- 2026-01-01 entry $i"; done
+} > "$F6"
+archfirst6(){ awk '/^- /{print;exit}' "$ARCHIVE6"; }
+archlast6(){ awk '/^- /{l=$0} END{print l}' "$ARCHIVE6"; }
+archcount6(){ awk '/^- /{c++} END{print c+0}' "$ARCHIVE6"; }
+(cd "$S6" && bash "$SCRIPT" log "entry 46" >/dev/null 2>&1)
+ok "PI-8 F1 — a 6-line batch lands in the archive whole" '[[ "$(archcount6)" -eq 6 ]]'
+ok "PI-8 F1 — within that batch, the oldest overall (entry 1) is at the top" '[[ "$(archfirst6)" == *"entry 1" ]]'
+ok "PI-8 F1 — within that batch, the newest-of-the-evicted (entry 6) is at the bottom" '[[ "$(archlast6)" == *"entry 6" ]]'
+# a later rotation must extend the SAME order, not restart it: its line lands below the earlier batch,
+# and the oldest-ever entry stays at the very top — one order end to end, never two.
+(cd "$S6" && bash "$SCRIPT" log "entry 47" >/dev/null 2>&1)
+ok "PI-8 F1 — a later rotation's line lands below the earlier batch (entry 7 after entry 6)" '[[ "$(archlast6)" == *"entry 7" ]]'
+ok "PI-8 F1 — the oldest entry ever archived is still at the very top" '[[ "$(archfirst6)" == *"entry 1" ]]'
+rm -rf "$S6"
+
+# --- PI-8 review finding 2 — LOGCAP must be the only place the 40 lives; nothing else repeats it by hand.
+# Case A: the file created from scratch (no docs/SESSION_HANDOFF.md at all) must show the live LOGCAP in
+# its "## Log" header, and the heredoc must actually have interpolated it (not leaked "$LOGCAP" as text).
+S7=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test7.XXXXXX")
+git init -q "$S7" >/dev/null
+(cd "$S7" && bash "$SCRIPT" show >/dev/null 2>&1)
+ok "PI-8 F2a — a freshly created file's Log header shows the live cap" \
+   'grep -qF "## Log (più recente in alto, ultime 40 righe)" "$S7/docs/SESSION_HANDOFF.md"'
+ok "PI-8 F2a — heredoc interpolation fired, no literal \$LOGCAP leaked into the file" \
+   '! grep -qF "\$LOGCAP" "$S7/docs/SESSION_HANDOFF.md"'
+rm -rf "$S7"
+# Case B: the file exists but has no "## Log" section yet (an older file, or one built by hand) — the
+# python fallback that adds the section must also derive from LOGCAP, never repeat 40 by hand.
+S8=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test8.XXXXXX")
+git init -q "$S8" >/dev/null
+mkdir -p "$S8/docs"
+cat > "$S8/docs/SESSION_HANDOFF.md" <<'EOF'
+# Session handoff
+
+## Fatti che non scadono
+- an existing fact
+EOF
+(cd "$S8" && bash "$SCRIPT" log "first log entry ever" >/dev/null 2>&1)
+ok "PI-8 F2b — the fallback header (no prior '## Log' section) shows the live cap" \
+   'grep -qF "## Log (più recente in alto, ultime 40 righe)" "$S8/docs/SESSION_HANDOFF.md"'
+rm -rf "$S8"
+# Structural guard: the fallback header line in the script itself must build the number from {logcap},
+# never spell it out — this is what actually failed before the fix (line hardcoded "ultime 40 righe").
+ok "PI-8 F2 — the script's fallback header interpolates {logcap}, it does not hardcode 40" \
+   '! grep -nE "if not sep:.*ultime 40 righe\)" "$SCRIPT"'
+ok "PI-8 F2 — and it does spell out the interpolation, so the guard above is not vacuous" \
+   'grep -nE "if not sep:.*\{logcap\} righe\)" "$SCRIPT" >/dev/null'
+
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"
