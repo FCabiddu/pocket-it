@@ -36,6 +36,6 @@ Nessun test automatico: sono definizioni di agenti. Verifica rileggendo entrambi
 ## Notes
 Per AC1 considera anche il caso del sito statico, dove non c'è un server da avviare ma una pagina da aprire: la regola deve valere in entrambi.
 
-Per AC3 una misura valida è il confronto fra il riquadro effettivo del testo e quello dell'antenato che lo ritaglia. Un controllo sulla presenza di una classe CSS non vale: è il genere di test rimasto verde con il difetto presente.
+Per AC3 il confronto fra il riquadro DOM del testo (`getBoundingClientRect`/`scrollHeight` vs `clientHeight`) e quello dell'antenato che lo ritaglia **non è una misura valida**: misura il riquadro delle metriche del font, non l'inchiostro, e sbaglia in entrambe le direzioni (verificato: un'interlinea stretta taglia i discendenti mentre il rettangolo dice che non esce nulla; un'interlinea generosa fa scattare un falso rosso senza alcun taglio visibile). Le misure valide sono i pixel (screenshot di una regione fissa con e senza il ritaglio, confrontati) o le metriche reali dei glifi (`canvas.measureText().actualBoundingBox*`). Un controllo sulla presenza di una classe CSS non vale in ogni caso: è il genere di test rimasto verde con il difetto presente.
 
 Questo repo è pubblico: niente dei progetti su cui gira la pipeline.

@@ -70,12 +70,25 @@ The compass holds the distilled *visual language* (colour, type, layout, motion)
 ## A.0 — Render it before you score anything
 A verdict on typography, layout or animation from source alone is not permitted: CSS cascades, clips text and reflows in ways no static read predicts — a `line-clamp` + `overflow: hidden` pair that reads correctly in the stylesheet can still cut a descender in the render, and a source-only audit that praises the very rule that clips a title is the failure mode this step exists to close.
 
-1. **Bring the page up.** Static file or folder (`index.html`, no `package.json` dev script): open it directly with Playwright, `file://` URL — no server needed. A project with a dev/start/preview script in `package.json`: run it in the background (`run_in_background: true`), poll until it responds (a bounded loop, never a blind `sleep`), then navigate with Playwright. A hosted URL: navigate directly.
-2. **Screenshot every key page the audit covers, full-page, at least two real widths**: one mobile (375×812) and one desktop (1440×900) — add a tablet width only if the brief calls out a tablet-specific layout. Full-page, not just the viewport, so a clipped heading below the fold is caught too. Example: `npx playwright screenshot --viewport-size=375,812 --full-page "<url>" /tmp/audit/home-mobile.png` (repeat per page × width).
-3. **Look at every screenshot with the Read tool before writing a single score.** Reading the CSS that produces a layout is not a substitute for seeing it rendered.
-4. Stop any server you started by its PID or port (`lsof -nP -iTCP:{port} -sTCP:LISTEN -t | xargs -r kill`) — never `pkill`/`killall`.
+1. **Bring the page up — always via a local server, never `file://`.** A `file://` URL blocks `<script type="module">`, `fetch` and cross-origin web fonts, so the page you would photograph is not the page a visitor sees. Static file or folder: `python3 -m http.server {free port}` in the background (`run_in_background: true`), poll `curl` until it answers, navigate to `http://localhost:{port}/...`. A project with a dev/start/preview script in `package.json`: same background-and-poll pattern with that script. A hosted URL: navigate directly. If no browser responds, try `npx playwright install chromium` once before concluding "no browser available" — do not declare the target unrenderable on the first failure.
+2. **Let the page settle before you shoot it — a screenshot of a page mid-animation or mid-scroll is not the rendered page.** The CLI screenshot alone cannot do this; write a short Playwright script per audited page:
+   ```js
+   await page.goto(url, { waitUntil: 'networkidle' });
+   await page.evaluate(() => document.fonts.ready);           // web fonts loaded, or you screenshot the fallback font's metrics
+   await page.evaluate(async () => {                          // walk the whole page so every scroll-triggered reveal fires once
+     const step = window.innerHeight, max = document.body.scrollHeight;
+     for (let y = 0; y < max; y += step) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 150)); }
+     window.scrollTo(0, max); await new Promise(r => setTimeout(r, 200)); window.scrollTo(0, 0);
+   });
+   await page.evaluate(() => Promise.all(document.getAnimations().map(a => a.finished.catch(() => {})))); // entrance animations finished, not mid-fade
+   await page.screenshot({ path: outPath, fullPage: true });
+   ```
+   Verified on a page with a fading-in hero title and an `IntersectionObserver` reveal below the fold: shooting immediately (no wait, no scroll) caught the hero at ~10% opacity and the below-fold heading never appeared at all; the sequence above rendered both fully visible.
+3. **Screenshot every key page the audit covers, full-page, at least two real widths**: one mobile (375×812) and one desktop (1440×900) — add a tablet width only if the brief calls out a tablet-specific layout.
+4. **Look at every screenshot with the Read tool before writing a single score.** Reading the CSS that produces a layout is not a substitute for seeing it rendered.
+5. Stop any server you started by its PID or port (`lsof -nP -iTCP:{port} -sTCP:LISTEN -t | xargs -r kill`) — never `pkill`/`killall`.
 
-If the target cannot be rendered (no browser tool available, the app fails to start, a login wall you cannot pass), do not fall back to a source-only read silently: say so in chat and in A.3, and cap **Archetype & layout** and **Typography** at 3/5 with the reason "not rendered — static read only". Never score either dimension 4 or 5 without having seen the page.
+If the target still cannot be rendered after trying to install a browser (the app fails to start, a login wall you cannot pass), do not fall back to a source-only read silently: say so in chat and in A.3, and cap **Archetype & layout** and **Typography** at 3/5 with the reason "not rendered — static read only". Never score either dimension 4 or 5 without having seen the page.
 
 ## A.1 — Score
 Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a hosted static URL) for everything that is not a visual judgment — structure, semantics, dead code. Score dimensions 1 (**Archetype & layout**) and 2 (**Typography**) only from the A.0 screenshots you looked at, never from source markup/CSS alone. Score each dimension **1–5** (1 = generic/broken, 5 = Awwwards-ready), each with the specific `file:line`/selector, why it falls short of the compass, and the fix:
