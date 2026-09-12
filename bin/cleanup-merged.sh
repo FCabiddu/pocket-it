@@ -12,7 +12,7 @@
 # tip, as `gh` reports it (squash merge, remote branch gone or not). Whether the branch has commits of its own is read
 # from its own reflog, never from topology against bases that may since have been merged and deleted: a branch whose
 # reflog shows no commit made on it since `branch: Created from …` is work not started or not yet committed and is
-# kept, and so is a branch with no reflog to tell. A branch created from its own remote branch (a checkout of work
+# kept, and so is a branch whose reflog cannot tell (none, pruned, or inherited through `branch -c`/`-m`). A branch created from its own remote branch (a checkout of work
 # already pushed) is removed only on a merged PR.
 # Only clean worktrees are removed; dirty ones (or ones whose `git status` fails) and locked ones are kept. Detached-HEAD worktrees under /tmp
 # older than 24 h (reviewer scratch, e.g. verify.sh leftovers) are removed too. The corresponding local branch is then
@@ -59,6 +59,8 @@ history(){ # $1 tip sha, $2 branch → reads the branch's reflog oldest first; p
   while read -r h s; do
     case "$s" in
       "branch: Created from "*) start="${s#branch: Created from }";;
+      # `branch -c` / `branch -m` carry another ref's reflog along: what came before was written on that ref
+      "Branch: copied "*|"Branch: renamed "*) start=""; seen=0; own=0;;
       # an entry that made a commit on this branch, still in its history (a reset past it takes it away)
       commit:*|"commit ("*|cherry-pick:*|revert:*|am:*|*": Merge made by "*) seen=1; is_anc "$h" "$1" && own=1;;
       # a rebase rewrites the commits above: it carries them only if there were some to replay
@@ -66,14 +68,14 @@ history(){ # $1 tip sha, $2 branch → reads the branch's reflog oldest first; p
     esac   # fast-forwards, resets, `branch -f`, update-ref: moves that make no commit of its own
   done < <(g reflog show --format='%H %gs' "refs/heads/$2" -- 2>/dev/null | awk '{l[NR]=$0} END{for(i=NR;i>0;i--) print l[i]}')
   if (( own )); then echo own
-  elif [[ -z "$start" ]]; then echo unknown   # no reflog, or pruned past the creation: cannot tell, so keep
+  elif [[ -z "$start" ]]; then echo unknown   # no reflog, pruned past the creation, or copied/renamed: cannot tell, so keep
   elif [[ "$start" == "origin/$2" || "$start" == "refs/remotes/origin/$2" ]]; then echo "remote $start"
   else echo "fresh $start"; fi; }
 decide(){ # $1 sha, $2 branch → prints the reason; exit 0 = remove, 1 = keep
   local k m n oid found=""
   k=$(history "$1" "$2")
   case "$k" in
-    unknown) echo "no reflog to tell whether it has commits of its own"; return 1;;
+    unknown) echo "reflog cannot tell whether it has commits of its own"; return 1;;
     fresh*)  echo "no commits of its own (created from ${k#fresh })"; return 1;;
     own)     m=$(merged_into "$1" "$2") && { echo "merged into $m"; return 0; };;
   esac
