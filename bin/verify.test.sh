@@ -7,7 +7,10 @@ cd "$(dirname "$0")"
 SCRIPT="$PWD/verify.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/verify-test.XXXXXX")
 S=$(cd "$S" && pwd -P)   # resolve any symlink (e.g. macOS /tmp) so it matches git's resolved toplevel
-cleanup(){ rm -rf "$S" "/tmp/pocket-it-verify" 2>/dev/null; }
+UNIQ=$(basename "$S")   # per-run id, also used by verify.sh to name its own worktree (basename of $ROOT)
+# verify.sh drops its throwaway worktrees under a shared /tmp/pocket-it-verify — only remove the ones this
+# run created ($UNIQ-prefixed), never the whole shared directory, so a parallel run isn't wiped out.
+cleanup(){ rm -rf "$S" "/tmp/pocket-it-verify/${UNIQ}-"* 2>/dev/null; }
 trap cleanup EXIT
 fail=0
 ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
@@ -16,7 +19,7 @@ q(){ "$@" >/dev/null 2>&1; }
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 
 q git init -q --bare "$S/origin.git"
-q git init -q -b main "$S/main"; M="$S/main"
+q git init -q -b main "$S/$UNIQ"; M="$S/$UNIQ"
 echo base > "$M/README.md"; q git -C "$M" add README.md; q git -C "$M" commit -qm base
 q git -C "$M" remote add origin "$S/origin.git"; q git -C "$M" push -q -u origin main
 
