@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Text clipping is invisible to the DOM: Range.getBoundingClientRect and scrollHeight/clientHeight report the font's metric box, not glyph ink (measured: a font clipped at line-height 1.0 reads as not overflowing; another reads as overflowing at 1.12 with nothing cut). Any check or rule for cut glyphs must compare pixels (clip neutralised vs as-is) or canvas measureText actualBoundingBox, never element rects.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-24 fix pushed — ink metrics/exclusions for qa, settle-before-shoot for designer, unified condition — 4 findings closed
 - 2026-09-12 PI-24 PR #48 needs work — DOM rect misses clipped ink — cause: first-round
 - 2026-09-12 PI-24 PR draft — render-before-score for ux-ui-designer + qa-engineer overflow check — no automated tests (agent md files)
 - 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md la regola sulle verifiche che reintroducono il difetto (descriverle per effetto nei report) — rinviata per non confliggere con PI-22, emersa dalla review di PI-21
@@ -55,4 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
