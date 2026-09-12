@@ -29,8 +29,9 @@ fi
 # git push to main/master is authorized only with the POCKET_IT_ORCHESTRATOR_PUSH=1 prefix: the
 # audit trail that this push is the orchestrator updating the board, index or memory on the base
 # branch after a wave (its standing mandate), not an agent pushing its own work — no agent knows
-# this prefix and none is authorized to use it. A force-push to main/master is blocked even with
-# the prefix, below: rewriting the base branch's history is never authorized, for anyone.
+# this prefix and none is authorized to use it. A force-push to main/master, or any push that
+# deletes it or rewrites the whole remote (--mirror/--prune), is blocked even with the prefix,
+# below: rewriting or removing the base branch is never authorized, for anyone.
 AUTHORIZED_PUSH=0
 grep -qE '(^|[;&|[:space:]])POCKET_IT_ORCHESTRATOR_PUSH=1[[:space:]]' <<<"$CMD" && AUTHORIZED_PUSH=1
 # No direct pushes to main/master (feature branches are fine).
@@ -68,13 +69,15 @@ def norm(ref):
 def is_force(tokens):
     # git's parse-options accepts clustered short flags (-uf, -fu, -qf, ...), not just a
     # standalone -f token: any short-flag cluster containing the letter f is a force-push.
+    # Clusters may also carry a digit flag (-4/-6 for IPv4/IPv6), so the cluster shape itself
+    # must allow digits too, or -f4/-4f slip through unmatched.
     # No other `git push` short flag uses the letter f, so this cannot false-positive.
     for t in tokens:
         if not t.startswith('-'):
             continue
         if t == '-f' or t.startswith('--force'):
             return True
-        if re.fullmatch(r'-[a-zA-Z]+', t) and 'f' in t[1:]:
+        if re.fullmatch(r'-[a-zA-Z0-9]+', t) and 'f' in t[1:]:
             return True
     return False
 
@@ -84,6 +87,25 @@ def strip_plus(ref):
     # destination is compared to main/master, or a forced +HEAD:main / +main slips through
     # as a plain (non-force) push to main and the authorization prefix wrongly allows it.
     return (ref[1:], True) if ref.startswith('+') else (ref, False)
+
+def has_delete_flag(tokens):
+    # -d/--delete (or a short cluster containing d, e.g. -ud) removes a remote ref outright.
+    # No other `git push` short flag uses the letter d, so this cannot false-positive.
+    for t in tokens:
+        if not t.startswith('-'):
+            continue
+        if t == '-d' or t.startswith('--delete'):
+            return True
+        if re.fullmatch(r'-[a-zA-Z0-9]+', t) and 'd' in t[1:]:
+            return True
+    return False
+
+def has_mirror_or_prune(tokens):
+    # --mirror pushes and deletes to make the remote match every local ref exactly;
+    # --prune deletes remote refs absent locally. Both can remove main/master without
+    # ever naming it, so they are treated as always touching main — long-flag only,
+    # no short form in git push, so no cluster case to worry about.
+    return any(t.startswith('--mirror') or t.startswith('--prune') for t in tokens if t.startswith('-'))
 
 verdict = ""
 force = False
@@ -96,7 +118,7 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
         continue
     # A leading POCKET_IT_ORCHESTRATOR_PUSH=1 is stripped before matching `git`, so the force
     # and implicit-main checks below still run when the segment carries the authorization
-    # prefix — the prefix authorizes a plain push to main, never a force-push to it.
+    # prefix — the prefix authorizes a plain push to main, never a force-push or a deletion.
     m = re.match(r'^(?:POCKET_IT_ORCHESTRATOR_PUSH=1\s+)?git\s+(?:-C\s+(\S+)\s+)?push\b(.*)$', seg)
     if not m:
         continue
@@ -107,34 +129,49 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
         tokens = rest.split()
     positional = [t for t in tokens if not t.startswith('-')]
     seg_force = is_force(tokens)
+    seg_delete = has_delete_flag(tokens)
 
-    implicit, explicit_main = False, False
+    implicit, explicit_main, destructive = False, False, False
+
+    if has_mirror_or_prune(tokens):
+        # Can wipe main from the remote without a single token naming it (a glob refspec,
+        # or no refspec at all) — always in scope, regardless of the current branch or of
+        # what the positional-ref matching below finds.
+        explicit_main = True
+        destructive = True
+
     if len(positional) == 0:
         implicit = True
     elif len(positional) == 1:
         ref0, plus_force = strip_plus(positional[0])
         seg_force = seg_force or plus_force
         if ':' in ref0:
-            _, dst = ref0.split(':', 1)
+            src, dst = ref0.split(':', 1)
             if dst and norm(dst) in ('main', 'master'):
                 explicit_main = True
+                if not src:
+                    destructive = True  # empty source = delete, e.g. ":main"
         else:
             implicit = True
     else:
         ref, plus_force = strip_plus(positional[1])
         seg_force = seg_force or plus_force
         if ':' in ref:
-            _, dst = ref.split(':', 1)
+            src, dst = ref.split(':', 1)
             if dst and norm(dst) in ('main', 'master'):
                 explicit_main = True
+                if not src:
+                    destructive = True  # empty source = delete, e.g. "origin :main"
         elif ref == 'HEAD':
             implicit = True
         elif norm(ref) in ('main', 'master'):
             explicit_main = True
+            if seg_delete:
+                destructive = True  # "-d/--delete origin main"
 
     if explicit_main:
         verdict = "EXPLICIT"
-        force = seg_force
+        force = seg_force or destructive
         break
     if implicit:
         b = branch_of(resolve_dir(c_path or tracked_cd))
