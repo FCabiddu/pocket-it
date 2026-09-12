@@ -15,6 +15,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-26 PR draft — model_hint replaces model, orchestrator chooses — 3 new tests
 - 2026-09-12 PI-21 PR #45 approved round 4 — scope ridotto, deps da ritracciare — merge: user
 - 2026-09-12 PI-21 round-3 fix pushed — removed ROUND log and merged-tree test, reverted deps edit, added pocket-it /quickfix routing sentence
 - 2026-09-12 PI-21 PR #45 delta needs work — ROUND non contabile, merged-tree per gruppo
@@ -54,4 +55,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
 - 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
 - 2026-09-09 PI-4 PR #19 draft — guard.sh resolves branch for bare/HEAD git push — 20 tests
-- 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator

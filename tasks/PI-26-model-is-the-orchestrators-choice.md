@@ -1,6 +1,6 @@
 # PI-26 — Il modello di un agente è deciso da una mappatura sul campo Risk
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/next-wave.sh, bin/next-wave.test.sh, .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, CLAUDE.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-26-model-choice
 **PR**: 
 
 ## Goal
@@ -27,11 +27,11 @@ Il modello va deciso dall'orchestratore, a ogni lancio, secondo la natura del la
 - **Il modello non si cambia per reazione a un giro fallito.** Un modello più grande non corregge una causa: si cerca perché il giro è fallito, e si cambia modello solo se l'analisi indica il modello come causa.
 
 ## Acceptance criteria
-- [ ] AC1 — Dato l'output di `next-wave.sh`, quando lo si legge, allora il valore del modello è presentato come suggerimento e non come decisione, con un nome di campo che lo dica, e la suite dello script è aggiornata di conseguenza.
-- [ ] AC2 — Dati `run-wave` e `quickfix`, quando prescrivono un lancio, allora dicono che l'orchestratore sceglie il modello esplicitamente e lo motiva in una riga del prompt, secondo criteri scritti.
-- [ ] AC3 — I criteri sono scritti e sono gli stessi nei due skill e in `CLAUDE.md`: modello più grande per lavoro irreversibile o distruttivo, confini di sicurezza o permessi, ragionamento aperto (diagnosi, design, analisi di causa e le loro review), superficie ampia da tenere coerente; modello più piccolo per lavoro meccanico, ben specificato o di sola prosa.
-- [ ] AC4 — Gli stessi testi dicono che il `model` nel frontmatter resta come pavimento, e perché.
-- [ ] AC5 — Gli stessi testi dicono che il modello non si cambia per reazione a un giro fallito.
+- [x] AC1 — Dato l'output di `next-wave.sh`, quando lo si legge, allora il valore del modello è presentato come suggerimento e non come decisione, con un nome di campo che lo dica, e la suite dello script è aggiornata di conseguenza. → campo rinominato `model_hint`; test in `bin/next-wave.test.sh` ("PI-26 AC1 field is named model_hint, not model", "PI-26 AC1 high-risk task gets an opus hint", "PI-26 AC1 low-risk task gets a sonnet hint").
+- [x] AC2 — Dati `run-wave` e `quickfix`, quando prescrivono un lancio, allora dicono che l'orchestratore sceglie il modello esplicitamente e lo motiva in una riga del prompt, secondo criteri scritti. → entrambi gli skill, sezione "Model choice".
+- [x] AC3 — I criteri sono scritti e sono gli stessi nei due skill e in `CLAUDE.md`: modello più grande per lavoro irreversibile o distruttivo, confini di sicurezza o permessi, ragionamento aperto (diagnosi, design, analisi di causa e le loro review), superficie ampia da tenere coerente; modello più piccolo per lavoro meccanico, ben specificato o di sola prosa. → stesso paragrafo in `run-wave/SKILL.md`, `quickfix/SKILL.md` e nella riga "Model choice" della tabella Conventions di `CLAUDE.md`.
+- [x] AC4 — Gli stessi testi dicono che il `model` nel frontmatter resta come pavimento, e perché. → stesso paragrafo, frase sul pavimento e sull'ereditarietà del modello di sessione.
+- [x] AC5 — Gli stessi testi dicono che il modello non si cambia per reazione a un giro fallito. → stesso paragrafo, ultima frase; già coerente con la frase preesistente in run-wave Step 3.
 
 ## Tests expected
 AC1 in `bin/next-wave.test.sh`. AC2-AC5 sono prosa: si verificano rileggendo i tre file per intero e cercando le frasi che fanno ancora dipendere il modello dal solo `Risk`. Integration/E2E: non servono.
