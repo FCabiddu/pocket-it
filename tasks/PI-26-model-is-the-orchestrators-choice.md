@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-26-model-choice
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/52
 
 ## Goal
 Oggi il modello con cui gira un developer lo decide `bin/next-wave.sh` con una regola sola: `opus` se il task ha `Risk: high`, altrimenti `sonnet`. Gli skill dicono di passare quel valore così com'è.
