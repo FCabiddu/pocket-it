@@ -1,6 +1,6 @@
 # PI-27 — Lo skill `deps` fa modificare all'orchestratore un file di configurazione
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
