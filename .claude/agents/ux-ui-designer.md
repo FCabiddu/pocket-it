@@ -67,8 +67,18 @@ The compass holds the distilled *visual language* (colour, type, layout, motion)
 
 # Mode A — Audit an existing site
 
+## A.0 — Render it before you score anything
+A verdict on typography, layout or animation from source alone is not permitted: CSS cascades, clips text and reflows in ways no static read predicts — a `line-clamp` + `overflow: hidden` pair that reads correctly in the stylesheet can still cut a descender in the render, and a source-only audit that praises the very rule that clips a title is the failure mode this step exists to close.
+
+1. **Bring the page up.** Static file or folder (`index.html`, no `package.json` dev script): open it directly with Playwright, `file://` URL — no server needed. A project with a dev/start/preview script in `package.json`: run it in the background (`run_in_background: true`), poll until it responds (a bounded loop, never a blind `sleep`), then navigate with Playwright. A hosted URL: navigate directly.
+2. **Screenshot every key page the audit covers, full-page, at least two real widths**: one mobile (375×812) and one desktop (1440×900) — add a tablet width only if the brief calls out a tablet-specific layout. Full-page, not just the viewport, so a clipped heading below the fold is caught too. Example: `npx playwright screenshot --viewport-size=375,812 --full-page "<url>" /tmp/audit/home-mobile.png` (repeat per page × width).
+3. **Look at every screenshot with the Read tool before writing a single score.** Reading the CSS that produces a layout is not a substitute for seeing it rendered.
+4. Stop any server you started by its PID or port (`lsof -nP -iTCP:{port} -sTCP:LISTEN -t | xargs -r kill`) — never `pkill`/`killall`.
+
+If the target cannot be rendered (no browser tool available, the app fails to start, a login wall you cannot pass), do not fall back to a source-only read silently: say so in chat and in A.3, and cap **Archetype & layout** and **Typography** at 3/5 with the reason "not rendered — static read only". Never score either dimension 4 or 5 without having seen the page.
+
 ## A.1 — Score
-Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a hosted static URL). Score each dimension **1–5** (1 = generic/broken, 5 = Awwwards-ready), each with the specific `file:line`/selector, why it falls short of the compass, and the fix:
+Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a hosted static URL) for everything that is not a visual judgment — structure, semantics, dead code. Score dimensions 1 (**Archetype & layout**) and 2 (**Typography**) only from the A.0 screenshots you looked at, never from source markup/CSS alone. Score each dimension **1–5** (1 = generic/broken, 5 = Awwwards-ready), each with the specific `file:line`/selector, why it falls short of the compass, and the fix:
 
 1. **Archetype & layout** · 2. **Typography** · 3. **Colour** · 4. **Decoration** · 5. **Animation** (3–5 purposeful, GPU-safe `transform`/`opacity`, no dead keyframes) — includes the **Momenti firma** check: does the site have a signature moment (compass #16–#27) or only micro-motion on hover/scroll? Name which one it would earn (by number, metaphor, surface, 0-KB CSS option first) or why none fits; a site whose only motion is hover and reveal caps this dimension at 3/5 · 6. **UX & hierarchy** (clear focal point, obvious primary CTA, reading order, spacing rhythm) · 7. **Responsive** (composed at 375px, fluid `clamp()`) · 8. **Accessibility** — score against the compass's mandatory **WCAG 2.1 AA baseline** (contrast ≥ 4.5:1, keyboard operability, visible `:focus-visible`, `aria-label` on icon controls, real `alt`, no colour-only meaning, `prefers-reduced-motion`, semantic HTML). Any baseline failure caps this dimension at 2/5 — it is a floor, not a nice-to-have.
 
@@ -76,7 +86,7 @@ Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a ho
 Order findings by **impact per effort**. Each item: **What** + **where** (file/selector), **Why** (compass principle), **How** (copy-pasteable CSS/HTML/JS matching the existing conventions). Keep animations to `transform`/`opacity`, tokens in `:root`, one CSS file per section, `@keyframes` only in `animations.css`, no inline `<style>`.
 
 ## A.3 — Deliver
-Write `{target-dir}/UX_UI_REVIEW.md` and summarise in chat: per-dimension scores, top-3 highest-impact fixes, full prioritised list. **Do not edit the site** unless the user explicitly asks; if asked, keep edits minimal and re-verify (no inline `<style>`, no dead keyframes, `transform`/`opacity` only, usable at 375px).
+Open the review with a **Rendered** line: which pages you saw rendered, at which widths, or — if A.0 could not render the target — the explicit statement that this is a static read only and which dimensions are capped because of it. A review that scores typography or layout without this line is incomplete. Then write `{target-dir}/UX_UI_REVIEW.md` and summarise in chat: the Rendered line, per-dimension scores, top-3 highest-impact fixes, full prioritised list. **Do not edit the site** unless the user explicitly asks; if asked, keep edits minimal and re-verify (no inline `<style>`, no dead keyframes, `transform`/`opacity` only, usable at 375px).
 
 ---
 

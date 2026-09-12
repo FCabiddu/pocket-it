@@ -1,6 +1,6 @@
 # PI-24 — Nessun agente della pipeline guarda l'app renderizzata
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: .claude/agents/ux-ui-designer.md, .claude/agents/qa-engineer.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-24-render-the-app
+**PR**: https://github.com/FCabiddu/pocket-it/pull/48
 
 ## Goal
 In un progetto reale il proprietario ha aperto l'app nel browser e ha trovato «tantissimi errori grafici», a partire da titoli con le lettere tagliate. Nessun controllo della pipeline li aveva visti, e l'analisi ha trovato perché: **nessun agente ha fra i suoi compiti quello di guardare l'app come la guarda un utente.**
