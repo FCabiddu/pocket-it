@@ -1,6 +1,6 @@
 # PI-30 — La copia installata della pipeline è la stessa in cui si sviluppa
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/install-live.sh (nuovo), bin/install-live.test.sh (nuovo), README.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-30-separate-live-install
 **PR**: 
 
 ## Goal
