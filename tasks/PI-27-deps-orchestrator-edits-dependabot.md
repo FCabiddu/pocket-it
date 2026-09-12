@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-27-deps-rollup-owns-dependabot
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/51
 
 ## Goal
 Lo skill `.claude/skills/deps/SKILL.md`, alla riga 20, descrive la modifica a `dependabot.yml` come una riga che l'utente può approvare, e in un'altra versione come una modifica fatta direttamente dall'orchestratore. Entrambe le strade sono sbagliate:
