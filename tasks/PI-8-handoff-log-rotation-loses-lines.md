@@ -1,6 +1,6 @@
 # PI-8 — `handoff.sh log` scarta in silenzio le righe più vecchie
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
