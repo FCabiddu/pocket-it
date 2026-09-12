@@ -14,8 +14,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - force-push detection in guard.sh must cover clustered short flags (-uf, -fu, -qf) and a leading + on the refspec (+main, +HEAD:main), not just -f/--force as standalone tokens
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
 - Text clipping is invisible to the DOM: Range.getBoundingClientRect and scrollHeight/clientHeight report the font's metric box, not glyph ink (measured: a font clipped at line-height 1.0 reads as not overflowing; another reads as overflowing at 1.12 with nothing cut). Any check or rule for cut glyphs must compare pixels (clip neutralised vs as-is) or canvas measureText actualBoundingBox, never element rects.
+- Playwright settle: awaiting document.getAnimations().map(a => a.finished) never resolves when any infinite animation (marquee, pulse, loader) exists — measured hang past 45 s; use page.screenshot({animations:'disabled'}) instead (finite animations fast-forwarded, infinite reset). A script importing playwright fails with ERR_MODULE_NOT_FOUND in a folder without node_modules, npx -p included.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-24 PR #48 needs work (delta) — settle hangs on infinite animations — cause: verification-reintroduced
 - 2026-09-12 PI-24 fix pushed — ink metrics/exclusions for qa, settle-before-shoot for designer, unified condition — 4 findings closed
 - 2026-09-12 PI-24 PR #48 needs work — DOM rect misses clipped ink — cause: first-round
 - 2026-09-12 PI-24 PR draft — render-before-score for ux-ui-designer + qa-engineer overflow check — no automated tests (agent md files)
@@ -55,4 +57,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
