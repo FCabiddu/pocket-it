@@ -10,7 +10,7 @@
 **Risk**: low
 **Depends on**: none
 **Wave**: 1
-**Files**: bin/next-wave.sh, bin/next-wave.test.sh, .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, CLAUDE.md
+**Files**: bin/next-wave.sh, bin/next-wave.test.sh, .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, CLAUDE.md, README.md, .claude/agents/implementation-planner.md
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-26-model-choice
@@ -40,3 +40,5 @@ AC1 in `bin/next-wave.test.sh`. AC2-AC5 sono prosa: si verificano rileggendo i t
 Chi legge l'output di `next-wave.sh` oggi, compresi altri script o skill, va trovato e aggiornato: cerca nel repo il nome del campo prima di rinominarlo.
 
 Questo repo è pubblico: niente dei progetti su cui gira la pipeline, né di entry point privati.
+
+**Files completata dopo la prima consegna**: la lista originale non copriva tutte le occorrenze della vecchia regola. `README.md` (diagramma e tabella skill) e `.claude/agents/implementation-planner.md` (istruzione al planner su Risk→modello) dicevano ancora, con formulazioni diverse, che il rischio decide il modello; corretti nella stessa PR — vedi il report per il dettaglio della ricerca.
