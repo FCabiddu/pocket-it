@@ -1,6 +1,6 @@
 # PI-8 — `handoff.sh log` scarta in silenzio le righe più vecchie
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
 **Branch**: task/pi-8-handoff-log-rotation
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/30
 
 ## Goal
 `bin/handoff.sh log` tronca il log a 40 righe con `lines=lines[:40]` (riga 38) e **butta via** quelle in eccesso: non finiscono da nessuna parte e non sono più recuperabili se il file è già stato committato con il taglio.
