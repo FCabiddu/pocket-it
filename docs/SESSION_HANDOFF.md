@@ -13,8 +13,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh: the prefix must never authorize a destructive push to the base branch. Beyond force flags there are three more families: the + refspec, branch deletion (--delete, -d, empty refspec), and --mirror/--prune. Any new guard must cover all four.
 - force-push detection in guard.sh must cover clustered short flags (-uf, -fu, -qf) and a leading + on the refspec (+main, +HEAD:main), not just -f/--force as standalone tokens
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
+- guard.sh push classifier: classify AFTER stripping leading env/NAME=VALUE assignments and git global options (-c/-C/etc), and on the RAW command not the STR-stripped one, else a prefix or a quoted refspec fails open. Four ways a push reaches the base branch without naming it: --all, --mirror, --prune, glob-dst refspec (refs/heads/*). A form that cannot be proven safe must be denied, not ignored.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-13 PR #47 draft — guard denies push reaching base branch behind any prefix/unnamed form — 31 guard cases added (113 total)
 - 2026-09-12 retro: shared/lessons.md:17 offre ancora «apri una sessione nuova prima della terza» come azione dell'orchestratore, che non può farlo — da riformulare al prossimo retro (file suo), segnalato dalla review di PI-20
 - 2026-09-12 PI-20 PR #44 approved — nome assente, compattazione non più azione dell'orchestratore — merge: user
 - 2026-09-12 PI-20 PR draft — removed private entry point name, fixed compaction wording in two files — 0 tests (prose)

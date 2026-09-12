@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni dell'hook
 **Contract**: none
 **Branch**: task/pi-13-guard-fail-open
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/47
 
 ## Goal
 Il blocco Python che classifica i push dentro `.claude/hooks/guard.sh` ancora le proprie espressioni all'inizio del comando, con `^git`. Basta quindi **qualsiasi** assegnazione di variabile davanti a `git` perché quell'ancora non corrisponda più e il comando non venga classificato affatto: la guardia non nega, semplicemente non vede. Un push verso il ramo base passa.
