@@ -1,6 +1,6 @@
 # PI-22 — `cleanup-merged.sh` cancella il worktree di un agente che sta ancora lavorando
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/cleanup-merged.sh, bin/cleanup-merged.test.sh, .claude/agents/shared/implementing-common.md
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-22-cleanup-keeps-running-worktrees
 **PR**: 
 
 ## Goal
