@@ -84,4 +84,46 @@ OUT=$(cd "$R4" && bash "$SCRIPT"); rc=$?
 ok "AC2 no duplicates: check produces no output"  '! has "duplicate task id"'
 ok "AC2 no duplicates: doctor stays green"        '[[ $rc -eq 0 ]]'
 
+# --- repo 5: AC3 regression — a same-prefix, different-number pair alone must never collide.
+# Catches a dedup key like "prefix + last digit" (PI-19 -> PI-9), which repo 3's AC3 assertion
+# above misses because it only greps for the exact string "duplicate task id PI-19".
+R5="$S/repo5"
+q git init -q -b main "$R5"
+decl "$R5/tasks/PI-9-only.md" "PI-9" "Only"
+decl "$R5/tasks/PI-19-only.md" "PI-19" "Only"
+q git -C "$R5" add -A; q git -C "$R5" commit -qm board
+OUT=$(cd "$R5" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC3 regression: PI-9 alone next to PI-19 alone — no duplicate at all" '! has "duplicate task id"'
+ok "AC3 regression: doctor stays green"                                   '[[ $rc -eq 0 ]]'
+
+# --- repo 6: a plain hyphenated word is not an id (PI-25 second round — false positive on real boards) ---
+# Five closed notes titled "# Follow-up: ..." on a real board all produced the same fake id
+# "Follow-up" under the old regex (any word with a hyphen), which doctor.sh then reported as
+# a duplicate even though these are not tasks at all.
+R6="$S/repo6"
+q git init -q -b main "$R6"
+decl "$R6/tasks/follow-up-1.md" "Follow-up" "the first one"
+decl "$R6/tasks/follow-up-2.md" "Follow-up" "the second one"
+decl "$R6/tasks/PI-41-real.md" "PI-41" "a real task, so the board is not empty"
+q git -C "$R6" add -A; q git -C "$R6" commit -qm board
+OUT=$(cd "$R6" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "no id: two Follow-up notes are not a duplicate id"  '! has "duplicate task id"'
+ok "no id: doctor stays green"                           '[[ $rc -eq 0 ]]'
+
+# --- repo 7: a numbered id must not swallow trailing punctuation ("T-2.1.1." vs "T-2.1.1") ---
+# If the id regex greedily consumes a trailing "." after the last digit, "T-2.1.1." and "T-2.1.1"
+# extract to two different strings and a real duplicate goes undetected.
+R7="$S/repo7"
+q git init -q -b main "$R7"
+mkdir -p "$R7/tasks"
+printf '# T-2.1.1. Title with a period after the number\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: `x`\n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R7/tasks/t-2.1.1-a.md"
+printf '# T-2.1.1 Title without a period\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: `x`\n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R7/tasks/t-2.1.1-b.md"
+q git -C "$R7" add -A; q git -C "$R7" commit -qm board
+OUT=$(cd "$R7" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "trailing dot stripped: both extract to T-2.1.1, caught as duplicate" 'has "ERROR duplicate task id T-2.1.1: tasks/t-2.1.1-a.md, tasks/t-2.1.1-b.md"'
+ok "trailing dot stripped: doctor exits 1"                                '[[ $rc -eq 1 ]]'
+
 exit $fail

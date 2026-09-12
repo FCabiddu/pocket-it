@@ -16,7 +16,7 @@ status, label, files_of, deps_of, risk, budget = {}, {}, {}, {}, {}, {}
 for f in glob.glob("tasks/**/*.md", recursive=True):
     if f.endswith(("INDEX.md","README.md","/EPIC.md")) or re.search(r"/(EPIC|STORY)-[^/]*\.md$", f): continue
     txt = open(f, errors="ignore").read()
-    m = re.match(r"^#\s*([A-Za-z]+(?:-[\w.]+)+)", txt); tid = m.group(1) if m else None   # "# T-BUG-1: title" → T-BUG-1 (repeated -segment so a second hyphen, e.g. a word id, is not truncated)
+    m = re.match(r"^#\s*([A-Za-z]+(?:-[A-Za-z]+)*-\d+(?:\.\d+)*)", txt); tid = m.group(1) if m else None   # a real id: letters, optional word segments, a mandatory numeric segment ("T-BUG-1", "PI-25", "T-2.1.1") — same regex as doctor.sh, kept identical on purpose. Never a plain hyphenated word ("Follow-up": no id, file skipped) and never trailing punctuation ("T-2.1.1." stops at "T-2.1.1")
     if not tid: continue
     fields = {}
     for line in txt.splitlines()[:40]:

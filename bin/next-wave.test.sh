@@ -51,4 +51,15 @@ bug1_pos=$(tr ' ' '\n' <<<"$order" | grep -n "^T-BUG-1$" | cut -d: -f1)
 bug10_pos=$(tr ' ' '\n' <<<"$order" | grep -n "^T-BUG-10$" | cut -d: -f1)
 ok "AC3 T-BUG-10 follows T-BUG-1 (numeric last segment)" '[[ -n "$bug1_pos" && -n "$bug10_pos" && $bug1_pos -lt $bug10_pos ]]'
 
+# --- AC4 (PI-25): a plain hyphenated word with no digits is not a task id — never fused into one fake task ---
+R4="$S/repo4"
+mkdir -p "$R4/tasks"
+printf '# Follow-up: something to check\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: \n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R4/tasks/follow-up-1.md"
+printf '# Follow-up: something else\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: \n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R4/tasks/follow-up-2.md"
+task "$R4" "PI-40" "Todo"
+OUT=$(cd "$R4" && bash "$SCRIPT" 2>&1 >/tmp/next-wave-test-stdout2.$$); rc=$?
+OUT_ERR="$OUT"; OUT_OUT=$(cat "/tmp/next-wave-test-stdout2.$$" 2>/dev/null); rm -f "/tmp/next-wave-test-stdout2.$$"
+ok "AC4 a hyphenated word without digits is never read as a task id" '! grep -q "Follow-up" <<<"$OUT_OUT$OUT_ERR"'
+ok "AC4 the two Follow-up notes are excluded from the total (1, not 3)" 'grep -q "1 total" <<<"$OUT_ERR"'
+
 exit $fail
