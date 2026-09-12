@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh push classifier: classify AFTER stripping leading env/NAME=VALUE assignments and git global options (-c/-C/etc), and on the RAW command not the STR-stripped one, else a prefix or a quoted refspec fails open. Four ways a push reaches the base branch without naming it: --all, --mirror, --prune, glob-dst refspec (refs/heads/*). A form that cannot be proven safe must be denied, not ignored.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-13 PR #47 needs work — quoted separators now block legitimate commits
 - 2026-09-12 PI-13 PR #47 draft — guard denies push reaching base branch behind any prefix/unnamed form — 31 guard cases added (113 total)
 - 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md la regola sulle verifiche che reintroducono il difetto (descriverle per effetto nei report) — rinviata per non confliggere con PI-22, emersa dalla review di PI-21
 - 2026-09-12 retro: shared/lessons.md:17 offre ancora «apri una sessione nuova prima della terza» come azione dell'orchestratore, che non può farlo — da riformulare al prossimo retro (file suo), segnalato dalla review di PI-20
@@ -55,5 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
-- 2026-09-09 PI-3 PR #17 draft — doctor warns on stale EPIC/STORY summary Status — 8 tests
-- 2026-09-09 PI-1 PR #18 draft — bin/worktree.sh + cleanup-merged AC6 — 18+21 tests

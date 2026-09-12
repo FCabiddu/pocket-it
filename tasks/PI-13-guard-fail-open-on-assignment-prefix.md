@@ -1,6 +1,6 @@
 # PI-13 — Qualunque assegnazione davanti a `git` disinnesca le guardie sul push
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
