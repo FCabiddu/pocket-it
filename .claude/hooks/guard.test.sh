@@ -217,4 +217,65 @@ expect_case ALLOW "$TMPROOT/feat-repo" "git config push.default simple"
 expect_case ALLOW "$TMPROOT/feat-repo" "git log --oneline"
 
 
+# ── PI-13 round 2 (review of PR #47). The hook's job was reframed: it guards a COOPERATIVE
+# agent from a base-branch push written in a NORMAL form; deliberate evasions are left to
+# server-side branch protection (see the threat model at the top of guard.sh). These cases
+# cover the regression the first round introduced and the everyday forms still reachable.
+
+# F1 — REGRESSION FIX: a quoted string or a heredoc body that contains ; | && followed by
+# push-shaped words must NOT turn a legitimate command into a fake push segment. All of these
+# passed before PR #47, were blocked by it, and must pass again. Run from a feature branch so
+# the real trailing push (to HEAD) is itself legitimate. Mutation-provable: replacing the
+# quote-aware tokenizer with a regex split on the raw text turns these red.
+expect_case ALLOW "$TMPROOT/feat-repo" 'git commit -m "fix; git push origin main is blocked now" && git push -u origin HEAD'
+expect_case ALLOW "$TMPROOT/feat-repo" 'git commit -m "note | git push --all is denied" && git push -u origin HEAD'
+expect_case ALLOW "$TMPROOT/feat-repo" 'git commit -m "a && git push origin main now fails" && git push -u origin HEAD'
+expect_case ALLOW "$TMPROOT/feat-repo" 'gh pr comment 1 --body "blocked: git push; git push origin main here" && git push -u origin HEAD'
+expect_case ALLOW "$TMPROOT/feat-repo" "git push -u origin HEAD && gh pr create --body \"\$(cat <<'EOF'
+body ; git push origin main stays blocked
+EOF
+)\""
+expect_case ALLOW "$TMPROOT/feat-repo" "git commit -F- <<'EOF'
+line ; git push origin main here
+EOF
+git push -u origin HEAD"
+
+# F8 — the audit prefix authorizes only on the push's OWN command word, not merely by being
+# present somewhere in the command. Mutation-provable: tying auth to the whole command (the
+# old behaviour) turns these ALLOW → red here.
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 true && git push origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "echo POCKET_IT_ORCHESTRATOR_PUSH=1 ; git push origin main"
+
+# F5 — every refspec after the remote is classified (not only the first), and options that
+# take a value consume it so they do not shift the refspecs out of view. Each moves main on a
+# real remote. Mutation-provable: reading only positional[1], or dropping PUSH_VALUE_OPTS,
+# turns these red.
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin task/x main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin task/x HEAD:main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin task/x task/x:main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin task/x +main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push -o ci.skip origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --push-option ci.skip origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --receive-pack git-receive-pack origin main"
+
+# F6 — destinations that resolve to the base without being spelled `main`: the DWIM
+# `heads/main`, the matching refspec `:`/`+:`, and `@` (HEAD). Mutation-provable: narrowing
+# norm() back to `refs/heads/` only (F6a), or dropping the `:`/`@` handling, turns these red.
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin task/x:heads/main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin task/x:refs/heads/main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin :"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin +:"
+expect_case BLOCK "$TMPROOT/main-repo" "git push origin @"
+expect_case BLOCK "$TMPROOT/main-repo" "git push -f origin @"
+
+# Controls — the same shapes toward task branches, and @ from a feature branch, must pass:
+# the multi-refspec reading and the : / @ handling must not over-tighten ordinary work.
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin task/x main-menu"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin task/x task/y"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin :task/old"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push -o ci.skip origin task/x"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin @"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin task/x:refs/tags/v1"
+
+
 exit $fail
