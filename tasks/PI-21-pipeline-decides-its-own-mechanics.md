@@ -1,6 +1,6 @@
 # PI-21 — La pipeline rimanda all'utente decisioni sul proprio funzionamento
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -10,7 +10,7 @@
 **Risk**: low
 **Depends on**: none
 **Wave**: 1
-**Files**: .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, .claude/agents/reviewer.md, .claude/agents/retro.md
+**Files**: .claude/skills/run-wave/SKILL.md, .claude/skills/quickfix/SKILL.md, .claude/agents/reviewer.md, .claude/agents/retro.md, CLAUDE.md, README.md, .claude/skills/deps/SKILL.md
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-21-pipeline-decides-mechanics
@@ -47,8 +47,17 @@ Per AC1 il limite del gruppo va motivato con un numero, non scelto a sensazione:
 
 Non alzare `maxTurns` del reviewer come soluzione: è una rete di sicurezza, e allargarla sposta il problema alla wave successiva più grande.
 
-`shared/lessons.md` e `CLAUDE.md` non fanno parte di questo task: li tocca PI-20.
+`shared/lessons.md` resta fuori scope (è del retro). PI-20 è mergiato: l'esclusione di `CLAUDE.md` non vale più, ed è stato aggiunto ai `Files` insieme a `README.md` e `.claude/skills/deps/SKILL.md`, le altre sedi dove il vecchio meccanismo (un reviewer, due giri, "proponi all'utente") era ancora scritto.
+
+`.claude/agents/shared/implementing-common.md` **non va toccato in questo task**: ci lavora PI-22 in parallelo, e una modifica concorrente produrrebbe lo stesso genere di conflitto che questo task corregge altrove. La regola sulla verifica che reintroduce il difetto (famiglia 3 di AC2) va lì; i testi qui si limitano a nominarlo come destinazione, senza scriverne il contenuto altrove per aggirare il divieto. Il proprietario la aggiunge dopo il merge di PI-22.
 
 Questo repo è pubblico: niente dei progetti su cui gira la pipeline, né di entry point privati.
 
 **Cambio di scope su AC2, recepito.** La scalata a modello più capace / divisione / parcheggio, come prima risposta a un secondo o terzo giro rosso, corregge il sintomo e non la causa. `run-wave` e `quickfix` ora prescrivono un'analisi di causa prima di rilanciare il developer, classificata almeno in tre famiglie osservate su PR reali arrivate al terzo giro: (1) il finding o il task descrivevano un esempio (due grafie di un comando bloccate da una guardia di sicurezza) e non l'intera classe, bypassata da una terza grafia — corretto enumerando l'insieme nel task/finding, non ripetendo l'istanza; (2) la base si è mossa sotto la PR (una lingua di default cambiata su main dopo l'approvazione) e i test, verdi sul branch, assumevano lo stato vecchio — corretto con un merge/rebase e un nuovo giro di test scoped prima di rimandare in review; (3) la verifica ha reintrodotto il difetto (un comando o un report che dimostra l'assenza di un nome lo ripete letteralmente) — corretto descrivendo la verifica per effetto, mai per contenuto. `reviewer.md` in `Mode: delta` ora dichiara questa causa anche quando la mancanza era sua, e i finding su una classe di problemi elencano l'insieme, non uno o due esempi. `retro.md` raccoglie i giri di review in più per causa, non solo per numero. Il parcheggio resta l'ultima risorsa dopo l'analisi, mai la risposta a un conteggio di giri; i reviewer paralleli su gruppi limitati e la separazione umano/orchestratore restano come nella prima stesura.
+
+**Secondo giro di review (PR #45, 5 finding), tutti recepiti.** Il cambio di scope su AC2 era arrivato a metà lavoro, e la prima stesura lo aveva applicato solo ai punti citati, non a tutta la classe nel repo. Corretto:
+- **F1** — nessuna scalata come prima mossa, in nessun punto, nemmeno per un developer fermo che non si può riprendere: prima l'analisi di causa (task in realtà doppio, input sbagliato, base mossa, blocco di uno strumento), poi la correzione nella corsia giusta; si rilancia da zero solo se il worktree non esiste più, sullo stesso modello a meno che l'analisi non indichi il modello come causa; il parcheggio non scatta più su "la causa si è ripresentata una volta" (era un conteggio mascherato) ma solo quando l'analisi conclude che la causa è fuori dalla portata della pipeline.
+- **F2** — l'analisi ora ha una destinazione eseguibile: il reviewer propone `cause:`/`fix at:` **nella riga di ritorno del suo Step 6** (mai solo nel commento PR, che l'orchestratore non legge), e chi applica ogni famiglia è nominato (chi edita il criterio e su quale branch; chi rilancia merge/rebase; dove va la regola sulla verifica). Aggiunta la riga di log `ROUND {ID} PR #{n} round {k} — cause: {…} — fix at: {…}`, letta dal retro come `BUDGET`/`STALL`.
+- **F3** — il limite dei reviewer paralleli scende da 4 a **3 PR**, motivato con la misura già su `shared/lessons.md` (~20 turni/PR con merge-tree e mutazioni ricontate, non la media piatta 60/7≈8.6 usata prima): 60/~20 ≈ 3.
+- **F4** — `reviewer.md`, quando revisiona più PR sulla stessa base, lancia i test sull'albero con tutte sovrapposte (Step 3), non sui singoli branch: è quello che oggi trovava rotture senza conflitti testuali. I report di `run-wave`/`quickfix` hanno ora una riga `Decided on its own: …` per cause trovate, PR parcheggiate, task divisi, agenti ripresi — il proprietario lo vede sempre. `reviewer.md` "never put to the user" → "mai chiesto all'utente, sempre riferito"; `retro.md` dice che solo il punto umano si ferma, il resto del giro atterra comunque.
+- **F5** — scope allargato: `CLAUDE.md` (righe 16, 68, 162), `README.md` (28, 57), `.claude/skills/deps/SKILL.md` (20) allineati allo stesso meccanismo. `shared/implementing-common.md` resta non toccato (PI-22 in parallelo); la regola sulla verifica-che-reintroduce-il-difetto è nominata come destinazione, non scritta altrove.

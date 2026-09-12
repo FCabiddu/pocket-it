@@ -13,7 +13,7 @@ This file is for working on the agents themselves. The rules the *orchestrator* 
              └▶ tech-architect ─▶ PROJECT TAD once, then a DELTA per feature + best-practices/
                   └▶ implementation-planner ─▶ tasks/*.md · INDEX.md · DEPS.json (waves, contract-first, risk)
                        └▶ 👤 board gate (the one human review)
-                            └▶ /run-wave ×N: doctor → next-wave → developers in worktrees (opus if risk high) → one reviewer (verify.sh first) → orchestrator merges (👤 only when `draft` was asked)
+                            └▶ /run-wave ×N: doctor → next-wave → developers in worktrees (opus if risk high) → reviewers in parallel, grouped by cost (verify.sh first) → orchestrator merges (👤 only when `draft` was asked)
                                  └▶ [qa-engineer only for justified QA tasks] ─▶ [documentation-agent] ─▶ retro
 Small change? ─▶ /quickfix: task file → developer → reviewer. No documents.
 ```
@@ -65,7 +65,7 @@ An orchestrator in front of pocket-it (private, not part of this repo) needs not
 |---|---|
 | `/intake` | The only place questions are asked. One `AskUserQuestion`, writes `.pocket-it.json` + `business-analysis/BRIEF.md`, commits, hands off to business-analyst |
 | `/quickfix {sentence}` | Fast lane: writes and commits `tasks/QF-n-*.md` with real file paths and Given/When/Then criteria, launches developer (worktree) then reviewer. No documents |
-| `/run-wave` | `doctor` → `next-wave` → all ready tasks in one message (worktree, background, opus if high risk) → one reviewer → at most two fix rounds → index + report. Next wave = next call |
+| `/run-wave` | `doctor` → `next-wave` → all ready tasks in one message (worktree, background, opus if high risk) → reviewers in parallel, grouped by cost → a red PR gets its cause fixed where it lives before another round, never a bigger model or a round count as the trigger → index + report. Next wave = next call |
 | `/retro EPIC-n` | launcher for the retro agent |
 
 ### Scripts (`bin/`, zero tokens)
@@ -159,7 +159,7 @@ Skipped sections keep their heading with a one-line `N/A`. A delta uses the same
 | Hosted CI | opt-in via `pipeline: true`; `APP_STATUS` starts `dev`; only a human flips it to `prod` |
 | History log | `docs/SESSION_HANDOFF.md`, **mandatory**, written only through `bin/handoff.sh`: `## Fatti che non scadono` (≤ 100, gotchas and decisions) + `## Log` (≤ 40 dated lines). State is never written here — `status.sh` computes it |
 | Project isolation | **Nothing from a project pocket-it works on ever lands in this repo.** No project name, no product or domain vocabulary, no file paths, no PR or issue numbers, no excerpts of its code, documents or data — in task files, reports, commit messages, PR bodies, `lessons.md` or `SESSION_HANDOFF.md`. This repo is public and the projects are not. A tooling bug found while working on a project is described by its mechanism alone: the failing line, the input shape that triggers it, the expected behaviour. Id shapes this repo defines itself (`T-{e}.{s}.{t}`, `T-BUG-{n}`, `QF-{n}`, `PI-{n}`) are its own conventions, not project data, and stay usable as examples and test fixtures. When a diagnosis cannot be written without naming a project, it belongs in that project's report, and only the mechanism comes here |
-| Cost rules | task file + cited sections only; read once; capped output; budget per task (stop on stall, not on size; `maxTurns` 300 is the safety net); one reviewer per wave; resume partial agents, never relaunch; two waves per session, then the orchestrator states the call and the user presses `/compact`; only named agents, never `general-purpose` |
+| Cost rules | task file + cited sections only; read once; capped output; budget per task (stop on stall, not on size; `maxTurns` 300 is the safety net); reviewers grouped by measured cost, never one for an arbitrarily large wave; a stopped agent or a red PR gets its cause fixed before anything is relaunched, never a bigger model as the first move — resume the same agent unless the analysis says otherwise, relaunch from scratch only when the worktree is gone; two waves per session, then the orchestrator states the call and the user presses `/compact`; only named agents, never `general-purpose` |
 | Learning loop | three layers of memory, each read by the agents that need it: **facts** (this project, `docs/SESSION_HANDOFF.md`, ≤ 100), **best-practices** (this stack, per project), **lessons** (method, every project, `shared/lessons.md`, ≤ 40, `provisional` → `confirmed` → promoted to a rule). Developers log `BUDGET`/`STALL`; the reviewer writes repeated findings as facts; `run-wave` launches `retro` when the board is complete; retro writes all three layers and **merges its own text-only PRs immediately** (audit prefix) so nothing waits on a human — unless `automerge: false` or draft mode. Promotion of a lesson to a rule in this repo is the only step a human does |
 
 ---
