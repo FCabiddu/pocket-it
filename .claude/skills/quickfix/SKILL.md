@@ -54,12 +54,14 @@ git add tasks/QF-{n}-*.md && git commit -q -m "task: QF-{n} {title}" && POCKET_I
 (Committed so a worktree-isolated developer can see it. The prefix is the hook's authorized form for a push to the base branch — see `/quickfix` §4.)
 
 ### 3. Launch
-One Agent call: `subagent_type: developer`, `isolation: worktree` (only when the session cwd is this project's repo — otherwise create the worktree with `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh <project-path> task/QF-{n}-{slug})`, omit `isolation` and add `Worktree: $WT` to the prompt), `model: opus` only if Risk is high, prompt:
+One Agent call: `subagent_type: developer`, `isolation: worktree` (only when the session cwd is this project's repo — otherwise create the worktree with `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh <project-path> task/QF-{n}-{slug})`, omit `isolation` and add `Worktree: $WT` to the prompt), `model`: your explicit choice for this launch (see "Model choice" below), motivated in one line in the prompt — `Risk` alone is not the decision, prompt:
 
 ```
 Issue: QF-{n} — {title}
 Label: {label}
 ```
+
+**Model choice**: yours to make at every launch, not `Risk` alone. Bigger model (opus): irreversible or destructive work, security or permission boundaries, open-ended reasoning (diagnosis, design, root-cause analysis, and their review), a wide surface to keep coherent. Smaller model (sonnet): mechanical, well-specified work, or prose only. The `model` in an agent's frontmatter stays as the floor — no subagent has a default model, so one launched without an explicit model inherits the session's, the most expensive; never omit it. Never change the model as a reaction to a failed round: find the cause first (Step 4), and raise the model only if the analysis itself names the model as the cause.
 
 When it reports, one Agent call: `subagent_type: reviewer`, prompt `Tasks: QF-{n}` plus `Draft: yes` when config `automerge` is `false` or the user's request contains `draft`.
 
