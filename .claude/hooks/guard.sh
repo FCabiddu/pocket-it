@@ -26,9 +26,18 @@ block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
 if ! grep -qE '(^|[;&|[:space:]])POCKET_IT_USER_MERGE=1[[:space:]]' <<<"$CMD"; then
   grep -qE '(^|[;&|[:space:]])gh[[:space:]]+pr[[:space:]]+merge\b' <<<"$CMD" && block "gh pr merge" "Prefix the command with POCKET_IT_USER_MERGE=1 — the audit trail that this merge is covered by the automerge default or by an explicit instruction. Never merge when the user asked for draft PRs, nor the epic→main PR of a deployed project without an instruction: report the PR as ready instead."
 fi
+# git push to main/master is authorized only with the POCKET_IT_ORCHESTRATOR_PUSH=1 prefix: the
+# audit trail that this push is the orchestrator updating the board, index or memory on the base
+# branch after a wave (its standing mandate), not an agent pushing its own work — no agent knows
+# this prefix and none is authorized to use it. A force-push to main/master is blocked even with
+# the prefix, below: rewriting the base branch's history is never authorized, for anyone.
+AUTHORIZED_PUSH=0
+grep -qE '(^|[;&|[:space:]])POCKET_IT_ORCHESTRATOR_PUSH=1[[:space:]]' <<<"$CMD" && AUTHORIZED_PUSH=1
 # No direct pushes to main/master (feature branches are fine).
-grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+\S+[[:space:]]+(main|master)([[:space:]]|$|:)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
-grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+(origin[[:space:]]+)?(HEAD:)?(main|master)([[:space:]]|$)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
+if [[ "$AUTHORIZED_PUSH" -eq 0 ]]; then
+  grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+\S+[[:space:]]+(main|master)([[:space:]]|$|:)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
+  grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*[[:space:]]+(origin[[:space:]]+)?(HEAD:)?(main|master)([[:space:]]|$)' <<<"$CMD" && block "git push to main/master" "Push a task branch and open a draft PR."
+fi
 # A bare `git push`, `git push origin HEAD`/`-u origin HEAD` or a refspec whose destination is
 # main/master (even under a refs/heads/ prefix) is only safe when the branch it resolves to isn't
 # main/master. Resolve the repo (a `-C <path>` on the same `git` invocation, else the nearest
@@ -56,7 +65,11 @@ def resolve_dir(path):
 def norm(ref):
     return re.sub(r'^refs/heads/', '', ref)
 
+def is_force(tokens):
+    return any(t == '-f' or t.startswith('--force') for t in tokens if t.startswith('-'))
+
 verdict = ""
+force = False
 tracked_cd = None
 for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     seg = seg.strip()
@@ -64,7 +77,10 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     if m:
         tracked_cd = m.group(1)
         continue
-    m = re.match(r'^git\s+(?:-C\s+(\S+)\s+)?push\b(.*)$', seg)
+    # A leading POCKET_IT_ORCHESTRATOR_PUSH=1 is stripped before matching `git`, so the force
+    # and implicit-main checks below still run when the segment carries the authorization
+    # prefix — the prefix authorizes a plain push to main, never a force-push to it.
+    m = re.match(r'^(?:POCKET_IT_ORCHESTRATOR_PUSH=1\s+)?git\s+(?:-C\s+(\S+)\s+)?push\b(.*)$', seg)
     if not m:
         continue
     c_path, rest = m.group(1), m.group(2)
@@ -73,6 +89,7 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     except ValueError:
         tokens = rest.split()
     positional = [t for t in tokens if not t.startswith('-')]
+    seg_force = is_force(tokens)
 
     implicit, explicit_main = False, False
     if len(positional) == 0:
@@ -97,19 +114,22 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
 
     if explicit_main:
         verdict = "EXPLICIT"
+        force = seg_force
         break
     if implicit:
         b = branch_of(resolve_dir(c_path or tracked_cd))
         if b in ('main', 'master'):
             verdict = "IMPLICIT"
+            force = seg_force
             break
 
-print(verdict)
+print(verdict + ("_FORCE" if force and verdict else ""))
 PYEOF
 )
   case "$PUSH_VERDICT" in
-    IMPLICIT) block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
-    EXPLICIT) block "git push to main/master" "Push a task branch and open a draft PR." ;;
+    IMPLICIT_FORCE|EXPLICIT_FORCE) block "git push to main/master" "Never rewrite main." ;;
+    IMPLICIT) [[ "$AUTHORIZED_PUSH" -eq 0 ]] && block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
+    EXPLICIT) [[ "$AUTHORIZED_PUSH" -eq 0 ]] && block "git push to main/master" "Push a task branch and open a draft PR." ;;
   esac
 fi
 # Never kill by pattern on a shared machine.

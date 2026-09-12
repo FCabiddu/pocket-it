@@ -34,6 +34,12 @@ ALLOW|gh pr comment 12 --body "never run git push origin main from an agent"
 BLOCK|echo "harmless" && gh pr merge 7
 ALLOW|POCKET_IT_USER_MERGE=1 gh pr merge 8 --merge --delete-branch
 BLOCK|POCKET_IT_USER_MERGE=0 gh pr merge 8 --merge
+BLOCK|git push origin HEAD:main
+ALLOW|POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin main
+ALLOW|POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin HEAD:main
+ALLOW|POCKET_IT_ORCHESTRATOR_PUSH=1 git push -u origin task/pi-10-slug
+BLOCK|POCKET_IT_ORCHESTRATOR_PUSH=1 git push --force origin main
+BLOCK|POCKET_IT_ORCHESTRATOR_PUSH=1 git push -f origin main
 CASES
 
 # --- Fixtures: branch-resolution cases (PI-4). A bare `git push`/`git push origin HEAD` only
@@ -89,5 +95,13 @@ expect_case BLOCK "$TMPROOT/main-repo" "git push --force"
 expect_case BLOCK "$TMPROOT/main-repo" "git push -f origin HEAD"
 expect_case BLOCK "$TMPROOT/feat-repo" "git push --force origin main"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push -f"
+
+# PI-10 AC1-AC4 — the POCKET_IT_ORCHESTRATOR_PUSH=1 prefix authorizes an implicit push to main
+# (bare `git push` resolved from the current branch), but never a force-push, even prefixed.
+expect_case BLOCK "$TMPROOT/main-repo" "git push"
+expect_case ALLOW "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push --force"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -f origin HEAD"
+expect_case ALLOW "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push"
 
 exit $fail
