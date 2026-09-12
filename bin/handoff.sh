@@ -4,11 +4,14 @@
 #   bash ~/.claude/agents/pocket-it/bin/handoff.sh log  "T-3.1.2 PR #41 draft — contratto ordini, 2 test"   # prepend a log line (dated)
 #   bash ~/.claude/agents/pocket-it/bin/handoff.sh fact "Le migrazioni Supabase vanno applicate a mano: supabase db push"   # add an evergreen fact
 #   bash ~/.claude/agents/pocket-it/bin/handoff.sh show
-# Creates docs/SESSION_HANDOFF.md if missing. Log keeps the last 40 lines; facts are capped at CAP (see below) — at the cap a new fact is refused (exit 3), it does not drop the oldest.
+# Creates docs/SESSION_HANDOFF.md if missing. Log keeps the last 40 lines; the rest are moved (never dropped)
+# to docs/SESSION_HANDOFF_ARCHIVE.md, appended, oldest batch at the bottom. Facts are capped at CAP (see below)
+# — at the cap a new fact is refused (exit 3), it does not drop the oldest.
 set -uo pipefail
 CAP=100
+LOGCAP=40
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "handoff: not a git repository" >&2; exit 1; }
-F="$ROOT/docs/SESSION_HANDOFF.md"; mkdir -p "$ROOT/docs"
+F="$ROOT/docs/SESSION_HANDOFF.md"; ARCHIVE="$ROOT/docs/SESSION_HANDOFF_ARCHIVE.md"; mkdir -p "$ROOT/docs"
 if [[ ! -f "$F" ]]; then cat > "$F" <<'EOF'
 # Session handoff
 
@@ -27,16 +30,26 @@ cmd="${1:-show}"; shift || true
 case "$cmd" in
   log)
     line="- $(date +%Y-%m-%d) $*"
-    python3 - "$F" "$line" <<'PY'
-import sys,re
-p,line=sys.argv[1],sys.argv[2]; s=open(p).read()
+    python3 - "$F" "$ARCHIVE" "$LOGCAP" "$line" <<'PY'
+import sys,os
+p,archive,logcap,line=sys.argv[1],sys.argv[2],int(sys.argv[3]),sys.argv[4]
+s=open(p).read()
 head,sep,tail=s.partition("## Log")
 if not sep: s=s.rstrip()+"\n\n## Log (più recente in alto, ultime 40 righe)\n"; head,sep,tail=s.partition("## Log")
 title,_,body=tail.partition("\n")
 lines=[l for l in body.splitlines() if l.startswith("- ")]
 lines=[line]+lines
-lines=lines[:40]
+overflow=lines[logcap:]
+lines=lines[:logcap]
 open(p,"w").write(head+sep+title+"\n"+"\n".join(lines)+"\n")
+if overflow:
+    if not os.path.exists(archive):
+        with open(archive,"w") as f:
+            f.write("# Session handoff — archive\n\nRighe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime "
+                     f"{logcap}. Nessuna riga viene persa: questo file si accoda, non si sovrascrive mai.\n\n## Log archiviato\n")
+    with open(archive,"a") as f:
+        f.write("\n".join(overflow)+"\n")
+    print(f"handoff: archived {len(overflow)} line(s) to docs/SESSION_HANDOFF_ARCHIVE.md")
 PY
     echo "handoff: logged";;
   fact)

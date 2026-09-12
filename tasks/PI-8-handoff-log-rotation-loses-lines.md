@@ -1,6 +1,6 @@
 # PI-8 — `handoff.sh log` scarta in silenzio le righe più vecchie
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/handoff.sh, bin/handoff.test.sh
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-8-handoff-log-rotation
 **PR**: 
 
 ## Goal

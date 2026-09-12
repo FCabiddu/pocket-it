@@ -82,5 +82,43 @@ ok "AC4 — stale 'max 30 righe' comment is normalised to the new cap" "grep -qF
 ok "AC4 — pre-existing fact survives the normalisation" "grep -qF 'an existing fact' \"$S3/docs/SESSION_HANDOFF.md\""
 rm -rf "$S2" "$S3"
 
+# --- PI-8: log rotation archives the overflow instead of dropping it ---
+S4=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test4.XXXXXX")
+git init -q "$S4" >/dev/null
+F4="$S4/docs/SESSION_HANDOFF.md"; ARCHIVE4="$S4/docs/SESSION_HANDOFF_ARCHIVE.md"
+loglines4(){ awk '/^## Log/{f=1;next} f && /^- /{c++} END{print c+0}' "$F4"; }
+archlines4(){ [[ -f "$ARCHIVE4" ]] && awk '/^- /{c++} END{print c+0}' "$ARCHIVE4" || echo 0; }
+for i in $(seq 1 40); do (cd "$S4" && bash "$SCRIPT" log "line $i" >/dev/null 2>&1); done
+ok "PI-8 setup — 40 log lines present before the rotating add" '[[ "$(loglines4)" -eq 40 ]]'
+
+# PI-8 AC1 — the line pushed out of the last 40 lands in the archive: total (log + archive) grows by one
+totalbefore4=$(( $(loglines4) + $(archlines4) ))
+(cd "$S4" && bash "$SCRIPT" log "line 41" >/dev/null 2>&1)
+totalafter4=$(( $(loglines4) + $(archlines4) ))
+ok "PI-8 AC1 — total lines (log + archive) grow by one" '[[ "$totalafter4" -eq $((totalbefore4 + 1)) ]]'
+ok "PI-8 AC1 — the oldest line (line 1) is in the archive, not in the log" 'grep -qE "line 1$" "$ARCHIVE4" && ! grep -qE "line 1$" "$F4"'
+
+# PI-8 AC2 — the main log section still has 40 lines, the newest on top
+ok "PI-8 AC2 — main log still has 40 lines" '[[ "$(loglines4)" -eq 40 ]]'
+firstlogline4=$(awk '/^## Log/{f=1;next} f && /^- /{print;exit}' "$F4")
+ok "PI-8 AC2 — the newest line is on top" '[[ "$firstlogline4" == *"line 41"* ]]'
+
+# PI-8 AC3 — a pre-existing archive is appended to, not overwritten, by the next rotation
+(cd "$S4" && bash "$SCRIPT" log "line 42" >/dev/null 2>&1)
+ok "PI-8 AC3 — line 1 (archived first) survives a second rotation" 'grep -qE "line 1$" "$ARCHIVE4"'
+ok "PI-8 AC3 — line 2 (archived second) is also there" 'grep -qE "line 2$" "$ARCHIVE4"'
+ok "PI-8 AC3 — archive has exactly 2 lines after two rotations" '[[ "$(archlines4)" -eq 2 ]]'
+
+# PI-8 AC4 — below the cap, no archive file is created and no line is moved
+S5=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test5.XXXXXX")
+git init -q "$S5" >/dev/null
+(cd "$S5" && bash "$SCRIPT" log "only one line" >/dev/null 2>&1)
+ok "PI-8 AC4 — no archive file is created below the cap" '[[ ! -f "$S5/docs/SESSION_HANDOFF_ARCHIVE.md" ]]'
+
+# PI-8 AC5 — a rotation that moves N lines says so, with N, on its output
+out4=$(cd "$S4" && bash "$SCRIPT" log "line 43" 2>&1)
+ok "PI-8 AC5 — output names the archived count" '[[ "$out4" == *"archived 1 line"* ]]'
+rm -rf "$S4" "$S5"
+
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"
