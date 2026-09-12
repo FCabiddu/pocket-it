@@ -8,18 +8,20 @@ Arguments (optional): `$ARGUMENTS` — e.g. `dry-run`, `draft` (review only, no 
 ```bash
 bash ~/.claude/agents/pocket-it/bin/doctor.sh && bash ~/.claude/agents/pocket-it/bin/next-wave.sh
 ```
-Any `ERROR` from doctor → stop and show it; do not launch. `next-wave` prints one JSON line per ready task (`issue`, `label`, `agent`, `model`, `risk`, `files`). Zero ready and some `in progress` → say which are running and stop. Zero ready and zero in progress and not everything Done → the blocked list is a pipeline state, not a business one: read why each task is blocked (`missing` dependency still not `Done`, or `file busy` from a stale worktree) and act on it — resume or relaunch the blocking task per Step 3, fix a wrong `Depends on` in the task file when the block is a planner mistake, run `cleanup-merged.sh` when a `file busy` traces to an abandoned worktree. Notify and skip only the one task whose own note names a genuinely human point (business or product call, money, credentials, an account, a permission, data only the client has, a physical or human check, a production deploy), and continue with the rest of the board.
+Any `ERROR` from doctor → stop and show it; do not launch. `next-wave` prints one JSON line per ready task (`issue`, `label`, `agent`, `model_hint`, `risk`, `files`). `model_hint` (opus for `risk: high`, sonnet otherwise) is a starting suggestion computed from `Risk` alone, never the decision — see "Model choice" below. Zero ready and some `in progress` → say which are running and stop. Zero ready and zero in progress and not everything Done → the blocked list is a pipeline state, not a business one: read why each task is blocked (`missing` dependency still not `Done`, or `file busy` from a stale worktree) and act on it — resume or relaunch the blocking task per Step 3, fix a wrong `Depends on` in the task file when the block is a planner mistake, run `cleanup-merged.sh` when a `file busy` traces to an abandoned worktree. Notify and skip only the one task whose own note names a genuinely human point (business or product call, money, credentials, an account, a permission, data only the client has, a physical or human check, a production deploy), and continue with the rest of the board.
 
 `dry-run` → print the launch plan and stop.
 
 ### 2. Launch — all ready tasks in ONE message
 For every JSON line, one Agent call in the same message:
 - `subagent_type`: the `agent` field (`developer` or `qa-engineer`) — **never `general-purpose`**: it has no rules, no budget and no read discipline; a task that fits no named agent is a missing agent, not a reason to improvise a prompt
-- `model`: the `model` field (`opus` only for `risk: high`)
+- `model`: your explicit choice for this launch (see "Model choice" below), motivated in one line in the prompt — never just the JSON's `model_hint` forwarded unread
 - `isolation`: `worktree` — **only if the session cwd is the project repo** (`git rev-parse --show-toplevel` = the project). From any other folder (the orchestrator running from a hub outside the project) the Agent tool would create a worktree of the wrong repo: instead run `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh <project-path> task/{issue}-{slug})` first, omit `isolation`, and add `Worktree: $WT` to the prompt (the agent `cd`s there; shared rules §5).
 - `run_in_background`: `true`
 - `description`: `{issue} {label}`
 - `prompt`: `Issue: {issue} — {title from tasks/}\nLabel: {label}` plus `Base: {epic branch}` when config `branching` is `epic`.
+
+**Model choice**: yours to make at every launch, not `Risk` alone — `next-wave.sh`'s `model_hint` is a starting suggestion, and the prompt states the reason in one line. Bigger model (opus): irreversible or destructive work, security or permission boundaries, open-ended reasoning (diagnosis, design, root-cause analysis, and their review), a wide surface to keep coherent. Smaller model (sonnet): mechanical, well-specified work, or prose only. The `model` in an agent's frontmatter stays as the floor — no subagent has a default model, so one launched without an explicit model inherits the session's, the most expensive; never omit it. Never change the model as a reaction to a failed round: find the cause first (Step 3), and raise the model only if the analysis itself names the model as the cause.
 
 Then stop and wait for the task notifications. Do not poll, do not read files while waiting.
 

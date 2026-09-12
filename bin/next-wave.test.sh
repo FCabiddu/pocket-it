@@ -3,6 +3,8 @@
 # purely-numeric ids (T-28.5.5) with ids carrying an alphabetic segment (T-BUG-1) used to blow up
 # with "TypeError: '<' not supported between instances of 'int' and 'str'" and print nothing.
 # Covers AC1-AC3 of PI-6.
+# Also covers AC1 of PI-26: the model field is a suggestion, not a decision, and its name says so
+# ("model_hint"), computed from Risk alone.
 cd "$(dirname "$0")"
 SCRIPT="$PWD/next-wave.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/next-wave-test.XXXXXX")
@@ -50,5 +52,16 @@ ok "AC3 deterministic across repeated runs"          '[[ "$order" == "$order2" ]
 bug1_pos=$(tr ' ' '\n' <<<"$order" | grep -n "^T-BUG-1$" | cut -d: -f1)
 bug10_pos=$(tr ' ' '\n' <<<"$order" | grep -n "^T-BUG-10$" | cut -d: -f1)
 ok "AC3 T-BUG-10 follows T-BUG-1 (numeric last segment)" '[[ -n "$bug1_pos" && -n "$bug10_pos" && $bug1_pos -lt $bug10_pos ]]'
+
+
+# --- PI-26 AC1: model field is named as a hint and computed from Risk alone ---
+R4="$S/repo4"
+mkdir -p "$R4/tasks"
+printf '# T-HI: x\n\n**Status**: Todo\n**Label**: DevOps\n**Risk**: high\n**Files**: \n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R4/tasks/T-HI.md"
+printf '# T-LO: x\n\n**Status**: Todo\n**Label**: DevOps\n**Risk**: low\n**Files**: \n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R4/tasks/T-LO.md"
+OUT_OUT=$(cd "$R4" && bash "$SCRIPT" 2>/dev/null)
+ok "PI-26 AC1 field is named model_hint, not model"    'grep -q "\"model_hint\"" <<<"$OUT_OUT" && ! grep -q "\"model\":" <<<"$OUT_OUT"'
+ok "PI-26 AC1 high-risk task gets an opus hint"         'grep -q "\"issue\": \"T-HI\".*\"model_hint\": \"opus\"" <<<"$OUT_OUT"'
+ok "PI-26 AC1 low-risk task gets a sonnet hint"         'grep -q "\"issue\": \"T-LO\".*\"model_hint\": \"sonnet\"" <<<"$OUT_OUT"'
 
 exit $fail
