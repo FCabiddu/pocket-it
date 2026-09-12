@@ -14,7 +14,7 @@
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§2.4 decisioni, §12 suddivisione in task)
 **Contract**: none
 **Branch**: design/pi-12-handoff-without-contention
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/39
 
 ## Goal
 `docs/SESSION_HANDOFF.md` è la memoria della pipeline: ogni agente ci scrive le proprie righe di log e i propri fatti, e ogni agente lo rilegge all'avvio. È un file solo, e tutti scrivono **in cima alla stessa sezione**. Due rami che lavorano in parallelo toccano quindi sempre la stessa porzione dello stesso file.
