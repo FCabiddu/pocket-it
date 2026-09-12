@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-23-compass-typography
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/49
 
 ## Goal
 Un progetto costruito seguendo la compass condivisa ha pubblicato una landing in cui i titoli perdono i discendenti delle lettere: la «g», la «p», la «y» tagliate in basso. La causa è stata misurata, e la regola che l'ha prodotta sta nella compass:
