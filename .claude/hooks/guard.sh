@@ -66,7 +66,24 @@ def norm(ref):
     return re.sub(r'^refs/heads/', '', ref)
 
 def is_force(tokens):
-    return any(t == '-f' or t.startswith('--force') for t in tokens if t.startswith('-'))
+    # git's parse-options accepts clustered short flags (-uf, -fu, -qf, ...), not just a
+    # standalone -f token: any short-flag cluster containing the letter f is a force-push.
+    # No other `git push` short flag uses the letter f, so this cannot false-positive.
+    for t in tokens:
+        if not t.startswith('-'):
+            continue
+        if t == '-f' or t.startswith('--force'):
+            return True
+        if re.fullmatch(r'-[a-zA-Z]+', t) and 'f' in t[1:]:
+            return True
+    return False
+
+def strip_plus(ref):
+    # A leading '+' on a refspec (or on the source side of a src:dst refspec) forces the
+    # push regardless of any -f/--force flag; it must be recognised and stripped before the
+    # destination is compared to main/master, or a forced +HEAD:main / +main slips through
+    # as a plain (non-force) push to main and the authorization prefix wrongly allows it.
+    return (ref[1:], True) if ref.startswith('+') else (ref, False)
 
 verdict = ""
 force = False
@@ -95,14 +112,17 @@ for seg in re.split(r'(?:&&|\|\||;|\|)', cmd):
     if len(positional) == 0:
         implicit = True
     elif len(positional) == 1:
-        if ':' in positional[0]:
-            _, dst = positional[0].split(':', 1)
+        ref0, plus_force = strip_plus(positional[0])
+        seg_force = seg_force or plus_force
+        if ':' in ref0:
+            _, dst = ref0.split(':', 1)
             if dst and norm(dst) in ('main', 'master'):
                 explicit_main = True
         else:
             implicit = True
     else:
-        ref = positional[1]
+        ref, plus_force = strip_plus(positional[1])
+        seg_force = seg_force or plus_force
         if ':' in ref:
             _, dst = ref.split(':', 1)
             if dst and norm(dst) in ('main', 'master'):

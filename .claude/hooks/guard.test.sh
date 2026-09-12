@@ -104,4 +104,18 @@ expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -
 expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -f origin HEAD"
 expect_case ALLOW "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push"
 
+# PI-10 review fix — three forms git accepts as a force-push, each still blocked to
+# main/master even with the authorization prefix: a clustered short flag containing -f
+# (not just a standalone -f token), a long --force(-with-lease) flag, and a leading '+' on
+# the refspec (with or without an explicit src:dst). Each must go red if the corresponding
+# guard is removed (mutation-provable against is_force()/strip_plus()).
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -uf origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -fu origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -qf origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin +main"
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin +HEAD:main"
+# Not force: a cluster without f, or a '+' on a refspec that does not target main/master.
+expect_case ALLOW "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push -uq origin main"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin +task/x:task/y"
+
 exit $fail
