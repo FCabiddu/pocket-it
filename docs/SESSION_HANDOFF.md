@@ -12,8 +12,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A new bin/*.test.sh or .claude/hooks/*.test.sh must be added to testCommand in .pocket-it.json in the same PR, or it runs once and never again — the repo has no runner that discovers tests by convention.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-11 CI fix pushed — registered verify.test.sh in testCommand, scoped its cleanup to per-run path (PR #35 review)
 - 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
+- 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
 - 2026-09-12 PI-9 PR #32 approved — codici di uscita e canali verificati invariati, merge: orchestrator
 - 2026-09-12 PI-9 PR #32 draft — handoff log/fact now name the file path — 7 tests
 - 2026-09-12 PI-8 PR #30 approved — archive one order end to end, LOGCAP sole source of 40, merge: orchestrator
