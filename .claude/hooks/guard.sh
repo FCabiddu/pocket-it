@@ -16,6 +16,15 @@ c=re.sub(r"\"(?:[^\"\\\\]|\\\\.)*\"", " STR ", c)
 c=re.sub(r"\x27[^\x27]*\x27", " STR ", c)
 print(c)' 2>/dev/null)
 [[ -z "$CMD" ]] && exit 0
+# The raw command, quotes and heredocs intact. The push classifier is fed this, not the
+# stripped CMD, so a legitimately quoted refspec (`git push origin "refs/heads/*:..."`) is
+# seen for what it is instead of collapsing to STR and slipping through. It is safe because
+# the classifier fires only when the *stripped* CMD contains both `git` and `push` as bare
+# words (a real push, never a mention buried in a commit message or an echo), and it acts
+# only on a segment whose git subcommand is literally `push`.
+RAW=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("tool_input",{}).get("command",""))
+except Exception: pass' 2>/dev/null)
 
 block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
 
@@ -52,7 +61,7 @@ fi
 # both `git` and `push`; the classifier returns an empty verdict (ALLOW) for git commands that are
 # not a push, so a broad gate is safe.
 if grep -qE '(^|[^[:alnum:]_])git([^[:alnum:]_]|$)' <<<"$CMD" && grep -qE '(^|[^[:alnum:]_])push([^[:alnum:]_]|$)' <<<"$CMD"; then
-  PUSH_VERDICT=$(python3 - "$CMD" "$PWD" <<'PYEOF'
+  PUSH_VERDICT=$(python3 - "$RAW" "$PWD" <<'PYEOF'
 import sys, re, os, subprocess, shlex
 from fnmatch import fnmatch
 

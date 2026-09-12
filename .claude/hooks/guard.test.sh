@@ -148,4 +148,73 @@ expect_case ALLOW "$TMPROOT/feat-repo" "git push --delete origin feat/old"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push origin :task/x"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push origin +task/x:task/y"
 
+# ── PI-13: a form the classifier does not recognise must be DENIED, not ignored. The
+# defect was that the push classifier anchored on `^git`, so anything in front of `git`
+# (an env/variable assignment, a `-c key=value` one-off config, or the audit prefix with a
+# non-authorized value) slipped past classification and reached the base branch unblocked.
+# The other side matters as much: legitimate task-branch pushes, and the orchestrator's
+# push with the exact authorized prefix, must still pass.
+
+# AC1 — any variable (or `env`) assignment in front of `git` no longer hides the push.
+# Mutation-provable: re-anchoring the classifier to the start of the command (dropping the
+# leading-assignment strip) turns the two main-repo rows ALLOW → red.
+expect_case BLOCK "$TMPROOT/main-repo" "FOO=bar git push"
+expect_case BLOCK "$TMPROOT/main-repo" "env FOO=bar git push"
+expect_case BLOCK "$TMPROOT/feat-repo" "FOO=bar git push origin main"
+
+# AC2 — `git -c key=value push`, the standard one-off-config spelling, is classified. The
+# config value must not be mistaken for the subcommand.
+expect_case BLOCK "$TMPROOT/main-repo" "git -c k=v push"
+expect_case BLOCK "$TMPROOT/feat-repo" "git -c k=v push origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git -c user.name=x push origin HEAD:main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git -c a=b -c c=d push origin main"
+
+# AC3 — the audit prefix authorizes only by its EXACT value: any other value (=0, =2, =10)
+# must be treated as no authorization and must not disarm the guard. Mutation-provable:
+# re-anchoring to `^git` (so the prefix token is required to strip) makes these ALLOW → red.
+expect_case BLOCK "$TMPROOT/feat-repo" "POCKET_IT_ORCHESTRATOR_PUSH=0 git push origin main"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=0 git push"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=2 git push"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=10 git push"
+
+# AC4 — the exact authorized form still passes: this task must not re-close what PI-10 opened.
+expect_case ALLOW "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push"
+expect_case ALLOW "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin main"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push --force"
+
+# AC5 — the same AC1-AC3 spellings toward a non-base branch pass exactly as before.
+expect_case ALLOW "$TMPROOT/feat-repo" "FOO=bar git push"
+expect_case ALLOW "$TMPROOT/feat-repo" "git -c k=v push"
+expect_case ALLOW "$TMPROOT/feat-repo" "FOO=bar git push origin feat/x"
+expect_case ALLOW "$TMPROOT/feat-repo" "env X=1 git push origin HEAD"
+
+# AC6 — a glob refspec reaches the base branch without naming it, quoted or unquoted; a
+# quoted refspec is classified against the raw command, not the STR-stripped one.
+# Mutation-provable: neutering targets_base()/is_glob() (or comparing dst by equality only)
+# turns these red.
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin refs/heads/*:refs/heads/*"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin +refs/heads/*:refs/heads/*"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin 'refs/heads/*:refs/heads/*'"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin refs/heads/*"
+
+# AC7 — --all pushes every local branch, main included, without naming it; blocked on its
+# own, and blocked as a force-push when combined with a force flag.
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --all --force origin"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --all -f"
+expect_case BLOCK "$TMPROOT/main-repo" "git push --all"
+
+# AC8 — the ordinary cleanup of task branches, in every one of the same spellings, still
+# passes: a glob that cannot expand to the base branch, a quoted task refspec, a `-c` push
+# to a feature branch. The tightening must not catch these in the middle.
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin refs/heads/task/*:refs/heads/task/*"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin 'refs/heads/task/*:refs/heads/task/*'"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push origin task/*"
+expect_case ALLOW "$TMPROOT/feat-repo" "git -c k=v push origin feat/x"
+
+# Controls: a git command that merely mentions `push` (a subcommand that is not push, or a
+# push option name) must not be classified as a push to the base branch.
+expect_case ALLOW "$TMPROOT/feat-repo" "git config push.default simple"
+expect_case ALLOW "$TMPROOT/feat-repo" "git log --oneline"
+
+
 exit $fail
