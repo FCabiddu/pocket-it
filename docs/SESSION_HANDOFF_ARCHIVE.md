@@ -10,3 +10,6 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator
+- 2026-09-09 PI-4 PR #19 draft — guard.sh resolves branch for bare/HEAD git push — 20 tests
+- 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
+- 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
