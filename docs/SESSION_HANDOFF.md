@@ -13,8 +13,11 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh: the prefix must never authorize a destructive push to the base branch. Beyond force flags there are three more families: the + refspec, branch deletion (--delete, -d, empty refspec), and --mirror/--prune. Any new guard must cover all four.
 - force-push detection in guard.sh must cover clustered short flags (-uf, -fu, -qf) and a leading + on the refspec (+main, +HEAD:main), not just -f/--force as standalone tokens
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
+- design-compass.md: no line-height formula from font metrics predicts glyph clipping — measured false negative (Rockwell A+D=1.0 clips at lh 1.0, DOM says no overflow) and false positive (Avenir Next A+D=1.366 clean at lh 1.12, DOM says overflow); verify text clipping on pixels only, never getBoundingClientRect/scrollHeight.
+- CSS: to widen a masking box for descender/accent room without changing line pitch, put ALL compensating negative margin on one side (e.g. margin-bottom) — splitting it top+bottom doesn't fully collapse between adjacent lines and the pitch widens anyway (measured 0.92em -> 1.12em).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
 - 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
 - 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
 - 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md la regola sulle verifiche che reintroducono il difetto (descriverle per effetto nei report) — rinviata per non confliggere con PI-22, emersa dalla review di PI-21
@@ -54,4 +57,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
-- 2026-09-09 PI-2 PR #15 draft — handoff.sh fact refuses at cap — 15 tests
