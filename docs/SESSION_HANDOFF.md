@@ -10,8 +10,12 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - next-wave.sh (pre-#24): the id regex ^#\s*([A-Za-z]+-[\w.]+) truncated any id with a second embedded hyphen (T-BUG-1 -> tid T-BUG); same-prefix ids collided in the in-memory dict and the later one silently overwrote the earlier — no exception, no warning, task just vanished from the board. Fixed in #24 alongside the mixed-id sort-key TypeError; reproduced independently in review (T-BUG-1 + T-BUG-10 -> '1 total' instead of 2).
 - guard.sh force-push detection: matching only the whole tokens -f/--force misses git's clustered short flags (-uf, -fu, -qf) and the +refspec form (+main, +HEAD:main), both of which git accepts as force pushes. Any new force check must cover all three shapes.
 - A new bin/*.test.sh or .claude/hooks/*.test.sh must be added to testCommand in .pocket-it.json in the same PR, or it runs once and never again — the repo has no runner that discovers tests by convention.
+- guard.sh: the prefix must never authorize a destructive push to the base branch. Beyond force flags there are three more families: the + refspec, branch deletion (--delete, -d, empty refspec), and --mirror/--prune. Any new guard must cover all four.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-11 PR #35 conflict resolved — union of handoff log lines, 0 lost, MERGEABLE
+- 2026-09-12 PI-10 PR #36 needs work (delta 2) — -f4/-4f clusters and base-branch deletion pass with the prefix
+- 2026-09-12 PI-11 PR #35 approved — verify.test.sh registered, run-scoped cleanup — merge: orchestrator
 - 2026-09-12 PI-11 CI fix pushed — registered verify.test.sh in testCommand, scoped its cleanup to per-run path (PR #35 review)
 - 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
