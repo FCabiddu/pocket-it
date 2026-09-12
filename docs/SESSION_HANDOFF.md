@@ -11,6 +11,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - force-push detection in guard.sh must cover clustered short flags (-uf, -fu, -qf) and a leading + on the refspec (+main, +HEAD:main), not just -f/--force as standalone tokens
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-12 PI-10 CI fix pushed — closed 2 force-push detection gaps (clustered -f, +refspec) — 7 new tests
 - 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
 - 2026-09-12 PI-9 PR #32 approved — codici di uscita e canali verificati invariati, merge: orchestrator
 - 2026-09-12 PI-9 PR #32 draft — handoff log/fact now name the file path — 7 tests
