@@ -45,7 +45,8 @@ Every page commits to one archetype. Choose the one that best fits the project's
 - **Display size**: enormous — `clamp(4rem, 12vw, 12rem)`. Type is a visual element, not just content.
 - **Weight contrast**: pair 900-weight headline with 300-weight body in the same section. Extremes create tension.
 - **Eyebrow labels**: always `text-transform: uppercase; letter-spacing: 0.25em; font-size: 0.7rem`. Never large.
-- **Display line-height**: tighten to `0.88`–`1.0` for headlines. Default browser line-height is for body copy, not display.
+- **Display line-height**: tighten to `0.88`–`1.0` for headlines — but that range is not a universal floor, it is a starting guess. The safe minimum is the font's own rendered glyph height (ascent + descent, from its `hhea`/`OS2` metrics ÷ `unitsPerEm`), and it is routinely *more* than `1.0`: roughly `1.05`–`1.15` for most grotesque/condensed sans with shallow descenders, `1.2` and up for serif or script display faces with deep descenders (`g`, `j`, `p`, `q`, `y`, and any swash). Tighten the line-height below that sum and the descenders don't shrink — the box around them does, so whatever bounds that box (a fixed-height wrapper, `overflow: hidden`, an active `clip-path`) cuts them off. **Find the font's floor before tightening**: read its ascent/descent from the metrics (a tool such as Wakamai Fondue, FontDrop!, or `fonttools ttx` on the `hhea`/`OS2` tables), or measure it directly — render `gjpqy` at the candidate line-height inside the real wrapper and check for a clipped descender at the narrowest and widest breakpoint on the rendered page, not in the CSS. Below the floor you found: raise the line-height, or keep it tight and add the missing room as `padding-bottom` on the *wrapper* (never on the text itself — that shifts the baseline instead of protecting it).
+- **No clipped glyphs, ever.** Whatever produces the final rule — line-height, a fixed-height container, `overflow: hidden`, a `clip-path` left active at rest — no descender, ascender or diacritic may be cut at any viewport width. This is checked on the rendered page (screenshot or DOM inspection of the actual glyph box), never deduced from the CSS values alone: a line-height and a clip that look safe on paper can still clip once the real font's metrics are in the picture.
 - **Type pairs that work**: Playfair Display + Space Grotesk · Fraunces + Inter · Bebas Neue + DM Sans · Editorial New + Neue Haas Grotesk (approximate with Inter) · Monument Extended + Satoshi
 - Pick one Google Font for the display role; use system-ui or a second Google Font for body.
 - **Do NOT default to Playfair Display** — it is overused. Choose from: Fraunces, Cormorant Garamond, DM Serif Display, Libre Baskerville, Abril Fatface, Bebas Neue, Archivo Black, Space Grotesk, Unbounded, Syne, Cabinet Grotesk. The display font must feel like a brand decision, not a safe fallback.
@@ -101,12 +102,12 @@ Study all of these. A page should use **3–5** that serve its specific personal
 
 ### 1. Split-text line reveal
 **Effect:** Each text line slides up from beneath a hidden overflow — cinematic "curtain rise."
-**How:** Wrap each line: `<span class="line"><span class="line-inner">text</span></span>`. Outer: `overflow: hidden; display: block`. Inner: starts `translateY(110%)`, animates to `translateY(0)` via `@keyframes` or `IntersectionObserver` + CSS transition. Stagger lines with `animation-delay` or `transition-delay`.
+**How:** Wrap each line: `<span class="line"><span class="line-inner">text</span></span>`. Outer: `overflow: hidden; display: block`. Inner: starts `translateY(110%)`, animates to `translateY(0)` via `@keyframes` or `IntersectionObserver` + CSS transition. Stagger lines with `animation-delay` or `transition-delay`. **The outer mask is permanent, not just for the animation's duration — size it for the font, not just the text.** Its height comes from the line's line-height, so if that line-height is tightened per the Typography principles above, give the outer the descender room the tight line-height took away (`padding-bottom` on the outer, sized to the shortfall — see the line-height entry for how to find it), or the mask keeps clipping descenders forever after the reveal finishes, not just during it.
 **Use for:** Hero headline, section titles. **GPU safe:** Yes — only `transform`.
 
 ### 2. Clip-path wipe reveal
 **Effect:** Content appears as if a curtain is pulled away — horizontal or vertical wipe.
-**How:** Start `clip-path: inset(0 100% 0 0)`, animate to `clip-path: inset(0 0% 0 0)`. Pure CSS `@keyframes` or triggered by `IntersectionObserver`. Works on images, text blocks, coloured panels.
+**How:** Start `clip-path: inset(0 100% 0 0)`, animate to `clip-path: inset(0 0% 0 0)`. Pure CSS `@keyframes` or triggered by `IntersectionObserver`. Works on images, text blocks, coloured panels. **`inset(0 0% 0 0)` is not "no clip" — it is a clip drawn exactly at the element's own box edges, held there forever if the animation rests on its final frame.** On a text block that box is only as tall as its line-height; if that line-height is tighter than the font's own ascent+descent (see the line-height entry above), the element was never clipping before this technique touched it — plain text overflows its line box without being cut — and now it permanently is. Either size the box to the font's full glyph height before wiping text, or drop the `clip-path` (`clip-path: none`) once the reveal completes instead of resting on `inset(0 0% 0 0)`.
 **Use for:** Images, section intros, label eyebrows. **GPU safe:** Yes — `clip-path` is composited.
 
 ### 3. Scroll-reveal fade + translate
@@ -181,6 +182,7 @@ Study all of these. A page should use **3–5** that serve its specific personal
 - `transform` and `opacity` only — never animate `width`, `height`, `top`, `left`, `margin`, or `padding`.
 - No dead `@keyframes` blocks — every block must be referenced by at least one selector. Prefer CSS transitions for single-element effects.
 - Do NOT reflexively pair the marquee ticker (#8) + scroll progress bar (#6). That combo is overused. Consider #14 (cursor glow) for dark backgrounds and #15 (staggered grid entrance) whenever there is a card/grid section.
+- Any technique that masks or clips text (#1's outer `overflow: hidden`, #2's `clip-path`, or any other reveal built the same way) must obey the no-clipped-glyphs rule in Typography principles — check the rendered page at rest, after the animation has finished, not just mid-motion.
 
 ---
 

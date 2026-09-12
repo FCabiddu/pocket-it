@@ -1,6 +1,6 @@
 # PI-23 — La design compass prescrive interlinee e ritagli che tagliano le lettere
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: .claude/agents/shared/design-compass.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-23-compass-typography
 **PR**: 
 
 ## Goal
