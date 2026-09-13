@@ -33,11 +33,17 @@ FRAG_DIR = os.path.join(root, "docs", "handoff")
 ARCHIVE_DIR = os.path.join(FRAG_DIR, "archive")
 
 def read(path):
+    # newline='' disables universal-newline translation: CR, CRLF and every other line-ish byte stay as
+    # literal data in the string, exactly like awk (RS="\n") sees them — only a bare "\n" ends a record.
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8", newline='') as f:
             return f.read()
     except (FileNotFoundError, IsADirectoryError):
         return None
+
+def usage_exit():
+    print("usage: handoff.sh facts|show|recent N|recent --all|grep REGEX", file=sys.stderr)
+    sys.exit(2)
 
 def section_body(text, name):
     # body of the first "## {name}..." section, up to the next "## " heading or EOF — same extraction
@@ -50,7 +56,10 @@ def section_body(text, name):
     return text[start: start + nxt.start()] if nxt else text[start:]
 
 def dash_lines(body):
-    return [l for l in body.splitlines() if l.startswith("- ")]
+    # split ONLY on "\n" — never str.splitlines(), which also breaks on \v \f \x1c-\x1e U+0085 U+2028
+    # U+2029 and a lone \r, characters awk's default RS="\n" treats as ordinary data. Splitting on those
+    # truncates a line silently: the tail after the character doesn't start with "- " and is dropped.
+    return [l for l in body.split('\n') if l.startswith("- ")]
 
 NEG = ""  # frozen sources sort before every fragment timestamp string (ADR-3: they are older than everything)
 
@@ -180,18 +189,28 @@ elif cmd == "show":
         print(f"facts: {tag}")
 elif cmd == "recent":
     log = collect_log()
-    out = log if (rest and rest[0] == "--all") else log[: (int(rest[0]) if rest else LOGCAP)]
+    if rest and rest[0] == "--all":
+        out = log
+    elif not rest:
+        out = log[:LOGCAP]
+    else:
+        if not re.fullmatch(r'[0-9]+', rest[0]):  # reject "abc", "--al", "-1" (a negative slice is not an error, it's wrong)
+            usage_exit()
+        out = log[: int(rest[0])]
     for l in out:
         print(l)
 elif cmd == "grep":
     if not rest:
-        sys.exit(2)
-    pat = re.compile(rest[0])
+        usage_exit()
+    try:
+        pat = re.compile(rest[0])
+    except re.error:
+        usage_exit()
     for l in collect_log():
         if pat.search(l):
             print(l)
 else:
-    sys.exit(2)
+    usage_exit()
 PY
 }
 

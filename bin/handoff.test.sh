@@ -256,10 +256,18 @@ cat > "$S12/docs/SESSION_HANDOFF.md" <<'EOF'
 ## Fatti che non scadono
 - fatto da ritirare
 - fatto stabile
+- fatto duplicato
 
 ## Log (più recente in alto, ultime 40 righe)
 EOF
 H12=$(hash12 "fatto da ritirare")
+# Review round 1, finding 2(b): a retract must also hide a fact that lives in a FRAGMENT older than the
+# retract, not only a frozen one — otherwise "hide only frozen facts" (M3) passes unnoticed.
+HOLD=$(hash12 "fatto vecchio del frammento")
+cat > "$S12/docs/handoff/2026-09/20260910T000000Z-oldfact-f6f6.md" <<'EOF'
+## Fatti
+- fatto vecchio del frammento
+EOF
 cat > "$S12/docs/handoff/2026-09/20260911T090000Z-branch-a-a1a1.md" <<'EOF'
 ## Log
 - 2026-09-13 riga duplicata
@@ -271,24 +279,43 @@ EOF
 cat > "$S12/docs/handoff/2026-09/20260913T090000Z-retro-c3c3.md" <<EOF
 ## Ritirati
 - ~ $H12
+- ~ $HOLD
 EOF
 cat > "$S12/docs/handoff/2026-09/20260914T090000Z-copyname-d4d4.md" <<'EOF'
 ## Log
 - 2026-09-14 riga del frammento con copia in archivio
 EOF
+# Review round 1, finding 2(c): the same fact text in two sources (frozen + fragment) must still count
+# once — proves the text-dedup rule (§4.3), not just the retract path.
+cat > "$S12/docs/handoff/2026-09/20260916T000000Z-dupfact-g7g7.md" <<'EOF'
+## Fatti
+- fatto duplicato
+EOF
 cat > "$S12/docs/handoff/archive/2026-09-20261001T000000Z-zzzz.md" <<'EOF'
 ### 20260914T090000Z-copyname-d4d4
 ## Log
 - 2026-09-14 riga del frammento con copia in archivio
+
+### 20260920T000000Z-orphan-o1o1
+## Log
+- 2026-09-20 riga solo in archivio, mai stata un frammento vivo
 EOF
 recent12=$(cd "$S12" && bash "$SCRIPT" recent --all)
 ok "AC3 — the duplicated log line appears twice (two events, never deduped)" \
    '[[ "$(printf "%s\n" "$recent12" | grep -c "^- 2026-09-13 riga duplicata$")" -eq 2 ]]'
 ok "AC3 — the declared copy (archive section == live fragment name) counts once" \
    '[[ "$(printf "%s\n" "$recent12" | grep -c "riga del frammento con copia")" -eq 1 ]]'
+# Review round 1, finding 2(a): an archive section with NO live fragment of the same name must still be
+# read (not silently skipped, M2) — its line has nowhere else to come from.
+ok "AC3 — an archive section with no live fragment (orphan) is still read" \
+   '[[ "$(printf "%s\n" "$recent12" | grep -c "riga solo in archivio")" -eq 1 ]]'
 facts12=$(cd "$S12" && bash "$SCRIPT" facts)
-ok "AC3 — the retracted fact does not appear" '! grep -qF "fatto da ritirare" <<<"$facts12"'
+ok "AC3 — the retracted fact (frozen source) does not appear" '! grep -qF "fatto da ritirare" <<<"$facts12"'
+ok "AC3 — the retracted fact (fragment source, older than the retract) does not appear" \
+   '! grep -qF "fatto vecchio del frammento" <<<"$facts12"'
 ok "AC3 — the untouched fact still appears" 'grep -qF "fatto stabile" <<<"$facts12"'
+ok "AC3 — the same fact in two sources counts once" \
+   '[[ "$(printf "%s\n" "$facts12" | grep -c "^- fatto duplicato$")" -eq 1 ]]'
 # mutation: a fact rewritten AFTER the retract (newer fragment, same text) is visible again
 cat > "$S12/docs/handoff/2026-09/20260915T090000Z-fix-e5e5.md" <<'EOF'
 ## Fatti
@@ -321,6 +348,53 @@ for variant in bare withold; do
   rm -rf "$S13"
 done
 
+# Review round 1, finding 3: the "withold" case above copies THIS repo's own file, which already says
+# "max 100 righe" — a reintroduced normalisation on read is a no-op rewrite there and git status stays
+# clean either way (M6 passed unnoticed). Commit a STALE "max 30 righe" comment plus a fragment and an
+# archive section, so a reintroduced sed on any of the four reads produces a real, visible diff.
+S13b=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test13b.XXXXXX")
+S13b=$(cd "$S13b" && pwd -P)
+git init -q "$S13b" >/dev/null
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+mkdir -p "$S13b/docs/handoff/2026-09" "$S13b/docs/handoff/archive"
+cat > "$S13b/docs/SESSION_HANDOFF.md" <<'EOF'
+# Session handoff
+
+## Fatti che non scadono
+<!-- max 30 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->
+- an existing fact
+
+## Log (più recente in alto, ultime 40 righe)
+- 2026-09-01 an existing log line
+EOF
+cat > "$S13b/docs/handoff/2026-09/20260902T090000Z-x-x1x1.md" <<'EOF'
+## Log
+- 2026-09-02 a fragment line
+EOF
+cat > "$S13b/docs/handoff/archive/2026-09-20261001T000000Z-a2a2.md" <<'EOF'
+### 20260902T090000Z-x-x1x1
+## Log
+- 2026-09-02 a fragment line
+EOF
+(cd "$S13b" && git add -A && git commit -q -m init) >/dev/null
+before13b=$(cd "$S13b" && git status --porcelain)
+(cd "$S13b" && bash "$SCRIPT" facts >/dev/null 2>&1
+               bash "$SCRIPT" show >/dev/null 2>&1
+               bash "$SCRIPT" recent 5 >/dev/null 2>&1
+               bash "$SCRIPT" grep X >/dev/null 2>&1)
+after13b=$(cd "$S13b" && git status --porcelain)
+ok "AC4 [stale-comment+fragments] — git status --porcelain identical before/after" '[[ "$before13b" == "$after13b" ]]'
+ok "AC4 [stale-comment+fragments] — the stale comment is still 'max 30 righe' after four reads" \
+   'grep -qF "max 30 righe" "$S13b/docs/SESSION_HANDOFF.md"'
+rm -rf "$S13b"
+
+# AC4 — outside a repo: exit 1 (not a git repository), nothing created, no traceback.
+S13c=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test13c.XXXXXX")
+outnr=$(cd "$S13c" && bash "$SCRIPT" facts 2>&1); rcnr=$?
+ok "AC4 [outside a repo] — exit 1" '[[ "$rcnr" -eq 1 ]]'
+ok "AC4 [outside a repo] — no file created" '[[ -z "$(ls -A "$S13c")" ]]'
+rm -rf "$S13c"
+
 # AC5 — a frozen row dated 2026-09-10 and fragments dated 2026-09-11 and 2026-09-12: recent --all orders
 # 12, 11, 10, and at equal day fragments come before frozen rows.
 S14=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test14.XXXXXX")
@@ -346,6 +420,106 @@ order14=$(cd "$S14" && bash "$SCRIPT" recent --all)
 ok "AC5 — order is 12, 11, 10" \
    '[[ "$order14" == "$(printf "%s\n%s\n%s" "- 2026-09-12 evento frammento" "- 2026-09-11 evento frammento" "- 2026-09-10 evento congelato")" ]]'
 rm -rf "$S14"
+
+# Review round 1, finding 1: AC5's fixture above has every entry on a distinct day, so the tie-break rule
+# for SAME-day entries (§4.3: fragments by timestamp descending, then main log top-down, then archive
+# bottom-up) is never exercised. All same day here: main log (1 line), archive (2 lines, oldest on top of
+# the file), two fragments at different timestamps.
+S15=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test15.XXXXXX")
+git init -q "$S15" >/dev/null
+mkdir -p "$S15/docs/handoff/2026-09"
+cat > "$S15/docs/SESSION_HANDOFF.md" <<'EOF'
+# Session handoff
+
+## Fatti che non scadono
+
+## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 riga principale
+EOF
+cat > "$S15/docs/SESSION_HANDOFF_ARCHIVE.md" <<'EOF'
+# Session handoff — archive
+
+## Log archiviato
+- 2026-09-13 riga archivio vecchia
+- 2026-09-13 riga archivio nuova
+EOF
+cat > "$S15/docs/handoff/2026-09/20260913T090000Z-branch-a-a1a1.md" <<'EOF'
+## Log
+- 2026-09-13 riga frammento presto
+EOF
+cat > "$S15/docs/handoff/2026-09/20260913T100000Z-branch-b-b2b2.md" <<'EOF'
+## Log
+- 2026-09-13 riga frammento tardi
+EOF
+order15=$(cd "$S15" && bash "$SCRIPT" recent --all)
+expected15=$(printf '%s\n%s\n%s\n%s\n%s' \
+  "- 2026-09-13 riga frammento tardi" "- 2026-09-13 riga frammento presto" \
+  "- 2026-09-13 riga principale" \
+  "- 2026-09-13 riga archivio nuova" "- 2026-09-13 riga archivio vecchia")
+ok "AC5 — same-day tie-break: fragments (newest ts first), then main log, then archive bottom-up" \
+   '[[ "$order15" == "$expected15" ]]'
+rm -rf "$S15"
+
+# Review round 1, finding 4: bin/handoff.sh:53 used str.splitlines(), which breaks a line on far more
+# characters than awk's RS="\n" (CRLF, a lone CR, VT, FF, FS, GS, RS, NEL, LS, PS) — the tail after any of
+# them silently vanished. Every one of the 10 must survive as DATA, byte for byte, matching the awk oracle.
+for sepname in CRLF CR VT FF FS GS RS NEL LS PS; do
+  S16=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test16-$sepname.XXXXXX")
+  git init -q "$S16" >/dev/null
+  mkdir -p "$S16/docs"
+  python3 - "$S16/docs/SESSION_HANDOFF.md" "$sepname" <<'PY'
+import sys
+path, name = sys.argv[1], sys.argv[2]
+SEP = {
+    "CRLF": "\r\n", "CR": "\r", "VT": "\x0b", "FF": "\x0c",
+    "FS": "\x1c", "GS": "\x1d", "RS": "\x1e",
+    "NEL": "\x85", "LS": " ", "PS": " ",
+}[name]
+content = ("# Session handoff\n\n"
+           "## Fatti che non scadono\n"
+           f"- fact a{SEP}b\n\n"
+           "## Log (più recente in alto, ultime 40 righe)\n"
+           f"- 2026-09-12 log a{SEP}b\n")
+with open(path, "w", encoding="utf-8", newline="") as f:
+    f.write(content)
+PY
+  awkfacts=$(awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /' "$S16/docs/SESSION_HANDOFF.md")
+  ourfacts=$(cd "$S16" && bash "$SCRIPT" facts)
+  ok "Finding4 [$sepname] — facts byte-identical to awk with the separator embedded as data" \
+     '[[ "$ourfacts" == "$awkfacts" ]]'
+  awklog=$(awk '/^## Log/{f=1;next} f && /^- /' "$S16/docs/SESSION_HANDOFF.md")
+  ourlog=$(cd "$S16" && bash "$SCRIPT" recent --all)
+  ok "Finding4 [$sepname] — recent --all byte-identical to awk with the separator embedded as data" \
+     '[[ "$ourlog" == "$awklog" ]]'
+  rm -rf "$S16"
+done
+
+# Contract §5.1 / round 1 review: a malformed argument gives exit 2 with a usage line on stderr, never a
+# Python traceback (exit 1) and never a silent wrong answer (recent -1 used to exit 0 and drop a line via
+# a negative slice).
+S17=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test17.XXXXXX")
+git init -q "$S17" >/dev/null
+
+out17a=$(cd "$S17" && bash "$SCRIPT" recent abc 2>&1); rc17a=$?
+ok "exit 2 on 'recent abc' (non-numeric N)" '[[ "$rc17a" -eq 2 ]]'
+ok "usage line on 'recent abc'" '[[ "$out17a" == usage:* ]]'
+
+out17b=$(cd "$S17" && bash "$SCRIPT" recent --al 2>&1); rc17b=$?
+ok "exit 2 on 'recent --al' (typo of --all)" '[[ "$rc17b" -eq 2 ]]'
+ok "usage line on 'recent --al'" '[[ "$out17b" == usage:* ]]'
+
+out17c=$(cd "$S17" && bash "$SCRIPT" grep '[' 2>&1); rc17c=$?
+ok "exit 2 on invalid regex \"grep [\"" '[[ "$rc17c" -eq 2 ]]'
+ok "usage line on invalid regex" '[[ "$out17c" == usage:* ]]'
+
+out17d=$(cd "$S17" && bash "$SCRIPT" recent -1 2>&1); rc17d=$?
+ok "exit 2 on 'recent -1' (negative N, not a silent negative slice)" '[[ "$rc17d" -eq 2 ]]'
+ok "usage line on 'recent -1'" '[[ "$out17d" == usage:* ]]'
+
+out17e=$(cd "$S17" && bash "$SCRIPT" grep 2>&1); rc17e=$?
+ok "exit 2 on 'grep' with no argument" '[[ "$rc17e" -eq 2 ]]'
+ok "usage line on 'grep' with no argument" '[[ "$out17e" == usage:* ]]'
+rm -rf "$S17"
 
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"
