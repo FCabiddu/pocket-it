@@ -39,8 +39,10 @@ automerge {on/off} · test integration/E2E {policy} · branching {flat/epic} · 
 ```
 
 ```bash
-git add .pocket-it.json business-analysis/BRIEF.md && git commit -q -m "chore: intake — brief e config pocket-it" && git push -q
+git add .pocket-it.json business-analysis/BRIEF.md && git commit -q -m "chore: intake — brief e config pocket-it" && POCKET_IT_ORCHESTRATOR_PUSH=1 git push -q
 ```
+
+(The prefix is the hook's authorized form for a push to the base branch — see `/quickfix` §4.)
 
 ### 4. Hand off
 Tell the user the two paths, then run `/business-analyst business-analysis/BRIEF.md` unless they said to stop here. The business-analyst treats BRIEF.md answers as facts.

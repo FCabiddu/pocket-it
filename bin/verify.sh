@@ -48,5 +48,5 @@ has lint && run "lint" "$PM run lint" || echo "skip  lint (no script)"
 if has type-check; then run "type-check" "$PM run type-check"; elif has typecheck; then run "type-check" "$PM run typecheck"; elif [[ -f tsconfig.json ]]; then run "type-check" "npx tsc --noEmit"; else echo "skip  type-check"; fi
 if [[ -n "$TESTCMD" && -n "$CHANGED" ]]; then run "affected tests" "$TESTCMD"; else echo "skip  tests (nothing to scope or no runner detected)"; fi
 # tests added?
-if echo "$CHANGED" | grep -qE '\.(test|spec)\.[cm]?[jt]sx?$|_test\.(py|go)$'; then echo "info  test files in diff: $(echo "$CHANGED" | grep -cE '\.(test|spec)\.|_test\.')"; else echo "warn  no test files in the diff"; fi
+if echo "$CHANGED" | grep -qE '\.(test|spec)\.[cm]?[jt]sx?$|_test\.(py|go)$|\.test\.sh$'; then echo "info  test files in diff: $(echo "$CHANGED" | grep -cE '\.(test|spec)\.|_test\.|\.test\.sh$')"; else echo "warn  no test files in the diff"; fi
 [[ $FAILED -eq 0 ]] && { echo "verify: GREEN"; exit 0; } || { echo "verify: RED"; exit 1; }

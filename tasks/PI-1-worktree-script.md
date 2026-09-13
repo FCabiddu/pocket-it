@@ -17,7 +17,7 @@
 **PR**: https://github.com/FCabiddu/pocket-it/pull/18
 
 ## Goal
-The Agent tool's `isolation: worktree` only works when the session cwd is the target repo. Jarvis runs from a hub folder and governs several projects, so today the orchestrator created worktrees by hand four times. Provide `bash bin/worktree.sh <repo-path> <branch> [base]` that does it deterministically and prints the worktree path on stdout, so a launcher can pass `Worktree: <path>` to a developer.
+The Agent tool's `isolation: worktree` only works when the session cwd is the target repo. The orchestrator can run from a hub folder governing several projects, so it created worktrees by hand four times. Provide `bash bin/worktree.sh <repo-path> <branch> [base]` that does it deterministically and prints the worktree path on stdout, so a launcher can pass `Worktree: <path>` to a developer.
 
 ## Acceptance criteria
 - [ ] AC1 — Given a repo path and a new branch name, when the script runs with `[base]` omitted, then a worktree exists at `<repo>/.claude/worktrees/<branch-with-slashes-replaced-by-dashes>` on a new branch created from `origin/<baseBranch from .pocket-it.json, default main>` after `git fetch`, and the script prints only the absolute worktree path on stdout (everything else on stderr).

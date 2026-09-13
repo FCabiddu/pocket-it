@@ -25,7 +25,7 @@ awk '/^## Fatti/{f=1;next} /^## /{f=0} f' docs/SESSION_HANDOFF.md               
 gh pr list --state all --limit 100 --search "{scope}" --json number,title,mergedAt,labels,headRefName
 ```
 
-For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json comments --jq '.comments[].body' | head -80`), whether it carried `needs-work`, how many review rounds. From `tasks/`: estimate and budget of each task (`grep -hE '^\*\*(Estimate|Budget)' tasks/{id}-*.md`). Read the best-practices files once.
+For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json comments --jq '.comments[].body' | head -80`), whether it carried `needs-work`, how many review rounds, and — for any PR with more than one round — the cause line a delta review should have stated (Step 0 of `reviewer.md`): an example mistaken for the whole specification, the base moving under the PR, the verification reintroducing the defect, or another one. A round count with no cause read is not evidence yet; the cause is what turns into a rule. From `tasks/`: estimate and budget of each task (`grep -hE '^\*\*(Estimate|Budget)' tasks/{id}-*.md`). Read the best-practices files once.
 
 ## Step 2 — Find the patterns (≥ 2 occurrences, or 1 with high cost)
 
@@ -35,6 +35,7 @@ For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json 
 | Estimation | `BUDGET` lines: a kind of task (label × estimate) that ran over while progressing, ≥ 2 times | a `handoff.sh fact "Stima: {kind} → {next size}, perché …"` the planner reads before estimating; plus the proposed planner line |
 | Stall | `STALL` lines, agents in the usage report with >150 turns and no PR, three-attempt loops | a stop rule or a best-practice ("when X fails three times, do Y"); if the task was too big, a split heuristic for the planner |
 | Weak spec | rework caused by an ambiguous or missing criterion | the BA/planner Given/When/Then wording — propose the exact line |
+| Review rounds | a PR needed a 2nd/3rd round: group them by **cause**, not by count — an example mistaken for the whole specification (a guard finding that named instances, not the class), the base moving under the PR (no merge-and-retest before sending to review), a verification that reintroduced the defect (a check describing content by repeating it instead of by its effect) | the cause's own home: the task/finding wording, a `verify.sh` step (merge base before scoped tests), or a report-writing rule — never a generic "review harder" note |
 | Wrong scope | files outside `**Files**`, tasks that turned out to be two | planner heuristic (split rule, file ownership) |
 | Tooling | worktree-isolation blocks, classifier denials, `verify.sh` gaps, mechanical failures reaching review | the shared rules or a script — propose the exact line; count them so the next retro sees the trend |
 | Process | `general-purpose` launches, sessions with average context > 200k, agents relaunched instead of resumed | the orchestrator's rules (`~/.claude/CLAUDE.md` or its entry skill) — propose the line, with the count |
@@ -44,7 +45,7 @@ For each PR in scope: the reviewer's comments (`gh pr view $N --comments --json 
 
 Three layers, three destinations. Everything you write is text (rules, facts, lessons), never product code, so your PRs are merged by you, immediately, with the audit prefix — a lesson nobody can read yet is a lesson lost. The exceptions: config `automerge: false`, or `Draft: yes` in your arguments → leave the PRs in draft and say so.
 
-- **Project facts** (this project only; read by every implementing agent at Step 1): `handoff.sh fact` for estimate corrections and gotchas true here and not general. Keep the section ≤ 30 lines: replace a fact now covered by a rule.
+- **Project facts** (this project only; read by every implementing agent at Step 1): `handoff.sh fact` for estimate corrections and gotchas true here and not general. Keep the section ≤ 100 lines: replace a fact now covered by a rule.
 - **Best-practices** (this stack; read by developer, qa, reviewer): add or sharpen bullets in the existing group file; never a new file; keep each within its 120-line cap by removing what no longer applies.
   Commit facts + best-practices on a branch `retro/{scope}-{date}` in the project, push, `gh pr create --base {baseBranch} --title "retro({scope}): {n} rules, {m} estimate corrections from {k} findings"` with the finding → rule table as body, then `POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch`.
 - **Method lessons** (every project, any stack; read by all agents at Step 0): `~/.claude/agents/pocket-it/.claude/agents/shared/lessons.md`. A finding earns a lesson when it is about *how we work*, not about this code or this stack (splitting, budgets, review order, tooling, process). Write it in the file's fixed form, status `provisional`, no client or project names ("project A"). Also **update existing lessons**: a `provisional` one you have now seen hold on a second epic/project becomes `confirmed`; one contradicted by the evidence is removed (say why in the PR). Keep ≤ 40 lines. Then, in that repo:
@@ -54,7 +55,7 @@ Three layers, three destinations. Everything you write is text (rules, facts, le
   If the pocket-it checkout is dirty or on another branch, do not touch it: write the lessons into the report under "Lessons not landed" and stop there.
 - **Pocket-it templates and rules** (`implementing-common.md`, agent templates, the orchestrator's CLAUDE.md): never edited from here. When a `confirmed` lesson keeps mattering, propose its promotion in the report under "Proposed changes to pocket-it", exact line and section; a human moves it and deletes the lesson.
 
-**Facts hygiene (every run).** `handoff.sh fact` refuses new facts at the cap (30), so the retro keeps the section useful: when the project has ≥ 25 facts, move every fact that is a stable stack or pattern rule (older than 30 days and still true) into the matching `best-practices/{group}.md` bullet, delete facts that describe history rather than knowledge (they are in the log or the archive), merge duplicates — target ≤ 20 facts, each still one line. List every moved or deleted fact in the report so the user can veto one.
+**Facts hygiene (every run).** `handoff.sh fact` refuses new facts at the cap (100), so the retro keeps the section useful: when the project has ≥ 85 facts, move every fact that is a stable stack or pattern rule (older than 30 days and still true) into the matching `best-practices/{group}.md` bullet, delete facts that describe history rather than knowledge (they are in the log or the archive), merge duplicates — target ≤ 70 facts, each still one line. List every moved or deleted fact in the report so the user can veto one.
 
 ## Step 4 — Report: file first, ten lines back
 
@@ -65,5 +66,5 @@ Write the full report (≤ 40 lines, the sections below) to `docs/reports/retro-
 - Patterns found, each with count and the rule written (or proposed).
 - The PR URLs (project: merged; pocket-it lessons: merged) — or "left in draft because {automerge false | Draft requested}".
 - Lessons: new (provisional), confirmed, removed — one line each.
-- "Proposed changes to pocket-it" — exact lines, copy-pasteable, only for confirmed lessons that deserve promotion to a rule.
-- "Not actioned" — one-offs, with a word on why.
+- "Proposed changes to pocket-it" — exact lines, copy-pasteable, only for confirmed lessons that deserve promotion to a rule (the promotion itself is the one deliberate human step in this pipeline, by existing design — not a stand-in for every other open point).
+- "Not actioned" — one-offs, with a word on why. Keep this list to genuine one-offs, never a parking spot for a pipeline mechanism you could have fixed in Step 3: a repeated review-grouping, round-limit, retry, model-choice or compaction snag is a pattern you write the rule for now, in this same pass, not a question left open. Only a finding that turned out to need a business/product call, money, credentials, an account, a permission, client-only data, or a physical/human check belongs to the user, and never as an item mixed into "Not actioned" — name it separately, say why it is the exception, and say plainly that **only that one point waits**: every other rule, fact and lesson from this pass is written and merged the same run, none of it held back by the one point that needed a person.
