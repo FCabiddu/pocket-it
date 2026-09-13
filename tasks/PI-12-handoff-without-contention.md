@@ -1,20 +1,20 @@
 # PI-12 — La memoria della pipeline è scritta da tutti nello stesso punto, e la piattaforma la blocca
 
-**Status**: Todo — serve una decisione di struttura prima di implementare
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
 **Priority**: Must
-**Estimate**: da dimensionare
-**Budget**: da dimensionare
+**Estimate**: S
+**Budget**: 120
 **Risk**: low
 **Depends on**: none
 **Wave**: 1
-**Files**: da definire nel design — l'impianto tocca `bin/handoff.sh`, `bin/status.sh`, gli agenti che leggono la memoria all'avvio (`developer`, `reviewer`, `retro`, `implementation-planner`) e lo skill `run-wave`
-**TAD**: da produrre
+**Files**: `tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md` — l'elenco definitivo per ciascun task di implementazione è in §12; l'impianto tocca `bin/handoff.sh`, `bin/status.sh`, gli agenti che leggono la memoria all'avvio (`developer`, `reviewer`, `retro`, `implementation-planner`) e lo skill `run-wave`
+**TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§2.4 decisioni, §12 suddivisione in task)
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: design/pi-12-handoff-without-contention
+**PR**: https://github.com/FCabiddu/pocket-it/pull/39
 
 ## Goal
 `docs/SESSION_HANDOFF.md` è la memoria della pipeline: ogni agente ci scrive le proprie righe di log e i propri fatti, e ogni agente lo rilegge all'avvio. È un file solo, e tutti scrivono **in cima alla stessa sezione**. Due rami che lavorano in parallelo toccano quindi sempre la stessa porzione dello stesso file.
@@ -45,12 +45,20 @@ Direzione proposta, da confermare o sostituire nel design: **togliere la contesa
 - La suddivisione in task con una stima per ciascuno, e l'ordine in cui vanno fatti.
 
 ## Acceptance criteria
-- [ ] AC1 — Esiste un documento di design che sceglie una struttura e dice perché, con le alternative scartate e il motivo.
-- [ ] AC2 — Il design dice esplicitamente come due rami paralleli che scrivono memoria nello stesso momento smettono di confliggere, e per quale meccanismo, non per quale buona volontà.
-- [ ] AC3 — Il design copre la migrazione del contenuto esistente senza perdita.
-- [ ] AC4 — Il lavoro è spezzato in task dimensionati, ordinati, ciascuno con la sua stima.
+- [x] AC1 — Esiste un documento di design che sceglie una struttura e dice perché, con le alternative scartate e il motivo.
+- [x] AC2 — Il design dice esplicitamente come due rami paralleli che scrivono memoria nello stesso momento smettono di confliggere, e per quale meccanismo, non per quale buona volontà.
+- [x] AC3 — Il design copre la migrazione del contenuto esistente senza perdita.
+- [x] AC4 — Il lavoro è spezzato in task dimensionati, ordinati, ciascuno con la sua stima.
 
 ## Notes
 Da non rifare: la strada del driver di merge è già stata provata ed è quella che ha fallito. Un design che la ripropone, in qualunque forma che dipenda da un'impostazione locale del repository, non risolve il problema.
 
 Il vincolo vero da rispettare è che la memoria è nel percorso di avvio di **ogni** agente: qualunque struttura si scelga, leggerla deve restare economico e deve restare una cosa sola da capire per chi la legge.
+
+## Esito
+Design prodotto in `tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md` (v2.0, dopo la review di PR #39). La direzione proposta è confermata, con tre correzioni:
+- **un frammento per invocazione**, non per ramo: un file per ramo confligge su `_base.md` (misurato in review) e in add/add dopo uno squash (misurato);
+- la composizione avviene **in lettura**, e nessuna lettura scrive;
+- il vecchio file **si congela** invece di migrare.
+
+Un fatto si toglie con `retract`. Implementazione in cinque task, PI-14…PI-18, in ordine «prima i lettori, poi gli scrittori», con criteri Given/When/Then (§12).

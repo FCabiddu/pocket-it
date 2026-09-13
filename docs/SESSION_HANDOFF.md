@@ -31,8 +31,16 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A verification procedure written into a shared agent doc must be executed, as literally written, against every technique in the same doc that cites it (and against a decorative non-text neighbour), not only against the author's fixture: PI-23 rounds 3-4 each shipped a method that the doc's own techniques contradicted (a metrics fallback with a false negative; a step scope 'ancestors' that misses the #1 line-mask markup).
 - An intentional-truncation exclusion in a glyph-clip check must keep closed only the side the truncation cuts on purpose, and be proven with a real cut on every other side: PI-24 round 5 measured three neutralisations blind to an unintended side (line-clamp: last kept line's descenders 0; scroller excluded entirely: top-accent cut 0; ellipsis overflow-x:clip: inline-start ink cut 0), each written from fixtures that only cut the side already tested. A 1-2 px diff at a box edge that goes to 0 when the glyph changes (A->Z) or padding moves it inside is real ink, not a renderer artifact.
 - clip-path basic shapes (inset/polygon) resolve against the border-box by default, while overflow clips at the padding edge: a reset that swaps an overflow clip for a clip-path on the same side must say padding-box, or a bordered element shows content under its (transparent) border only in the reset shot — PI-24 round 6 measured a false red 291/1024 on a clean bordered scroller. Clean fixtures for any exclusion must include a border on the excused side.
+- Numerazione dei task: verificare 'ls tasks/' prima di assegnare un id — due task con lo stesso id si mascherano a vicenda in next-wave.sh (PI-12 aveva proposto PI-13, già occupato)
+- Guardie su git log --name-status: sempre -m --first-parent (altrimenti la D dentro un merge sparisce) e --no-renames (altrimenti una cancellazione con file simile esce come R e l'esito dipende da diff.renames)
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
+- 2026-09-13 PI-12 PR #39 fix pushed round 4 — guardia con --no-renames, compact 1/N e rinomina vera come casi — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 3 delta — compact esce come R, serve --no-renames — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 3 — segnale where fuori repo, guardia MRTD con -m --first-parent — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 2 delta — where scrive, guardia frammenti solo M — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 2 — frammento per invocazione, congelamento, retract, AC per PI-14…18 — nessun test (documento)
 - 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
 - 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
 - 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
@@ -55,6 +63,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
 - 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
 - 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
+- 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
 - 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
 - 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
 - 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
@@ -66,10 +75,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
 - 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
 - 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class
-- 2026-09-13 PI-25 PR #50 fix pushed round 4 — repo8's vacuous 'no error' assertions replaced with real duplicate pairs per id shape
-- 2026-09-13 PI-25 PR #50 needs work (delta 3) — doctor alnum-id test is vacuous — cause: other: vacuous test
-- 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
-- 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
-- 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
-- 2026-09-13 PI-13 review round 4 pushed — unparseable commands deny every push, continuations joined — 179 guard cases
-- 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
