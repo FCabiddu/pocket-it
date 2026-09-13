@@ -42,6 +42,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - handoff.sh (post PI-14): only log/fact write and normalise the stale 'max N righe' cap comment, on their own write — facts/show/recent/grep are pure reads (ADR-2) and never touch the file, so a stale comment survives them.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-14 PR #63 approved (delta 3) — merge: orchestrator
 - 2026-09-13 PI-14 PR #63 needs work (delta 2) — argomenti in più accettati con exit 0 — cause: example-not-class
 - 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
 - 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
@@ -81,4 +82,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
 - 2026-09-13 PI-31 PR #59 needs work — gh failure reported as not merged
 - 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
-- 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
