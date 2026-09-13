@@ -3,6 +3,12 @@
 # updated once every child task turned Done, on scratch git repos. Covers AC1-AC4 of PI-3.
 cd "$(dirname "$0")"
 SCRIPT="$PWD/doctor.sh"
+GUARD="$(cd .. && pwd)/.claude/hooks/guard.sh"  # PI-29 round 4: proves doctor's printed commands pass the real guard
+guard_rc(){ # guard_rc <cwd> <command> — exit code of guard.sh given <command> as a PreToolUse Bash payload
+  local cwd="$1" cmd="$2"
+  ( cd "$cwd" && python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.argv[1]}}))' "$cmd" | bash "$GUARD" >/dev/null 2>&1 )
+  echo $?
+}
 S=$(mktemp -d "${TMPDIR:-/tmp}/doctor-test.XXXXXX")
 cleanup(){ rm -rf "$S"; }
 trap cleanup EXIT
@@ -220,15 +226,19 @@ printf 'after\n' > "$SCRATCH10/h.txt"; q git -C "$SCRATCH10" add -A; q git -C "$
 q git -C "$SCRATCH10" push -q origin main
 AFTER_SHA10=$(git -C "$SCRATCH10" rev-parse HEAD)
 
-# AC2: rewritten base — an ERROR that says how to inspect it, how to recover without discarding
-# anything pushed since, and how to accept it if the rewrite was intentional. Round 3: every command
-# it prints must actually RUN, as printed, from inside an arbitrary project (no bin/ dir, nothing
-# pocket-it-specific in the clone) and bring doctor back to green — round 2 only checked the text.
-# Each remediation path (recover / accept / each mutation) gets its OWN fresh origin replaying the
-# same rewrite, and its own clone seeded with the same "last seen" baseline — pushing to origin in
-# one path (the real recovery genuinely mutates the remote) must never disturb another path's test.
-extract_recover_cmd(){ grep '^ERROR base branch' | sed -E 's/.*discarding anything pushed since: (.*) — if it was intentional.*/\1/'; }
-extract_accept_cmd(){ grep '^ERROR base branch' | sed -E 's/.*then accept it with: (.*)$/\1/'; }
+# AC2/AC3: base rewritten or deleted — an ERROR that says how to inspect it and how to SAVE the lost
+# commit, never how to write onto the base itself: restoring the base is a decision for a person, not
+# this script (PI-29 round 4). Round 3's recovery pushed a merge commit straight onto the base; round
+# 4's own recovery-on-deletion form (`git push origin {prev}:refs/heads/{base}`) has the identical
+# defect. Every command doctor prints must (a) actually RUN, as printed, from inside an arbitrary
+# project; (b) never move refs/heads/<base> on origin; (c) be allowed by the real pocket-it push guard
+# even when the base is literally named "main"; (d) leave doctor red until a person restores the base
+# or, for a rewrite, runs --accept-base. Each remediation path gets its OWN fresh origin/clone so that
+# a real push in one path never disturbs another path's test.
+extract_save_cmd(){        grep '^ERROR base branch' | sed -E 's/.*pruned away: (.*) — restoring.*/\1/'; }              # AC2, from doctor's normal run
+extract_accept_cmd(){      grep '^ERROR base branch' | sed -E 's/.*then accept it with: (.*)$/\1/'; }                   # AC2, unchanged shape
+extract_save_cmd_del(){    grep '^ERROR base branch' | sed -E 's/.*can be lost: (.*) — whether and how to restore.*/\1/'; }         # AC3, from doctor's normal run
+extract_save_cmd_del_acc(){ grep '^doctor --accept-base' | sed -E 's/.*can be lost: (.*) — whether and how to restore.*/\1/'; }     # AC3, from --accept-base
 seed_prev(){ # seed_prev <clone-dir> <base> <sha> — pre-record doctor's "last seen" baseline for a clone
   mkdir -p "$(common "$1")/pocket-it"
   printf '%s %s\n' "$2" "$3" > "$(common "$1")/pocket-it/base-seen"
@@ -245,47 +255,74 @@ clone_rewritten(){ # clone_rewritten <dest-dir> — a fresh origin + clone at th
   q git clone -q "$1.git" "$1"
   seed_prev "$1" main "$SHA2"
 }
+clone_deleted(){ # clone_deleted <dest-dir> — a fresh origin at SHA1->SHA2, clone (prev=SHA2 seeded), THEN main deleted
+  local bare="$1.git"
+  q git init -q --bare -b main "$bare"
+  q git -C "$bare" config receive.denyDeleteCurrent ignore
+  q git -C "$SEED10" push -q "$bare" main:main
+  q git clone -q "$bare" "$1"
+  seed_prev "$1" main "$SHA2"
+  q git -C "$SEED10" push -q "$bare" --delete main
+}
+RESCUE_BRANCH="rescue-${SHA2:0:12}"  # doctor derives it the same way (prev[:12]) — SHA2 is prev throughout repo10
 
 OUT=$(cd "$WORK10" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
 ok "AC2 rewritten base: ERROR names the lost commit"        "has \"ERROR base branch 'main' was rewritten on origin: commit $SHA2 is no longer in its history\""
 ok "AC2 rewritten base: says how to see what changed"       "has \"git log $SHA2..refs/remotes/origin/main\" && has \"git log refs/remotes/origin/main..$SHA2\""
-ok "AC2 rewritten base: recovery command is not a bare --force onto main" '! has "push --force origin '"$SHA2"':refs/heads/main"'
+ok "AC2 rewritten base: no command writes refs/heads/main (only a rescue branch is pushed)" \
+  '! has "refs/heads/main" && has "git branch rescue-" && has "git push origin rescue-"'
+ok "AC2 rewritten base: says restoring main is a person's decision, not the script's" \
+  'has "decision for a person, not this script"'
 ok "AC2 rewritten base: says how to accept an intentional rewrite, absolute script path" \
   "has \"then accept it with: bash $SCRIPT --accept-base\""
 ok "AC2 rewritten base: doctor exits 1"                '[[ $rc -eq 1 ]]'
 ok "AC2 rewritten base: seen commit NOT advanced (keeps reporting until fixed)" 'seen_has "$WORK10" "main $SHA2"'
 
-# execute the printed RECOVERY command verbatim, from its own clone's cwd (an arbitrary project
-# checkout, no bin/ dir, nothing pocket-it-specific) — must not discard a single local ref/commit,
-# must keep whatever was pushed to main AFTER the rewrite, and bring the next doctor.sh run to green.
+# execute the printed SAVE command verbatim, from its own clone's cwd (an arbitrary project checkout,
+# no bin/ dir, nothing pocket-it-specific) — must not touch refs/heads/main on origin, must push a
+# rescue branch pointing at the lost commit, must pass the real push guard, and must leave doctor RED
+# (restoring main is still a human call) until --accept-base is run.
 WORK10R="$S/repo10-work-recover"; clone_rewritten "$WORK10R"
-RECOVER_CMD=$(extract_recover_cmd <<<"$OUT")
+SAVE_CMD=$(extract_save_cmd <<<"$OUT")
 LOCAL_BEFORE=$(git -C "$WORK10R" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
-( cd "$WORK10R" && eval "$RECOVER_CMD" ) >/dev/null 2>&1; recover_rc=$?
+LS_MAIN_BEFORE=$(git -C "$WORK10R" ls-remote origin refs/heads/main)
+GRC=$(guard_rc "$WORK10R" "$SAVE_CMD")
+( cd "$WORK10R" && eval "$SAVE_CMD" ) >/dev/null 2>&1; save_rc=$?
 LOCAL_AFTER=$(git -C "$WORK10R" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
-ok "recovery command: runs clean from the project's own cwd" '[[ $recover_rc -eq 0 ]]'
-ok "recovery command: local branches/HEAD unchanged (nothing discarded)" '[[ "$LOCAL_BEFORE" == "$LOCAL_AFTER" ]]'
-OUT_POST_RECOVER=$(cd "$WORK10R" && bash "$SCRIPT"); rc_post_recover=$?
-ok "recovery command: doctor.sh is GREEN on the very next run (not just red-with-different-text)" \
-  '[[ $rc_post_recover -eq 0 ]] && ! grep -q "was rewritten on origin" <<<"$OUT_POST_RECOVER"'
-ok "recovery command: the commit pushed AFTER the rewrite is still on main's history" \
-  '[[ "$(cd "$WORK10R" && git fetch -q origin && git merge-base --is-ancestor '"$AFTER_SHA10"' refs/remotes/origin/main; echo $?)" == 0 ]]'
+LS_MAIN_AFTER=$(git -C "$WORK10R" ls-remote origin refs/heads/main)
+ok "save command: runs clean from the project's own cwd"                     '[[ $save_rc -eq 0 ]]'
+ok "save command: refs/heads/main on origin is byte-identical before/after"  '[[ "$LS_MAIN_BEFORE" == "$LS_MAIN_AFTER" ]]'
+ok "save command: rescue branch pushed to origin, pointing at the lost commit" \
+  '[[ "$(git -C "$WORK10R" ls-remote origin "refs/heads/$RESCUE_BRANCH" | cut -f1)" == "$SHA2" ]]'
+EXPECTED_LOCAL_AFTER=$(printf '%s\n%s\n' "$LOCAL_BEFORE" "refs/heads/$RESCUE_BRANCH $SHA2" | sort)
+ok "save command: adds only the rescue branch locally, nothing pre-existing discarded" \
+  '[[ "$LOCAL_AFTER" == "$EXPECTED_LOCAL_AFTER" ]]'
+ok "save command: the pocket-it push guard allows it, even with base=main"   '[[ $GRC -eq 0 ]]'
+OUT_POST_SAVE=$(cd "$WORK10R" && bash "$SCRIPT"); rc_post_save=$?
+ok "save command alone: doctor stays RED (restoring main is still a human decision)" \
+  '[[ $rc_post_save -eq 1 ]] && grep -q "was rewritten on origin" <<<"$OUT_POST_SAVE"'
+ACCEPT_CMD_R=$(extract_accept_cmd <<<"$OUT_POST_SAVE")
+( cd "$WORK10R" && eval "$ACCEPT_CMD_R" ) >/dev/null 2>&1; accept_r_rc=$?
+OUT_POST_ACCEPT_R=$(cd "$WORK10R" && bash "$SCRIPT")
+ok "after the save AND --accept-base: doctor turns green"  \
+  '[[ $accept_r_rc -eq 0 ]] && ! grep -q "was rewritten on origin" <<<"$OUT_POST_ACCEPT_R"'
 
-# mutation A: revert the fix to round 2's non-converging recovery (publish to a side ref, never
-# touches main) — on a FRESH clone (BARE10's main is still the raw rewrite, untouched by WORK10R's
-# recovery above), the SAME kind of recovery command, executed the SAME way, must fail to go green
+# mutation: revert the save command to a form that writes directly onto refs/heads/main (round 3's
+# own mistake) — on a FRESH clone, running it the SAME way must actually move refs/heads/main, proving
+# check (a) above is not vacuous, and must be BLOCKED by the real push guard.
 WORK10MA="$S/repo10-work-mutA"; clone_rewritten "$WORK10MA"
-MUT_RECOVER=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
-sed '/^                        recover_cmd = ($/,/^                        )$/c\
-                        recover_cmd = f"git push origin {prev}:refs/heads/{base}-recovered-{prev[:12]} (a new ref, {base} itself untouched)"  # MUTATED round-2 form' "$SCRIPT" > "$MUT_RECOVER"
-OUT_MR=$(cd "$WORK10MA" && bash "$MUT_RECOVER"); rc_mr=$?
-RECOVER_CMD_MR=$(extract_recover_cmd <<<"$OUT_MR")
-( cd "$WORK10MA" && eval "$RECOVER_CMD_MR" ) >/dev/null 2>&1
-OUT_MR_POST=$(cd "$WORK10MA" && bash "$MUT_RECOVER"); rc_mr_post=$?
-rm -f "$MUT_RECOVER"
-ok "mutation A (round-2 recovery form): fails to turn doctor green — proves the round-3 test is not vacuous" \
-  '[[ $rc_mr_post -eq 1 ]] && grep -q "was rewritten on origin" <<<"$OUT_MR_POST"'
+q git -C "$WORK10MA" fetch origin
+MUT_TREE=$(git -C "$WORK10MA" rev-parse refs/remotes/origin/main^{tree})
+MUT_MERGE=$(git -C "$WORK10MA" commit-tree "$MUT_TREE" -p refs/remotes/origin/main -p "$SHA2" -m "round-3 mistake replay")
+OLD_FORM_CMD="git push origin $MUT_MERGE:refs/heads/main"  # fast-forward from the current tip, like round 3's own mistake
+LS_MAIN_BEFORE_MA=$(git -C "$WORK10MA" ls-remote origin refs/heads/main)
+GRC_MA=$(guard_rc "$WORK10MA" "$OLD_FORM_CMD")
+( cd "$WORK10MA" && eval "$OLD_FORM_CMD" ) >/dev/null 2>&1
+LS_MAIN_AFTER_MA=$(git -C "$WORK10MA" ls-remote origin refs/heads/main)
+ok "mutation (a push straight onto refs/heads/main): actually rewrites main — proves the round-4 checks are not vacuous" \
+  '[[ "$LS_MAIN_BEFORE_MA" != "$LS_MAIN_AFTER_MA" ]]'
+ok "mutation (a push straight onto refs/heads/main): the real pocket-it push guard blocks it" '[[ $GRC_MA -eq 2 ]]'
 
 # --accept-base: extract and run the printed command on ITS OWN fresh clone's cwd (no bin/doctor.sh
 # there); a human decision that only ever updates doctor's own bookkeeping — never a git ref/branch/commit
@@ -320,28 +357,69 @@ ok "mutation B (round-2 accept form): the printed command, run from the project,
 # locale: classified from `ls-remote --exit-code`'s exit status, never from stderr text — see the
 # fake-git locale regression tests below, repo 13). Its own fresh origin (SHA1->SHA2 only, no
 # rewrite needed to test a deletion) so it is independent of everything repo10 did above.
-BARE10DEL="$S/repo10-del-origin.git"
-q git init -q --bare -b main "$BARE10DEL"
-q git -C "$BARE10DEL" config receive.denyDeleteCurrent ignore
-q git -C "$SEED10" push -q "$BARE10DEL" main:main
-WORK10DEL="$S/repo10-work-deleted"
-q git clone -q "$BARE10DEL" "$WORK10DEL"
-seed_prev "$WORK10DEL" main "$SHA2"
-q git -C "$SEED10" push -q "$BARE10DEL" --delete main
+WORK10DEL="$S/repo10-work-deleted"; clone_deleted "$WORK10DEL"
 OUT=$(cd "$WORK10DEL" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
 ok "AC3 deleted base: ERROR reported"                  'has "ERROR base branch '"'"'main'"'"' no longer exists on origin"'
 ok "AC3 deleted base: doctor exits 1"                  '[[ $rc -eq 1 ]]'
+ok "AC3 deleted base: no command re-creates refs/heads/main directly"  '! has "refs/heads/main"'
 
-# --accept-base on a DELETED base (finding 3, round 3): must say it is deleted and what to do, never
-# "try again once reachable" (that phrase is only true for a transient/unreachable origin)
-OUT_ACCEPT_DEL=$(cd "$WORK10DEL" && bash "$SCRIPT" --accept-base); rc_accept_del=$?
-BASE_SEEN_BEFORE=$(cat "$(common "$WORK10DEL")/pocket-it/base-seen" 2>/dev/null)
+# execute the printed SAVE command for a deleted base (finding 2) — must not touch refs/heads/main
+# (there is nothing to touch: it does not exist), must push a rescue branch, must pass the guard.
+WORK10DELR="$S/repo10-del-recover"; clone_deleted "$WORK10DELR"
+OUT_DELR=$(cd "$WORK10DELR" && bash "$SCRIPT")
+SAVE_CMD_DEL=$(extract_save_cmd_del <<<"$OUT_DELR")
+LS_MAIN_BEFORE_DEL=$(git -C "$WORK10DELR" ls-remote origin refs/heads/main)
+GRC_DEL=$(guard_rc "$WORK10DELR" "$SAVE_CMD_DEL")
+( cd "$WORK10DELR" && eval "$SAVE_CMD_DEL" ) >/dev/null 2>&1; save_rc_del=$?
+LS_MAIN_AFTER_DEL=$(git -C "$WORK10DELR" ls-remote origin refs/heads/main)
+ok "deleted base, save command: runs clean"                                 '[[ $save_rc_del -eq 0 ]]'
+ok "deleted base, save command: refs/heads/main stays absent on origin (identical before/after)" \
+  '[[ -z "$LS_MAIN_BEFORE_DEL" ]] && [[ "$LS_MAIN_BEFORE_DEL" == "$LS_MAIN_AFTER_DEL" ]]'
+ok "deleted base, save command: rescue branch pushed, pointing at the last-seen commit" \
+  '[[ "$(git -C "$WORK10DELR" ls-remote origin "refs/heads/$RESCUE_BRANCH" | cut -f1)" == "$SHA2" ]]'
+ok "deleted base, save command: the pocket-it push guard allows it"         '[[ $GRC_DEL -eq 0 ]]'
+OUT_POST_DELR=$(cd "$WORK10DELR" && bash "$SCRIPT"); rc_post_delr=$?
+ok "deleted base, save command alone: doctor stays RED (base still gone, a person restores it)" '[[ $rc_post_delr -eq 1 ]]'
+
+# --accept-base on a DELETED base (finding 3): must say it is deleted and what to do, never "try
+# again once reachable" (that phrase is only true for a transient/unreachable origin), and its own
+# printed save command must have the same three properties as the ones above.
+WORK10DELACC="$S/repo10-del-accept"; clone_deleted "$WORK10DELACC"
+OUT_ACCEPT_DEL=$(cd "$WORK10DELACC" && bash "$SCRIPT" --accept-base); rc_accept_del=$?
+BASE_SEEN_BEFORE=$(cat "$(common "$WORK10DELACC")/pocket-it/base-seen" 2>/dev/null)
 ok "--accept-base on deleted base: exits 1"                          '[[ $rc_accept_del -eq 1 ]]'
 ok "--accept-base on deleted base: says it no longer exists, not 'try again once reachable'" \
   'grep -q "no longer exists on origin" <<<"$OUT_ACCEPT_DEL" && ! grep -qi "try again once reachable" <<<"$OUT_ACCEPT_DEL"'
-ok "--accept-base on deleted base: says how to restore it"           'grep -q "restore it with: git push origin" <<<"$OUT_ACCEPT_DEL"'
-ok "--accept-base on deleted base: base-seen left untouched"         '[[ "$(cat "$(common "$WORK10DEL")/pocket-it/base-seen" 2>/dev/null)" == "$BASE_SEEN_BEFORE" ]]'
+ok "--accept-base on deleted base: says how to save the lost commit, not how to write main directly" \
+  'grep -q "save the lost commit before it can be lost: git branch rescue-" <<<"$OUT_ACCEPT_DEL" && ! grep -q "refs/heads/main" <<<"$OUT_ACCEPT_DEL"'
+ok "--accept-base on deleted base: base-seen left untouched"         '[[ "$(cat "$(common "$WORK10DELACC")/pocket-it/base-seen" 2>/dev/null)" == "$BASE_SEEN_BEFORE" ]]'
+
+SAVE_CMD_DEL_ACC=$(extract_save_cmd_del_acc <<<"$OUT_ACCEPT_DEL")
+LS_MAIN_BEFORE_DELACC=$(git -C "$WORK10DELACC" ls-remote origin refs/heads/main)
+GRC_DELACC=$(guard_rc "$WORK10DELACC" "$SAVE_CMD_DEL_ACC")
+( cd "$WORK10DELACC" && eval "$SAVE_CMD_DEL_ACC" ) >/dev/null 2>&1; save_rc_delacc=$?
+LS_MAIN_AFTER_DELACC=$(git -C "$WORK10DELACC" ls-remote origin refs/heads/main)
+ok "--accept-base on deleted base, save command: runs clean"                     '[[ $save_rc_delacc -eq 0 ]]'
+ok "--accept-base on deleted base, save command: refs/heads/main stays absent, identical before/after" \
+  '[[ -z "$LS_MAIN_BEFORE_DELACC" ]] && [[ "$LS_MAIN_BEFORE_DELACC" == "$LS_MAIN_AFTER_DELACC" ]]'
+ok "--accept-base on deleted base, save command: rescue branch pushed, pointing at the last-seen commit" \
+  '[[ "$(git -C "$WORK10DELACC" ls-remote origin "refs/heads/$RESCUE_BRANCH" | cut -f1)" == "$SHA2" ]]'
+ok "--accept-base on deleted base, save command: the pocket-it push guard allows it"  '[[ $GRC_DELACC -eq 0 ]]'
+
+# mutation: revert the deleted-base save command to one that re-creates refs/heads/main directly
+# (round 3's mistake, restated for deletion) — on a FRESH clone, running it the SAME way must
+# actually create refs/heads/main, proving the "stays absent" check above is not vacuous, and it
+# must be BLOCKED by the real push guard.
+WORK10DELMA="$S/repo10-del-mutA"; clone_deleted "$WORK10DELMA"
+OLD_FORM_CMD_DEL="git push origin $SHA2:refs/heads/main"
+LS_MAIN_BEFORE_DELMA=$(git -C "$WORK10DELMA" ls-remote origin refs/heads/main)
+GRC_DELMA=$(guard_rc "$WORK10DELMA" "$OLD_FORM_CMD_DEL")
+( cd "$WORK10DELMA" && eval "$OLD_FORM_CMD_DEL" ) >/dev/null 2>&1
+LS_MAIN_AFTER_DELMA=$(git -C "$WORK10DELMA" ls-remote origin refs/heads/main)
+ok "mutation (deleted base, push straight onto refs/heads/main): actually re-creates main — proves the round-4 checks are not vacuous" \
+  '[[ -z "$LS_MAIN_BEFORE_DELMA" ]] && [[ -n "$LS_MAIN_AFTER_DELMA" ]]'
+ok "mutation (deleted base, push straight onto refs/heads/main): the real pocket-it push guard blocks it" '[[ $GRC_DELMA -eq 2 ]]'
 
 # --- repo 11: the seen commit is shared across worktrees of the same repo (AC5) ---
 BARE11="$S/repo11-origin.git"; SEED11="$S/repo11-seed"

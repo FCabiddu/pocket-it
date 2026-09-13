@@ -91,8 +91,18 @@ if accept_base:
     status, detail = _classify_base(base, GIT_ENV)
     if status == "deleted":
         if prev:
-            print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
-                  f"restore it with: git push origin {prev}:refs/heads/{qbase} — then re-run doctor.sh")
+            has_prev = subprocess.run(["git", "cat-file", "-e", prev + "^{commit}"],
+                                       capture_output=True, env=GIT_ENV).returncode == 0
+            if has_prev:
+                rescue_branch = f"rescue-{prev[:12]}"
+                print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
+                      f"save the lost commit before it can be lost: git branch {rescue_branch} {prev} && "
+                      f"git push origin {rescue_branch} — whether and how to restore {base!r} is a decision "
+                      f"for a person, not this script")
+            else:
+                print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
+                      f"commit {prev} is also gone from the local object database (pruned) — recovery is not "
+                      f"possible from this clone, check other clones or worktrees for it")
         else:
             print(f"doctor --accept-base: base branch {base!r} does not exist on origin — nothing to accept")
         sys.exit(1)
@@ -117,8 +127,18 @@ if common_dir and has_origin:
     status, detail = _classify_base(base, GIT_ENV)
     if status == "deleted":  # AC3
         if prev:
-            err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
-                f"restore it: git push origin {prev}:refs/heads/{qbase} — then re-run doctor.sh")
+            has_prev = subprocess.run(["git", "cat-file", "-e", prev + "^{commit}"],
+                                       capture_output=True, env=GIT_ENV).returncode == 0
+            if has_prev:
+                rescue_branch = f"rescue-{prev[:12]}"
+                err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
+                    f"save it before it can be lost: git branch {rescue_branch} {prev} && "
+                    f"git push origin {rescue_branch} — whether and how to restore {base!r} is a decision "
+                    f"for a person, not this script — then re-run doctor.sh")
+            else:
+                err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
+                    f"commit {prev} is also gone from the local object database (pruned) — recovery is not "
+                    f"possible from this clone, check other clones or worktrees for it")
         else:
             err(f"base branch {base!r} does not exist on origin")
     elif status == "unreachable":  # never a false ERROR
@@ -145,28 +165,29 @@ if common_dir and has_origin:
                     if is_ancestor:
                         if remote_sha != prev: _save_seen(seen_file, {**seen, base: remote_sha})  # AC1: advanced normally
                     else:
-                        # a real fix, not just a status update: create a merge commit whose TREE is the
-                        # current (bad) tip's tree unchanged — nothing live is altered, including anything
-                        # pushed after the rewrite — but whose second parent is the lost commit, so it is
-                        # an ancestor again; a plain (non --force) push is a fast-forward from the remote's
-                        # own tip, so it can never collide with a concurrent legitimate push. No checkout,
-                        # no local branch required — it runs from any cwd, on the refs alone.
-                        recover_cmd = (
+                        # The recovery this script can perform on its own is limited to what never
+                        # writes to the base branch: saving the lost commit under a new ref. Whether
+                        # {base} itself should be restored to include it is a decision for a person —
+                        # a script cannot tell an intentional rewrite from an accidental one, and a
+                        # merge commit pushed straight onto {base} would reinstate history someone may
+                        # have deliberately removed (PI-29 round 3: this is exactly the mistake the
+                        # printed command used to make). has_prev (just checked above) is already true
+                        # here, so {prev} is guaranteed present locally.
+                        rescue_branch = f"rescue-{prev[:12]}"
+                        save_cmd = (
                             f"git fetch origin && "
-                            f"T=$(git rev-parse refs/remotes/origin/{qbase}^{{tree}}) && "
-                            f'N=$(git commit-tree "$T" -p refs/remotes/origin/{qbase} -p {prev} '
-                            f"-m 'PI-29 recovery: merge back {prev} after an unexpected rewrite of {base}') && "
-                            f'git push origin "$N":refs/heads/{qbase}'
+                            f"git branch {rescue_branch} {prev} && "
+                            f"git push origin {rescue_branch}"
                         )
                         err(
                             f"base branch {base!r} was rewritten on origin: commit {prev} is no longer in its history — "
                             f"see what changed: git log {prev}..refs/remotes/origin/{qbase} (added by the rewrite), "
                             f"git log refs/remotes/origin/{qbase}..{prev} (dropped by it) — "
-                            f"if it was accidental, merge the old history back onto {base} without discarding anything pushed since: "
-                            f"{recover_cmd} — "
-                            f"if it was intentional: first check that git log refs/remotes/origin/{qbase}..{prev} prints "
-                            f"nothing (else those commits only exist in the old history — stop, rescue them first with "
-                            f"git branch rescue-{prev[:12]} {prev}), then accept it with: {accept_cmd}"
+                            f"the lost commit is still reachable locally: save it before it can be pruned away: "
+                            f"{save_cmd} — "
+                            f"restoring {base!r} to include it again is a decision for a person, not this script: "
+                            f"doctor keeps reporting this as an error until {base!r} is restored, or, if the "
+                            f"rewrite was intentional, then accept it with: {accept_cmd}"
                         )
                         # do not overwrite the seen commit here: keep reporting until it is fixed or explicitly accepted
 
