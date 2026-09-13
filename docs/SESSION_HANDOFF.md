@@ -17,6 +17,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - a test asserting 'no error/no duplicate' on a single, un-duplicated fixture is vacuous if the checked condition also produces no error when the id/shape is simply not recognised at all — it can't distinguish 'read and clean' from 'not read'. To prove a shape IS read, declare the same id twice (two files) and require the positive signal (the duplicate error) to fire.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
 - 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
 - 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class
 - 2026-09-13 PI-25 PR #50 fix pushed round 4 — repo8's vacuous 'no error' assertions replaced with real duplicate pairs per id shape
@@ -56,4 +57,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests
 - 2026-09-11 PI-6 PR #24 draft - next-wave.sh total-order sort key for mixed alphanumeric ids - 6 tests
 - 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged
-- 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
