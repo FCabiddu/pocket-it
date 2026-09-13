@@ -44,7 +44,7 @@ required = ["Status","Label","Files","TAD"]
 id_files = {}  # declared id -> [files] — same extraction as next-wave.sh, so both scripts agree on what "same id" means
 for f in files:
     txt = open(f, errors="ignore").read()
-    m = re.match(r"^#\s*([A-Za-z]+(?:-[A-Za-z]+)*-\d+(?:\.\d+)*)", txt)  # a real id: letters, optional word segments, a mandatory numeric segment ("T-BUG-1", "PI-25", "T-2.1.1") — never a plain hyphenated word ("Follow-up") and never trailing punctuation ("T-2.1.1." stops at "T-2.1.1")
+    m = re.match(r"^#\s*(?=[A-Za-z][A-Za-z0-9]*-[^\s:]*\d)([A-Za-z][A-Za-z0-9]*(?:[-.][A-Za-z0-9]+)+)", txt)  # a real id: a letter-led prefix (alphanumeric segments allowed, e.g. E2E, I18N) then one or more -/.  segments, with a digit somewhere past the first hyphen; never a plain hyphenated word ("Follow-up": no digit, lookahead fails) and never trailing punctuation ("T-2.1.1." stops at "T-2.1.1")
     tid = m.group(1) if m else os.path.basename(f).split("-")[0]
     if m: id_files.setdefault(m.group(1), []).append(f)  # only a genuinely declared id counts as a duplicate candidate; a filename-guessed fallback never does
     fields = {}

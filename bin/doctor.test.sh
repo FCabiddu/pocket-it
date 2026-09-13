@@ -126,4 +126,36 @@ echo "$OUT" | sed 's/^/      | /'
 ok "trailing dot stripped: both extract to T-2.1.1, caught as duplicate" 'has "ERROR duplicate task id T-2.1.1: tasks/t-2.1.1-a.md, tasks/t-2.1.1-b.md"'
 ok "trailing dot stripped: doctor exits 1"                                '[[ $rc -eq 1 ]]'
 
+# --- repo 8: an id whose segment mixes letters and digits must not be ignored (PI-25 third round) ---
+# The round-2 regex required a pure-digit final segment, so "STYLE-PR1", "WELCOME-A11Y-1" and
+# "E2E-4" matched no id at all and silently dropped out of both scripts, same failure mode as
+# a real duplicate: the task disappears from the board with no error.
+R8="$S/repo8"
+q git init -q -b main "$R8"
+decl "$R8/tasks/style-pr1.md" "STYLE-PR1" "alnum segment after the prefix"
+decl "$R8/tasks/welcome-a11y-1.md" "WELCOME-A11Y-1" "alnum middle segment"
+decl "$R8/tasks/e2e-4.md" "E2E-4" "digit inside the prefix itself"
+q git -C "$R8" add -A; q git -C "$R8" commit -qm board
+OUT=$(cd "$R8" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "alnum-segment ids are read (no unexpected duplicate, no error)" '! has "ERROR"'
+ok "alnum-segment ids: doctor stays green"                          '[[ $rc -eq 0 ]]'
+
+# --- repo 9: a letter suffix on the numeric segment must not be truncated away (PI-25 third round) ---
+# The round-2 regex stopped at the digit run, so "T-1.2.3a"/"T-1.2.3b" both extracted to "T-1.2.3"
+# and "QF-10b" extracted to "QF-10": two distinct real ids collided into one, a false duplicate
+# (or a silent overwrite in next-wave.sh, same family of bug PI-25 exists to catch).
+R9="$S/repo9"
+q git init -q -b main "$R9"
+decl "$R9/tasks/t-1.2.3a.md" "T-1.2.3a" "letter suffix a"
+decl "$R9/tasks/t-1.2.3b.md" "T-1.2.3b" "letter suffix b"
+decl "$R9/tasks/qf-10.md" "QF-10" "plain"
+decl "$R9/tasks/qf-10b.md" "QF-10b" "letter suffix on a shorter id"
+q git -C "$R9" add -A; q git -C "$R9" commit -qm board
+OUT=$(cd "$R9" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "T-1.2.3a and T-1.2.3b are distinct ids, not merged" '! has "ERROR"'
+ok "QF-10 and QF-10b are distinct ids, not merged"      '! has "ERROR"'
+ok "letter-suffixed ids: doctor stays green"            '[[ $rc -eq 0 ]]'
+
 exit $fail

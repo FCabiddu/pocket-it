@@ -62,4 +62,23 @@ OUT_ERR="$OUT"; OUT_OUT=$(cat "/tmp/next-wave-test-stdout2.$$" 2>/dev/null); rm 
 ok "AC4 a hyphenated word without digits is never read as a task id" '! grep -q "Follow-up" <<<"$OUT_OUT$OUT_ERR"'
 ok "AC4 the two Follow-up notes are excluded from the total (1, not 3)" 'grep -q "1 total" <<<"$OUT_ERR"'
 
+# --- AC5 (PI-25 third round): an alnum-mixed segment must not drop the task off the board ---
+R5="$S/repo5"
+task "$R5" "STYLE-PR1" "Todo"
+task "$R5" "WELCOME-A11Y-1" "Todo"
+task "$R5" "E2E-4" "Todo"
+OUT_OUT=$(cd "$R5" && bash "$SCRIPT" 2>/dev/null)
+ok "AC5 STYLE-PR1 is read as a task"      'grep -q "\"issue\": \"STYLE-PR1\"" <<<"$OUT_OUT"'
+ok "AC5 WELCOME-A11Y-1 is read as a task" 'grep -q "\"issue\": \"WELCOME-A11Y-1\"" <<<"$OUT_OUT"'
+ok "AC5 E2E-4 is read as a task"          'grep -q "\"issue\": \"E2E-4\"" <<<"$OUT_OUT"'
+
+# --- AC6 (PI-25 third round): a letter suffix on the number must not merge two distinct ids ---
+R6="$S/repo6"
+task "$R6" "T-1.2.3a" "Todo"
+task "$R6" "T-1.2.3b" "Todo"
+task "$R6" "QF-10"    "Todo"
+task "$R6" "QF-10b"   "Todo"
+OUT_ERR=$(cd "$R6" && bash "$SCRIPT" 2>&1 >/dev/null)
+ok "AC6 T-1.2.3a and T-1.2.3b both counted (4 total, none overwritten)" 'grep -q "4 total" <<<"$OUT_ERR"'
+
 exit $fail
