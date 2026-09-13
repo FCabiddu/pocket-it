@@ -10,11 +10,14 @@
 # tokeniser will never all cover. The real, un-bypassable protection is server-side branch
 # protection on the base branch in GitHub; that is the owner's setting, not this file.
 # Therefore the push guard COVERS, and has a red test for, the everyday spellings: a bare or
-# explicit push, HEAD:/main and refs/heads/main and heads/main, a variable/`env` assignment or
-# a one-off `-c key=val` in front of `git`, the audit prefix (only its exact value, only on the
-# push's own command word), force/delete/--mirror/--prune/--all, glob refspecs, and every
-# refspec in a multi-refspec push. It DELIBERATELY DOES NOT chase forms an agent would only
-# reach on purpose — and these are left to server-side protection, not worked around here:
+# explicit push, HEAD:/main and refs/heads/main and heads/main, `:`/`+:` and `@`, a variable/
+# `env` assignment or a one-off `-c key=val` in front of `git`, the audit prefix (only its exact
+# value, only on the push's own command word), force/delete/--mirror/--prune/--all, glob
+# refspecs, every refspec in a multi-refspec push, redirections (`2>&1 | tail`, `&>/dev/null`),
+# commands on separate lines, a push under a shell keyword (`if … ; then`, `while`, `for … do`),
+# and — when the command cannot be parsed at all — a coarse DENY of any push spelled to main.
+# It DELIBERATELY DOES NOT chase forms an agent would only reach on purpose; these are left to
+# server-side branch protection, not worked around here:
 #   - a string or stdin run as a shell: `bash -c "…"`, `sh -c`, `eval`, `source`, a heredoc
 #     piped into a shell;
 #   - wrappers and indirections: `env -i`/`env -u`, `command`, `exec`, `nohup`, `time`, `nice`,
@@ -23,9 +26,11 @@
 #   - an alias defined on the fly (`-c alias.x=push`, `--config-env`, `GIT_CONFIG_*`),
 #     `git send-pack`, and an unknown global option;
 #   - config or environment that changes what an implicit push does (`push.default`,
-#     `remote.*.push`, `GIT_DIR`/`--git-dir` pointing at another repo);
-#   - commands separated by a raw newline rather than `; && || |`.
+#     `remote.*.push`, `GIT_DIR`/`--git-dir` pointing at another repo).
 # Adding a regex per new spelling does not converge; if these matter, they belong on the server.
+# (PI-32 will let the hook read a Claude-Code input field an agent cannot forge and forbid the
+# base branch to agents regardless of the command's shape; this guard then becomes the second
+# line and the main session's guard, and still need not chase every spelling.)
 set -uo pipefail
 INPUT=$(cat)
 # Match against the command with heredoc bodies and quoted strings removed, so a commit
@@ -35,7 +40,7 @@ try:
     d=json.load(sys.stdin); c=d.get("tool_input",{}).get("command","")
 except Exception:
     c=""
-c=re.sub(r"<<-?\s*[\x27\"]?(\w+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)", " HEREDOC ", c, flags=re.S)
+c=re.sub(r"<<-?\s*[\x27\"]?([^\s\x27\"<>|;&()]+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)", " HEREDOC ", c, flags=re.S)
 c=re.sub(r"\"(?:[^\"\\\\]|\\\\.)*\"", " STR ", c)
 c=re.sub(r"\x27[^\x27]*\x27", " STR ", c)
 print(c)' 2>/dev/null)
@@ -82,32 +87,61 @@ from fnmatch import fnmatch
 
 cmd, hook_cwd = sys.argv[1], sys.argv[2]
 
-HEREDOC_RE = r"<<-?\s*[\x27\"]?(\w+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)"
-BOUNDARY = {';', '&', '&&', '||', '|', '|&', '(', ')', '{', '}', '!'}
+HEREDOC_RE = r"<<-?\s*[\x27\"]?([^\s\x27\"<>|;&()]+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)"
+# A command boundary is a run of separator punctuation (`; & && || | |& ( )` and an unquoted
+# newline) or a shell keyword that begins a new command. Keywords are boundaries so a push
+# under `if`/`while`/`for … do` is still classified; a newline is a boundary because a
+# multi-line command is an everyday form for a cooperative agent, not an evasion.
+BOUNDARY_KEYWORDS = {'if', 'then', 'elif', 'else', 'fi', 'while', 'until', 'for',
+                     'do', 'done', 'case', 'esac', '{', '}', '!'}
+# Redirection operators; each is dropped together with an optional leading fd digit (`2>&1`)
+# and its target (`>/dev/null`), or the target lands in `positional` and a bare push stops
+# looking implicit (`git push 2>&1 | tail` — the agents' standard output-capping form).
+REDIR_OPS = {'>', '>>', '<', '<<<', '>&', '<&', '&>', '&>>'}
 GIT_VALUE_OPTS = {'-C', '-c', '--namespace', '--git-dir', '--work-tree',
                   '--exec-path', '--super-prefix', '--config-env'}
 # `git push` options that take a separate-token value; their value must be consumed or it is
 # read as a refspec and shifts the real refspecs out of view (`git push -o ci.skip origin main`).
 PUSH_VALUE_OPTS = {'-o', '--push-option', '--receive-pack', '--exec', '--repo'}
 
+def is_boundary(t):
+    return t in BOUNDARY_KEYWORDS or (t != '' and all(ch in ';&|()\n' for ch in t))
+
+def strip_redirections(tokens):
+    out = []
+    k = 0
+    while k < len(tokens):
+        t = tokens[k]
+        if t in REDIR_OPS:
+            if out and re.fullmatch(r'\d+', out[-1]):
+                out.pop()          # the fd digit written before the operator (2>&1)
+            k += 2                 # skip the operator and its target token
+            continue
+        out.append(t); k += 1
+    return out
+
 def segments(raw):
     # Remove heredoc bodies, then tokenise with a quote-aware lexer and cut on the shell
-    # separators. Splitting the raw text with a regex (the earlier approach) cut inside quotes
+    # separators. Splitting the raw text with a regex (an earlier approach) cut inside quotes
     # and heredoc bodies, so a commit message or PR body holding `;`/`|`/`&&` plus push-shaped
-    # words was turned into a fake push segment and a legitimate command was blocked.
+    # words was turned into a fake push segment and a legitimate command was blocked. Newline
+    # is punctuation here (not whitespace) so a push on its own line is its own segment;
+    # redirections are stripped per segment. A ValueError (a command bash accepts but shlex
+    # rejects) propagates to the caller, which DENIES rather than allowing blindly.
     raw = re.sub(HEREDOC_RE, ' HEREDOC ', raw, flags=re.S)
-    lex = shlex.shlex(raw, posix=True, punctuation_chars=';&|()<>')
+    lex = shlex.shlex(raw, posix=True, punctuation_chars=';&|()<>\n')
+    lex.whitespace = ' \t\r'
     lex.whitespace_split = True
-    toks = list(lex)  # ValueError (unbalanced quotes) propagates to the caller -> ALLOW
+    toks = list(lex)
     segs, cur = [], []
     for t in toks:
-        if t in BOUNDARY:
+        if is_boundary(t):
             if cur:
-                segs.append(cur); cur = []
+                segs.append(strip_redirections(cur)); cur = []
         else:
             cur.append(t)
     if cur:
-        segs.append(cur)
+        segs.append(strip_redirections(cur))
     return segs
 
 def branch_of(path):
@@ -245,7 +279,12 @@ def analyze(tokens, authorized, c_path, tracked_cd):
 try:
     segs = segments(cmd)
 except ValueError:
-    print(''); sys.exit(0)
+    # The command holds a git push (the gate fired) but the lexer cannot parse it — anything
+    # bash accepts and shlex rejects (ANSI-C `$'…'`, an exotic heredoc, unbalanced quotes).
+    # The task's whole point is that an unclassifiable command must be DENIED, not waved
+    # through. Hand back to the shell, which applies a coarse explicit-main check on the
+    # stripped command as the fallback deny.
+    print('LEXER_ERROR'); sys.exit(0)
 
 result = ''
 tracked_cd = None
@@ -291,6 +330,13 @@ PYEOF
     BLOCK_FORCE)    block "git push to main/master" "Never rewrite main." ;;
     BLOCK_IMPLICIT) block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
     BLOCK_EXPLICIT) block "git push to main/master" "Push a task branch and open a draft PR." ;;
+    LEXER_ERROR)
+      # Fallback deny: the command could not be parsed, so classification is impossible. Block
+      # any push whose destination is spelled main/master in the stripped command; a legitimate
+      # push to a task branch (or the orchestrator's own well-formed push) parses cleanly and
+      # never reaches here, so this cannot block ordinary work.
+      grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*([[:space:]]+\S+)*[[:space:]]+(\+?(refs/heads/|heads/)?(main|master))([[:space:]]|:|$)' <<<"$CMD" && block "git push to main/master" "Command could not be parsed; a push to main/master is refused. Push a task branch and open a draft PR."
+      ;;
   esac
 fi
 # Never kill by pattern on a shared machine.
