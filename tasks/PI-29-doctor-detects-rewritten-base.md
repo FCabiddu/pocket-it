@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
 **Branch**: task/pi-29-doctor-base-rewritten
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/60
 
 ## Goal
 La guardia sui push ferma gli agenti quando, per errore, scrivono verso il ramo base in una forma normale. Non può fermare tutto: una lista di divieti sul testo di una shell non copre ogni modo di scrivere lo stesso comando, e lo si è verificato in più giri di review. La protezione lato server, quella che rifiuta la riscrittura e la cancellazione del ramo base qualunque sia il comando, non è disponibile per tutti i repository: sui repository privati del piano gratuito la piattaforma non la offre.
