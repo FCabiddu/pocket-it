@@ -13,6 +13,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh: the prefix must never authorize a destructive push to the base branch. Beyond force flags there are three more families: the + refspec, branch deletion (--delete, -d, empty refspec), and --mirror/--prune. Any new guard must cover all four.
 - force-push detection in guard.sh must cover clustered short flags (-uf, -fu, -qf) and a leading + on the refspec (+main, +HEAD:main), not just -f/--force as standalone tokens
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
+- Hooks, skills and agents must be read from the installed copy (~/.claude/pocket-it-live, written only by bin/install-live.sh from the published main), never from the development checkout; after every merge into main run: bash ~/.claude/pocket-it-live/bin/install-live.sh — until the README switch is applied, the development checkout is still what every session runs.
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-12 PI-21 PR #45 approved round 4 — scope ridotto, deps da ritracciare — merge: user

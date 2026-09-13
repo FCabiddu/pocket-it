@@ -1,6 +1,6 @@
 # PI-30 — La copia installata della pipeline è la stessa in cui si sviluppa
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
