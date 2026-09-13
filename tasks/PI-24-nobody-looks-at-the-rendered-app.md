@@ -1,6 +1,6 @@
 # PI-24 — Nessun agente della pipeline guarda l'app renderizzata
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
