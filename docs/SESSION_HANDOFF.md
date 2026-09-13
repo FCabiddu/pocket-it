@@ -19,8 +19,15 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - PI-26: a task's Files list can miss occurrences of a repo-wide wording rule (planner didn't grep every phrasing) — before closing such a task, grep the mechanism with several phrasings across the whole repo, not just the cited files.
 - guard.sh: redirections (`2>&1 | tail`, `&>/dev/null`, `>file`) are stripped with their fd and target before a push's positionals are counted, since PI-13 round 3; before that a bare push with a redirection stopped looking implicit and passed from the base branch.
 - guard.sh push guard is NOT a security boundary: it stops a COOPERATIVE agent pushing to the base branch by MISTAKE in a normal shell form; deliberate evasions (eval, bash -c, env -i, wrappers, quoted/escaped git, on-the-fly aliases, push-affecting config, send-pack) are left to server-side branch protection, and the threat model is at the top of guard.sh. The classifier tokenises the RAW command quote-aware (never a regex split on raw text), with heredoc bodies removed, an unquoted newline and shell keywords (if/then/do/…) as boundaries and redirections stripped. Any git push in a command it cannot parse is DENIED whatever its target (task branches too), unless the exact prefix sits on that push; a backslash-newline is joined before newlines split commands. The audit prefix authorizes only by exact value on the push's own command word.
+- Hooks, skills and agents must be read from the installed copy (~/.claude/pocket-it-live, written only by bin/install-live.sh from the published main), never from the development checkout; after every merge into main run: bash ~/.claude/pocket-it-live/bin/install-live.sh — until the README switch is applied, the development checkout is still what every session runs.
+- A hook command that runs a guard file fails open whenever that file is absent or half-written (exit 127 is non-blocking): hook commands are written 'bash …/guard.sh || exit 2' (guard.sh exits only 0 or 2), and nothing updates the copy the hook reads in place — build beside, then exchange. A symlink rename is not atomic for readers on macOS (measured); renamex_np RENAME_SWAP of directories is.
+- A hook command must be fail-closed ('bash …/guard.sh || exit 2'): a missing guard file exits 127, and 127 does not block. Swapping a symlink with rename is not atomic for readers on macOS; exchange directories with renamex_np RENAME_SWAP (renameat2 RENAME_EXCHANGE on Linux). BSD grep -R does not follow a symlink given as an argument: resolve paths first.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
+- 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
+- 2026-09-13 PI-30 PR #53 needs work — guard file absent during update fails open
+- 2026-09-13 PI-30 PR #53 draft — installed copy separate from dev checkout — 36 tests
 - 2026-09-13 PI-25 PR #50 conflict resolved — union of handoff/archive (0 lines lost), next-wave.test both blocks kept; PI-26 fixtures T-HI/T-LO -> T-HI-1/T-LO-1 (digit-less ids are not ids under PI-25) — testCommand 357 ok
 - 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
 - 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
@@ -57,7 +64,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-10 CI fix pushed — closed 2 force-push detection gaps (clustered -f, +refspec) — 7 new tests
 - 2026-09-12 PI-11 CI fix pushed — registered verify.test.sh in testCommand, scoped its cleanup to per-run path (PR #35 review)
 - 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
-- 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
-- 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
-- 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
-- 2026-09-12 PI-13 PR #47 delta needs work — redirections, newlines, lexer error reopen main
