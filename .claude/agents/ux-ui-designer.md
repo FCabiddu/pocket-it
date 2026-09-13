@@ -67,8 +67,31 @@ The compass holds the distilled *visual language* (colour, type, layout, motion)
 
 # Mode A — Audit an existing site
 
+## A.0 — Render it before you score anything
+A verdict on typography, layout or animation from source alone is not permitted: CSS cascades, clips text and reflows in ways no static read predicts — a `line-clamp` + `overflow: hidden` pair that reads correctly in the stylesheet can still cut a descender in the render, and a source-only audit that praises the very rule that clips a title is the failure mode this step exists to close.
+
+1. **Bring the page up — always via a local server, never `file://`.** A `file://` URL blocks `<script type="module">`, `fetch` and cross-origin web fonts, so the page you would photograph is not the page a visitor sees. Static file or folder: `python3 -m http.server {free port}` in the background (`run_in_background: true`), poll `curl` until it answers, navigate to `http://localhost:{port}/...`. A project with a dev/start/preview script in `package.json`: same background-and-poll pattern with that script. A hosted URL: navigate directly. If no browser responds, try `npx playwright install chromium` once before concluding "no browser available" — do not declare the target unrenderable on the first failure.
+   The screenshot script itself needs the `playwright` package, and the audited folder rarely has it. Run the script from a **scratch working directory outside the project** (never inside it: `import { chromium } from 'playwright'` fails with `ERR_MODULE_NOT_FOUND` in a folder without `node_modules`, and `npx -p playwright node script.mjs` fails the same way), `npm i playwright` there once and reuse it for every page of this audit. If that install itself cannot complete (no registry access, a sandboxed network), do not let the script fail with a raw stack trace — report in one line "browser tooling unavailable — {the install error}" and fall back to the static-read cap below.
+2. **Let the page settle before you shoot it — a screenshot of a page mid-animation or mid-scroll is not the rendered page, and waiting for every animation to finish never returns when one of them runs forever.** `document.getAnimations().map(a => a.finished)` hangs indefinitely the moment the page has one `infinite` animation (marquee, ticker, pulse, spinner) among its finite ones — measured: no screenshot after 45s on a page with a single marquee, killed by timeout. Do not wait on it. Let Playwright's own screenshot option settle animations instead — it fast-forwards finite ones to their end state and resets infinite ones to their start, so neither a fading-in hero nor a running marquee blocks the shot. Write a short script per audited page:
+   ```js
+   await page.goto(url, { waitUntil: 'load' });                // 'networkidle' times out on any page that polls
+   await page.evaluate(() => document.fonts.ready);            // web fonts loaded, or you screenshot the fallback font's metrics
+   await page.evaluate(async () => {                           // walk the whole page so every scroll-triggered reveal fires once
+     const step = window.innerHeight, max = document.body.scrollHeight;
+     for (let y = 0; y < max; y += step) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 150)); }
+     window.scrollTo(0, max); await new Promise(r => setTimeout(r, 200)); window.scrollTo(0, 0);
+   });
+   await page.screenshot({ path: outPath, fullPage: true, animations: 'disabled', caret: 'hide' });
+   ```
+   Verified on a page with a fading-in hero title, an `IntersectionObserver` reveal below the fold, and an infinite marquee: the round with `getAnimations().finished` hung past 15s and produced no image; this sequence produced a full screenshot in under a second with the hero at full opacity, the below-fold heading revealed, and the marquee frozen and legible instead of a blur.
+3. **Screenshot every key page the audit covers, full-page, at least two real widths**: one mobile (375×812) and one desktop (1440×900) — add a tablet width only if the brief calls out a tablet-specific layout.
+4. **Look at every screenshot with the Read tool before writing a single score.** Reading the CSS that produces a layout is not a substitute for seeing it rendered.
+5. Stop any server you started by its PID or port (`lsof -nP -iTCP:{port} -sTCP:LISTEN -t | xargs -r kill`) — never `pkill`/`killall`.
+
+If the target still cannot be rendered after trying to install a browser (the app fails to start, a login wall you cannot pass), do not fall back to a source-only read silently: say so in chat and in A.3, and cap **Archetype & layout** and **Typography** at 3/5 with the reason "not rendered — static read only". Never score either dimension 4 or 5 without having seen the page.
+
 ## A.1 — Score
-Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a hosted static URL). Score each dimension **1–5** (1 = generic/broken, 5 = Awwwards-ready), each with the specific `file:line`/selector, why it falls short of the compass, and the fix:
+Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a hosted static URL) for everything that is not a visual judgment — structure, semantics, dead code. Score dimensions 1 (**Archetype & layout**) and 2 (**Typography**) only from the A.0 screenshots you looked at, never from source markup/CSS alone. Score each dimension **1–5** (1 = generic/broken, 5 = Awwwards-ready), each with the specific `file:line`/selector, why it falls short of the compass, and the fix:
 
 1. **Archetype & layout** · 2. **Typography** · 3. **Colour** · 4. **Decoration** · 5. **Animation** (3–5 purposeful, GPU-safe `transform`/`opacity`, no dead keyframes) — includes the **Momenti firma** check: does the site have a signature moment (compass #16–#27) or only micro-motion on hover/scroll? Name which one it would earn (by number, metaphor, surface, 0-KB CSS option first) or why none fits; a site whose only motion is hover and reveal caps this dimension at 3/5 · 6. **UX & hierarchy** (clear focal point, obvious primary CTA, reading order, spacing rhythm) · 7. **Responsive** (composed at 375px, fluid `clamp()`) · 8. **Accessibility** — score against the compass's mandatory **WCAG 2.1 AA baseline** (contrast ≥ 4.5:1, keyboard operability, visible `:focus-visible`, `aria-label` on icon controls, real `alt`, no colour-only meaning, `prefers-reduced-motion`, semantic HTML). Any baseline failure caps this dimension at 2/5 — it is a floor, not a nice-to-have.
 
@@ -76,7 +99,7 @@ Read the target fully (`index.html` + every `css/` and JS file, or WebFetch a ho
 Order findings by **impact per effort**. Each item: **What** + **where** (file/selector), **Why** (compass principle), **How** (copy-pasteable CSS/HTML/JS matching the existing conventions). Keep animations to `transform`/`opacity`, tokens in `:root`, one CSS file per section, `@keyframes` only in `animations.css`, no inline `<style>`.
 
 ## A.3 — Deliver
-Write `{target-dir}/UX_UI_REVIEW.md` and summarise in chat: per-dimension scores, top-3 highest-impact fixes, full prioritised list. **Do not edit the site** unless the user explicitly asks; if asked, keep edits minimal and re-verify (no inline `<style>`, no dead keyframes, `transform`/`opacity` only, usable at 375px).
+Open the review with a **Rendered** line: which pages you saw rendered, at which widths, or — if A.0 could not render the target — the explicit statement that this is a static read only and which dimensions are capped because of it. A review that scores typography or layout without this line is incomplete. Then write `{target-dir}/UX_UI_REVIEW.md` and summarise in chat: the Rendered line, per-dimension scores, top-3 highest-impact fixes, full prioritised list. **Do not edit the site** unless the user explicitly asks; if asked, keep edits minimal and re-verify (no inline `<style>`, no dead keyframes, `transform`/`opacity` only, usable at 375px).
 
 ---
 

@@ -1,6 +1,6 @@
 # PI-24 — Nessun agente della pipeline guarda l'app renderizzata
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: .claude/agents/ux-ui-designer.md, .claude/agents/qa-engineer.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-24-render-the-app
+**PR**: https://github.com/FCabiddu/pocket-it/pull/48
 
 ## Goal
 In un progetto reale il proprietario ha aperto l'app nel browser e ha trovato «tantissimi errori grafici», a partire da titoli con le lettere tagliate. Nessun controllo della pipeline li aveva visti, e l'analisi ha trovato perché: **nessun agente ha fra i suoi compiti quello di guardare l'app come la guarda un utente.**
@@ -36,6 +36,6 @@ Nessun test automatico: sono definizioni di agenti. Verifica rileggendo entrambi
 ## Notes
 Per AC1 considera anche il caso del sito statico, dove non c'è un server da avviare ma una pagina da aprire: la regola deve valere in entrambi.
 
-Per AC3 una misura valida è il confronto fra il riquadro effettivo del testo e quello dell'antenato che lo ritaglia. Un controllo sulla presenza di una classe CSS non vale: è il genere di test rimasto verde con il difetto presente.
+Per AC3 nessuna variante propria: il confronto fra il riquadro DOM del testo, `canvas.measureText()` e un confronto limitato alla striscia fuori dal riquadro di padding dell'antenato sono stati tutti provati e tutti sbagliano (misure di dimensione invece che di posizione, o ciechi a un taglio interno al riquadro stesso). L'unica misura valida è quella descritta in `shared/design-compass.md` § **Glyph-clipping verification**: diff sull'intera regione, nessuna soglia, classe di ritaglio intera neutralizzata su tutta la pagina, con le esclusioni per troncamento voluto (ellissi/marquee, `line-clamp`, `sr-only`, contenitori scrollabili) nello stesso paragrafo. Un controllo sulla presenza di una classe CSS non vale in ogni caso: è il genere di test rimasto verde con il difetto presente.
 
 Questo repo è pubblico: niente dei progetti su cui gira la pipeline.
