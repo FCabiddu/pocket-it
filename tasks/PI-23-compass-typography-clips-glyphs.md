@@ -1,6 +1,6 @@
 # PI-23 — La design compass prescrive interlinee e ritagli che tagliano le lettere
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
