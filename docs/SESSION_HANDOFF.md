@@ -26,6 +26,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A hook command must be fail-closed ('bash …/guard.sh || exit 2'): a missing guard file exits 127, and 127 does not block. Swapping a symlink with rename is not atomic for readers on macOS; exchange directories with renamex_np RENAME_SWAP (renameat2 RENAME_EXCHANGE on Linux). BSD grep -R does not follow a symlink given as an argument: resolve paths first.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-24 review round 3 pushed (dup-safe) — pixel-position replaces measureText, no-tolerance rule, animations disabled — 3 findings closed
 - 2026-09-13 PI-24 review round 3 pushed — pixel-position check replaces measureText, no-tolerance rule, animations disabled in screenshots, missing-node_modules message — findings from PR #48 delta review
 - 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
 - 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
@@ -65,9 +66,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-10 PR #36 conflict resolved — unione di fatti e log, 0 righe perse, MERGEABLE
 - 2026-09-12 PI-10 PR #36 approved round 3 — tutte e 4 le famiglie di push distruttivo chiuse, 58 casi, merge: orchestrator
 - 2026-09-12 PI-10 PR #36 fix pushed — F3 digit cluster + F4 base-branch deletion closed — 10 tests
-- 2026-09-12 PI-11 PR #35 conflict resolved — union of handoff log lines, 0 lost, MERGEABLE
-- 2026-09-12 PI-10 PR #36 needs work (delta 2) — -f4/-4f clusters and base-branch deletion pass with the prefix
-- 2026-09-12 PI-11 PR #35 approved — verify.test.sh registered, run-scoped cleanup — merge: orchestrator
-- 2026-09-12 PI-10 CI fix pushed — closed 2 force-push detection gaps (clustered -f, +refspec) — 7 new tests
-- 2026-09-12 PI-11 CI fix pushed — registered verify.test.sh in testCommand, scoped its cleanup to per-run path (PR #35 review)
-- 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
