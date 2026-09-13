@@ -433,10 +433,10 @@ agent_case BLOCK "$TMPROOT/main-repo" "$DEV" "git push -u origin HEAD"
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "cd $MISSING && git push origin HEAD"
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "cd \"\$WT\" && git push -u origin HEAD"
 agent_case BLOCK "$TMPROOT/upstream-repo" "$DEV" "git push"
-# The price, on purpose: text that spells a push to main next to a git word is denied for agents
-# (pass it through a file, as in the AC4 ALLOW row above); the main session still allows it.
-agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -F- <<'EOF'${NL}never git push origin main${NL}EOF"
-expect_case ALLOW "$TMPROOT/feat-repo" "git commit -F- <<'EOF'${NL}never git push origin main${NL}EOF"
+# The price, on purpose: text outside a textual option (a positional argument, an echo) that
+# spells a push to main next to a git word is denied for agents; the main session still allows it.
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git add -A && handoff.sh fact \"never git push origin main\" && git commit -qm log"
+expect_case ALLOW "$TMPROOT/feat-repo" "git add -A && handoff.sh fact \"never git push origin main\" && git commit -qm log"
 
 # AC5 — agent_id present but empty or of an unexpected type, or agent_type alone: an agent.
 for f in '{"agent_id":""}' '{"agent_id":null}' '{"agent_id":42}' '{"agent_id":["x"]}' '{"agent_type":"developer"}' '{"agent_id":"","agent_type":null}'; do
@@ -453,5 +453,109 @@ agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "printf \$'a\\'b' && git push origi
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "echo \"\$(echo \")\"; git push origin main; echo \"(\")\""
 agent_case BLOCK "$TMPROOT/main-repo" "$DEV" "printf \$'a\\'b' && git push -u origin HEAD && echo 'c'"
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git \$'\\x70ush' origin HEAD:\$'\\x6dain'"
+
+# ── PI-32 round 2, finding 1. "The prefix authorizes nothing for an agent" (PREFIX_COUNTS) is
+# covered by reading B, so no row above proves it alone. These rows run on a copy of the guard in
+# which reading B is switched off by rewriting its one call; the copy is refused if the rewrite
+# did not happen. Mutation-provable: PREFIX_COUNTS = True turns them red (reading A lets the prefix
+# authorize). Not an environment switch: an agent could set it.
+NOB="$TMPROOT/guard-no-reading-b.sh"
+sed "s/reason = agent_doubt(dropped)/reason = ''/" "$HOOKDIR/guard.sh" > "$NOB"
+if cmp -s "$HOOKDIR/guard.sh" "$NOB" || ! grep -q "reason = ''" "$NOB"; then
+  echo "FAIL  reading B could not be switched off in the copy (the call to agent_doubt changed?)"; fail=1
+fi
+nob_case() {
+  local expect="$1" cwd="$2" fields="$3" cmd="$4" payload got
+  payload=$(python3 -c 'import json,sys
+d={"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}; d.update(json.loads(sys.argv[2])); print(json.dumps(d))' "$cmd" "$fields")
+  if (cd "$cwd" && printf '%s' "$payload" | bash "$NOB") >/dev/null 2>&1; then got=ALLOW; else got=BLOCK; fi
+  if [[ "$got" == "$expect" ]]; then echo "ok    $got  [no-B cwd=$(basename "$cwd") $fields] $cmd"; else echo "FAIL  want $expect got $got  [no-B cwd=$(basename "$cwd") $fields] $cmd"; fail=1; fi
+}
+nob_case BLOCK "$TMPROOT/feat-repo" "$DEV" "$PP git push origin main"
+nob_case BLOCK "$TMPROOT/feat-repo" "$DEV" "$PP git push origin HEAD:main"
+nob_case BLOCK "$TMPROOT/main-repo" "$DEV" "$PP git push"
+nob_case BLOCK "$TMPROOT/main-repo" "$DEV" "git commit -m \$'it\\'s' && $PP git push origin main"
+# Controls on the same copy: the main session keeps its prefix, an agent keeps its task branch.
+nob_case ALLOW "$TMPROOT/feat-repo" '{}' "$PP git push origin main"
+nob_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push -u origin HEAD"
+
+# ── PI-32 round 2, finding 2. A rule that looks for a word (merge, push, main, pkill, prod, sleep)
+# must not find it in the free text passed as the value of a textual option (-m/--message,
+# --body/--title/--notes, a heredoc read as text). Each rule is tested both ways: harmless text
+# holding the word passes, the real command is still denied. Mutation-provable, each layer on rows
+# the other layers do not cover: making the TEXT replacement return the raw command turns the rows
+# marked (T) red; restoring the unanchored merge regex turns the rows marked (A) red (their value
+# cannot be replaced: the command holds ANSI-C quoting, or the body a backtick); reading the
+# APP_STATUS rule past its own segment turns (S) red, reading it on the quote-stripped text (Q).
+HD() { printf '%s' "\"\$(cat <<'EOF'${NL}$1${NL}EOF${NL})\""; }
+
+# Rule: agent merge ban (quote-blind text).
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr comment 54 --body \"Review passed — 9 criteria checked. merge: orchestrator\""
+agent_case ALLOW "$TMPROOT/neutral" "$DEV" "gh pr create --draft --base main --title \"PI-99: fix merge order in doctor\" --body-file b.md"
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr comment 54 --body \"ready to merge\""
+agent_case ALLOW "$TMPROOT/neutral" "$DEV" "gh pr create --draft --base main --title \"PI-99: fix merge order\" --body \$'line one\\nline two'"   # (A)
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr comment 54 --body \"Review passed, \`date\` checked. merge: orchestrator\""   # (A)
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr comment 54 --body $(HD 'NEEDS WORK: an agent ran gh pr merge 8 --squash')"   # (T)
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr comment 54 -F - <<'EOF'${NL}gh pr merge 8 must not run here${NL}EOF"   # (T)
+agent_case ALLOW "$TMPROOT/neutral" "$DEV" "git commit -qm \"docs: gh pr merge is the orchestrator's\""   # (T)
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr comment 54 --body=\"see gh pr merge 8 and pulls/8/merge\""   # (T)
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh pr merge 8"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh -R o/r pr merge 8"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh pr -R o/r merge 8 --squash"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh pr view 8 && gh pr merge 8"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh pr comment 8 --body ok && gh pr merge 8 --body \"merged\""
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh pr comment 8 --body \"\$(gh pr merge 8)\""
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh pr comment 8 --body \"run \`gh pr merge 8\`\""
+
+# Rule: agent push to the base branch (reading B, quote-blind text).
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git commit -qm \"guard: deny a push to main from agents\" && git push -u origin HEAD"   # (T)
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git commit -F- <<'EOF'${NL}never git push origin main${NL}EOF${NL}git push -u origin HEAD"   # (T)
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git commit -m $(HD 'fix: git push origin main is denied') && git push -u origin HEAD"   # (T)
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push -u origin HEAD && gh pr create --draft --base main --title \"push to main is denied\" --body $(HD 'git push origin main; git push --all')"   # (T)
+agent_case ALLOW "$TMPROOT/feat-repo" "$REV" "git status && gh pr comment 54 --body-file - <<'EOF'${NL}1. git push origin HEAD:main passes${NL}EOF"   # (T)
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git stash push -m \"wip before merging main\""   # (T)
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git commit --message=\"push to main denied\" && git tag -a v1 -m \"main release\""   # (T)
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -qm \"guard\" && git push origin main"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \"\$(git push origin main)\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \"\`git push origin main\`\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -F- <<EOF${NL}\$(git push origin main)${NL}EOF"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "bash <<'EOF'${NL}git push origin main${NL}EOF"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "cat <<'EOF' | bash${NL}git push origin main${NL}EOF"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \"\$(cat <<'EOF'${NL}x${NL}EOF${NL}git push origin main${NL}EOF${NL})\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "gh pr create --title x --body \"\$(git push origin main)\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \$'a\\'b' --message \"git push origin main\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push -m x origin main"
+
+# Rule: main-session merge (needs POCKET_IT_USER_MERGE=1).
+expect_case ALLOW "$TMPROOT/neutral" "gh pr comment 3 --body \"run gh pr merge 3 after review\""
+expect_case ALLOW "$TMPROOT/neutral" "gh pr create --title \"gh pr merge docs\" --body $(HD 'then gh pr merge 3 --squash')"
+expect_case BLOCK "$TMPROOT/neutral" "gh pr comment 3 --body ok && gh pr merge 3"
+expect_case BLOCK "$TMPROOT/neutral" "gh pr merge 3 --body \"merge it\""
+
+# Rule: pkill/killall.
+expect_case ALLOW "$TMPROOT/neutral" "gh pr comment 3 --body killall"   # (T)
+agent_case ALLOW "$TMPROOT/neutral" "$DEV" "git commit -qm pkill-is-blocked"   # (T)
+expect_case ALLOW "$TMPROOT/neutral" "git commit -m \"never pkill node\""
+expect_case BLOCK "$TMPROOT/neutral" "gh pr comment 3 --body killall && pkill node"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "git commit -qm x; killall node"
+
+# Rule: APP_STATUS → prod.
+expect_case ALLOW "$TMPROOT/neutral" "gh variable set APP_STATUS --body dev && gh pr comment 3 --body prod"
+expect_case ALLOW "$TMPROOT/neutral" "gh variable set APP_STATUS --body dev && echo prod-ready"   # (S)
+expect_case ALLOW "$TMPROOT/neutral" "gh variable set APP_STATUS --body dev && gh pr comment 3 --body \"flip APP_STATUS to prod later\""
+expect_case ALLOW "$TMPROOT/neutral" "git commit -m \"gh variable set APP_STATUS --body prod is the user's\""
+expect_case BLOCK "$TMPROOT/neutral" "gh variable set APP_STATUS --body \"prod\""   # (Q)
+expect_case BLOCK "$TMPROOT/neutral" "gh pr comment 3 --body ok && gh variable set APP_STATUS --body prod"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh variable set APP_STATUS --body 'prod'"   # (Q)
+
+# Rule: sleep N && ….
+expect_case ALLOW "$TMPROOT/neutral" "git commit -m \"sleep 30 && retry is blocked\""
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr comment 3 --body \"sleep 5; gh pr view 3\""
+expect_case BLOCK "$TMPROOT/neutral" "sleep 30 && gh pr checks 3"
+
+# Rule: legacy force-push-to-main grep.
+expect_case ALLOW "$TMPROOT/feat-repo" "git push -f origin task/x && gh pr comment 3 --body main"   # (T)
+expect_case ALLOW "$TMPROOT/feat-repo" "git push --force origin task/x && git commit -m \"main\""
+expect_case BLOCK "$TMPROOT/feat-repo" "git push -f origin task/x && git push -f origin main"
 
 exit $fail

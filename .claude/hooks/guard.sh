@@ -57,9 +57,10 @@
 #     unresolvable directory, an implicit push from main/master or whose @{push} is main/master,
 #     config that changes what a push does (alias., push.default, remote.*.push, GIT_DIR…), an
 #     unparseable command, or ANSI-C escapes that can encode a word. A push to a task branch
-#     stays allowed. The price is paid in false positives, on purpose: a commit message or PR body
-#     that spells a push to main next to a `git` word is denied for agents, who pass such text
-#     through a file (`git commit -F`, `--body-file`) instead.
+#     stays allowed. The price is paid in false positives, on purpose: text that spells a push to
+#     main next to a `git` word is denied for agents when it is NOT the value of a textual option
+#     (a positional argument such as `handoff.sh fact "…"`, an echo), or when that value cannot be
+#     read as data (see TEXT OPTIONS); agents pass such text through a file instead.
 #   Residue for agents, left to server-side protection: `git`/`push` reached through a variable,
 #   an eval of a variable, or an encoding outside ANSI-C quoting; a push both misread by the lexer
 #   AND cut by a quoted separator after `push` in the same command.
@@ -116,7 +117,7 @@ class Lexer:
         self.s, self.n, self.segs = s, len(s), []
 
     def level(self, i, closer):
-        # One nesting level (the whole command, or the inside of a `$(…)`). Appends the level's
+        # One nesting level (the whole command, or the inside of a command substitution). Appends the level's
         # segments (lists of word and heredoc tokens) to self.segs; returns the index after closer.
         s, n = self.s, self.n
         seg, pending, depth = [], [], 0
@@ -140,7 +141,7 @@ class Lexer:
         while i < n:
             c = s[i]
             nx = s[i + 1] if i + 1 < n else ''
-            if c == '\\':
+            if c == '\x5c':
                 if nx == '\n':
                     i += 2; continue
                 if ws is None:
@@ -204,9 +205,9 @@ class Lexer:
                         if k < 0:
                             raise GiveUp()
                         delim += s[j + 1:k]; quoted = True; j = k + 1
-                    elif s[j] == '\\':
+                    elif s[j] == '\x5c':
                         delim += s[j + 1:j + 2]; quoted = True; j += 2
-                    elif s[j] == '$':
+                    elif s[j] == '\x24':
                         raise GiveUp()
                     else:
                         delim += s[j]; j += 1
@@ -231,13 +232,13 @@ class Lexer:
                 i = j + 1; continue
             if c == '"':
                 i, c2 = self.dquote(i + 1); code = code or c2; continue
-            if c == '$' and nx == "'":
+            if c == '\x24' and nx == "'":
                 raise GiveUp()
-            if c == '$' and nx == '(':
+            if c == '\x24' and nx == '(':
                 i = self.level(i + 2, ')'); code = True; continue
-            if c == '$' and nx == '{':
+            if c == '\x24' and nx == '{':
                 i, c2 = self.param(i + 2); code = code or c2; continue
-            if c == '`':
+            if c == '\x60':
                 i = self.backtick(i + 1); code = True; continue
             i += 1
         if closer is not None or pending:
@@ -250,35 +251,35 @@ class Lexer:
         while i < n:
             c = s[i]
             nx = s[i + 1] if i + 1 < n else ''
-            if c == '\\':
+            if c == '\x5c':
                 i += 2
             elif c == '"':
                 return i + 1, code
-            elif c == '$' and nx == '(':
+            elif c == '\x24' and nx == '(':
                 i = self.level(i + 2, ')'); code = True
-            elif c == '$' and nx == '{':
+            elif c == '\x24' and nx == '{':
                 i, c2 = self.param(i + 2); code = code or c2
-            elif c == '`':
+            elif c == '\x60':
                 i = self.backtick(i + 1); code = True
             else:
                 i += 1
         raise GiveUp()
 
     def param(self, i):
-        # `${…}`: quotes inside change meaning with the surrounding context — in doubt, give up.
+        # A parameter expansion: quotes inside change meaning with the surrounding context — in doubt, give up.
         s, n, code = self.s, self.n, False
         while i < n:
             c = s[i]
             nx = s[i + 1] if i + 1 < n else ''
-            if c in '\x27"`':
+            if c in '\x27"\x60':
                 raise GiveUp()
-            if c == '\\':
+            if c == '\x5c':
                 i += 2
             elif c == '}':
                 return i + 1, code
-            elif c == '$' and nx == '(':
+            elif c == '\x24' and nx == '(':
                 i = self.level(i + 2, ')'); code = True
-            elif c == '$' and nx == '{':
+            elif c == '\x24' and nx == '{':
                 i, c2 = self.param(i + 2); code = code or c2
             else:
                 i += 1
@@ -287,17 +288,17 @@ class Lexer:
     def backtick(self, i):
         s, n = self.s, self.n
         while i < n:
-            if s[i] == '\\':
+            if s[i] == '\x5c':
                 i += 2
-            elif s[i] == '`':
+            elif s[i] == '\x60':
                 return i + 1
             else:
                 i += 1
         raise GiveUp()
 
 def is_cat_heredoc_word(t):
-    # Exactly "$(cat <<'EOF' … EOF)" with a quoted delimiter: one argument of literal text.
-    m = re.match(r'"\$\([ \t]*cat[ \t]+<<(-?)[ \t]*([\x27"])([A-Za-z_][A-Za-z0-9_.-]*)\2[ \t]*\n', t)
+    # Exactly a double-quoted command substitution of cat reading a heredoc, with a quoted delimiter: one argument of literal text.
+    m = re.match(r'"\x24\([ \t]*cat[ \t]+<<(-?)[ \t]*([\x27"])([A-Za-z_][A-Za-z0-9_.-]*)\2[ \t]*\n', t)
     if not m:
         return False
     strip, delim = m.group(1) == '-', m.group(3)
