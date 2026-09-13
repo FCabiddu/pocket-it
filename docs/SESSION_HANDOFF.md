@@ -17,6 +17,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - PI-26: a task's Files list can miss occurrences of a repo-wide wording rule (planner didn't grep every phrasing) — before closing such a task, grep the mechanism with several phrasings across the whole repo, not just the cited files.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-22 PR #46 approved round 3 — copied/renamed branches kept, §5/§6 aligned — merge: user
 - 2026-09-12 PI-22 PR #46 round 3 — copied/renamed reflog restarts; §5 guard simplified, §6 aligned — 2 checks added
 - 2026-09-12 PI-22 PR #46 delta needs work — inherited reflog, §5 BR before branch
 - 2026-09-12 PI-22 PR #46 round 2 — commits of its own read from branch reflog; worktree guard rule executable — 12 checks added
@@ -56,9 +57,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
 - 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
 - 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
-- 2026-09-12 PI-9 PR #32 approved — codici di uscita e canali verificati invariati, merge: orchestrator
-- 2026-09-12 PI-9 PR #32 draft — handoff log/fact now name the file path — 7 tests
-- 2026-09-12 PI-8 PR #30 approved — archive one order end to end, LOGCAP sole source of 40, merge: orchestrator
-- 2026-09-12 PI-8 PR #30 needs work — archive ordering contradicts its own header comment
-- 2026-09-12 PI-8 PR #30 fix pushed — one archive order, LOGCAP-only hardcode fix — 9 tests
-- 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests
