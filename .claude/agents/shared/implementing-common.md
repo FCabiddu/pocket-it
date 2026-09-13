@@ -57,14 +57,14 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 | E2E (browser) | `on-demand` | qa-engineer, as its own QA task | only the 1–3 journeys the product cannot ship broken (checkout, login, the core flow) — never one per screen |
 | Accessibility | `required` (floor) | developer (axe on the component), qa if E2E exists | every frontend task |
 
-"Done well" for unit tests means: one behaviour per test named as scenario + outcome; happy path, the edge cases the acceptance criteria imply, and the error paths; behaviour, not implementation; deterministic, independent, factories over inline literals; coverage of the code you wrote, not of the repo. A task whose "Tests expected" section is empty and that changes behaviour is a planner defect — write the tests anyway and say so.
+"Done well" for unit tests means: one behaviour per test named as scenario + outcome; happy path, the edge cases the acceptance criteria imply, and the error paths; behaviour, not implementation; deterministic, independent, factories over inline literals; coverage of the code you wrote, not of the repo. A task whose "Tests expected" section is empty and that changes behaviour is a planner defect — write the tests anyway and say so. A test that asserts an absence — no error, no match, no duplicate — needs a positive case proven to fail alongside it: an untouched, unread input produces the same "no error, no match" result, so without that positive case the test cannot tell a clean input from one it never looked at.
 
 `tests.integration` / `tests.e2e` values: `off` (never, even if asked by a task — report instead), `on-demand` (default), `on` (the planner adds a QA task per story). Unit tests cannot be turned off.
 
-**Which tests to run** — the dependency graph, never the whole suite. Resolution order, stop at the first hit: (1) `testCommand` from config or a `test:affected` script in `package.json`; (2) the runner's own selector on the files git says you changed — `vitest related --run <files>`, `jest --findRelatedTests <files>`, `pytest <module>`, `go test ./pkg/...`, `cargo test -p <crate>`; (3) naming convention, and say in the report that scope was heuristic. Changed files:
+**Which tests to run** — the dependency graph, never the whole suite. Resolution order, stop at the first hit: (1) `testCommand` from config or a `test:affected` script in `package.json`; (2) the runner's own selector on the files git says you changed — `vitest related --run <files>`, `jest --findRelatedTests <files>`, `pytest <module>`, `go test ./pkg/...`, `cargo test -p <crate>`; (3) naming convention, and say in the report that scope was heuristic. Changed files, against the remote base — §6 branches from `origin/$BASE`, not a local checkout of it, so compare against the same ref or the list widens or empties depending on how stale the local one is:
 
 ```bash
-git diff --name-only $(git merge-base $BASE HEAD) HEAD; git status --porcelain --untracked-files=all
+git diff --name-only $(git merge-base "origin/$BASE" HEAD) HEAD; git status --porcelain --untracked-files=all
 ```
 
 Full suite at most once, as the gate before the PR, and not at all if hosted CI runs it. Integration (live DB) and browser E2E only if the change touches their surface. Type-check is project-wide by nature; run it after a batch of edits, not after every edit — three consecutive failing type-check rounds on the same error means stop, re-read the error, and change approach.
@@ -133,3 +133,10 @@ Two different signals, two different actions:
 - **Stall**: no new commit and no additional passing test in the last ~30 turns, or the same error surviving three fix attempts. Stop: commit what is coherent, push, log `handoff.sh log "STALL {ID} ~{turns} turns — {what is stuck, one line}"` and report. A clean partial report is cheaper than a runaway.
 
 Also stop, with the branch pushed, when the task needs a decision only the user can make, a best-practice conflict appears, or the scope turns out to be several tasks (say which). The agent's `maxTurns` (300) is a safety net far above any budget, never the plan; if you hit it, something above already went wrong.
+
+## 9. Rules from real incidents
+
+- **A check that verifies an absence describes it by effect, never by repeating the content it checked for.** A report or a verification command that echoes back the very secret, private name or forbidden string it proves removed defeats the removal it just verified.
+- **A migration or a backfill is never applied to a project's real database before review and merge.** Prove it on a copy; once the PR is merged, whoever merges it applies it to the real database, not the task's author beforehand.
+- **No write to a shared database, ever — not to try something out, not during review, rolled back or not.** A transaction you intend to undo is still a write attempted on data other people depend on right now; use a copy or a disposable local database instead.
+- **When you resume a branch marked `ALREADY EXISTS`, the scope is every open finding from every review round, read from the PR comments — whatever the resume prompt says the scope is.** Report each finding closed, one by one; a resume prompt that claims "no other change" has already made a prior round's finding vanish unactioned, costing an extra review round to catch it.
