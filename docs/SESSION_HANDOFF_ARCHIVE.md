@@ -58,3 +58,11 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-19 PR #42 needs work — segnali elencati ma non decidono nulla
 - 2026-09-12 PI-19 fix pushed — segnali OR, vincolo assoluto, entry point privato tolto
 - 2026-09-12 PI-19 PR #42 delta needs work — report nomina l'entry point privato
+- 2026-09-12 PI-19 fix pushed — report non nomina più l'entry point privato
+- 2026-09-12 PI-19 PR #42 approved round 3 — nome privato assente dal tree — merge: user
+- 2026-09-12 PI-20 PR draft — removed private entry point name, fixed compaction wording in two files — 0 tests (prose)
+- 2026-09-12 PI-20 PR #44 approved — nome assente, compattazione non più azione dell'orchestratore — merge: user
+- 2026-09-12 retro: shared/lessons.md:17 offre ancora «apri una sessione nuova prima della terza» come azione dell'orchestratore, che non può farlo — da riformulare al prossimo retro (file suo), segnalato dalla review di PI-20
+- 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md la regola sulle verifiche che reintroducono il difetto (descriverle per effetto nei report) — rinviata per non confliggere con PI-22, emersa dalla review di PI-21
+- 2026-09-12 PI-24 PR draft — render-before-score for ux-ui-designer + qa-engineer overflow check — no automated tests (agent md files)
+- 2026-09-12 PI-24 PR #48 needs work — DOM rect misses clipped ink — cause: first-round
