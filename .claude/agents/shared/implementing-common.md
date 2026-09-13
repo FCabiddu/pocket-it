@@ -75,15 +75,25 @@ Other agents and the user's app share this machine. Never `pkill`/`killall` (a h
 
 **Worktree handed to you.** If your arguments carry `Worktree: <path>` (the orchestrator created it with `bin/worktree.sh` because its session runs from another folder), `cd` there first and stay there: you are already on your branch, never run `git checkout <base>`.
 
-**Paths in a worktree.** You are in `$(git rev-parse --show-toplevel)` and that is the only tree you may touch. Every path you type is **relative to it** (`tasks/…`, `src/…`, `docs/…`): never an absolute path into the project's main checkout (`…/Astro-games/src/…`, `…/.worktrees/other/…`), never `cd` into another checkout, never `git -C <other path>`. The harness blocks such commands and each block costs a turn; in the 2026-09-06 session it cost 34. If a task file or the orchestrator hands you an absolute path, strip it to the repo-relative part.
+**Worktree gone — stop, never fall back.** Applies whenever you work in a worktree (`Worktree:` given, `isolation: worktree`, or `pwd` under `/.claude/worktrees/` or `/.worktrees/`). The shell's working directory resets between commands to where the session started — usually the project's main checkout — and a worktree can vanish under a running agent (a cleanup after someone else's merge, a manual prune). So:
+
+1. **First command:** `cd '<Worktree: path, if given>' && git rev-parse --show-toplevel`; note the output as `WT`. If it is the project's main checkout although you were meant to be in a worktree, stop here.
+2. **Every shell command starts with `cd '<WT>' && …`** — `&&`, never `;`, so nothing runs when the path is gone.
+3. **Once, when the branch is yours:** right after §6 creates or checks out your branch — or in the first command, when it was already checked out for you (`Worktree:` given) — note `git branch --show-current` as `BR`.
+4. **Every commit carries the branch check:** `cd '<WT>' && [ "$(git branch --show-current)" = '<BR>' ] && git commit …`. Nothing is checked before a file edit: an edit on a vanished path fails by itself, and the next shell command or commit catches the loss before anything is committed.
+5. **When a `cd '<WT>'` fails, the branch check fails, or a file tool reports that a path under `<WT>` no longer exists: stop and report** — `WT`, `BR`, the last commit you pushed, what was left uncommitted. Do not recreate the worktree, do not check the branch out elsewhere, and **do not continue in the main checkout or in any other directory** — not for a one-line edit, not for a test run, not for `handoff.sh`. A change made there lands in the tree every other session and every hook reads, with no branch, no review and no PR; lost uncommitted work is recoverable, an unreviewed edit to the shared tree may not be noticed at all. Commit early: uncommitted work is exactly what a vanished worktree takes with it.
+
+**Paths in a worktree.** `<WT>` is the only tree you may touch. Shell commands, after their `cd '<WT>'`, use paths **relative to it** (`tasks/…`, `src/…`, `docs/…`); file tools (`Read`, `Edit`, `Write`) accept only absolute paths, so they get `<WT>/…` and nothing else. Never a path into the project's main checkout (`…/<project>/src/…`) or another worktree (`…/.worktrees/other/…`), never `cd` into another checkout, never `git -C <other path>`. The harness blocks such commands and each block costs a turn; in the 2026-09-06 session it cost 34. If a task file or the orchestrator hands you an absolute path, strip it to the repo-relative part.
 
 ## 6. Branch, commit, PR
 
 ```bash
 BASE={Base: from args, else baseBranch}
-git fetch origin && git checkout "$BASE" && git pull --ff-only origin "$BASE"
-git checkout -b {branch}            # or: git checkout {branch} && git pull origin {branch}  if "ALREADY EXISTS"
+git fetch origin
+git checkout --no-track -b {branch} "origin/$BASE"   # or: git checkout {branch} && git pull origin {branch}  if "ALREADY EXISTS"
 ```
+
+Branch straight from `origin/$BASE`: no local checkout of the base, which a worktree cannot do while the base is checked out elsewhere. Skip the block when `Worktree:` was given — you are already on your branch. Right after it, note `BR` (§5, step 3).
 
 Commit early and often (a killed agent loses uncommitted work). Before `git add -A`, check `git status --short` for `.env`/credentials and gitignore them. Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`. Push, then open a **draft** PR against `$BASE` with `gh pr create --draft --base "$BASE" …`. Never `gh pr merge` (the orchestrator merges after the review), never push to `main` directly (hooks block both). If `automerge` is true: `gh label create Auto-merge --color 94a3b8 2>/dev/null || true; gh pr edit $PR_NUM --add-label Auto-merge`. Record `$PR_URL` in the task file. Then log the event — this is the project's memory across sessions, and it is mandatory:
 

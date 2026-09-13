@@ -7,9 +7,14 @@
 # Usage (from any worktree of the project): bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh [--dry-run] [--all]
 #   --dry-run  print what would happen, touch nothing
 #   --all      also consider worktrees on epic/*, main, master and fix-* branches (never the main checkout, never the current one)
-# A worktree is removed when its branch is merged into origin/main, origin/master or any origin/epic/* (local base
-# branches count too), or when its remote branch is gone and `gh` reports a merged PR for it (squash merge).
-# Only clean worktrees are removed; dirty and locked ones are reported and kept. Detached-HEAD worktrees under /tmp
+# A worktree is removed when its branch has commits of its own and they are merged: by ancestry into origin/main,
+# origin/master or any origin/epic/* (local base branches count too), or by a merged PR whose head contains the branch
+# tip, as `gh` reports it (squash merge, remote branch gone or not). Whether the branch has commits of its own is read
+# from its own reflog, never from topology against bases that may since have been merged and deleted: a branch whose
+# reflog shows no commit made on it since `branch: Created from …` is work not started or not yet committed and is
+# kept, and so is a branch whose reflog cannot tell (none, pruned, or inherited through `branch -c`/`-m`). A branch created from its own remote branch (a checkout of work
+# already pushed) is removed only on a merged PR.
+# Only clean worktrees are removed; dirty ones (or ones whose `git status` fails) and locked ones are kept. Detached-HEAD worktrees under /tmp
 # older than 24 h (reviewer scratch, e.g. verify.sh leftovers) are removed too. The corresponding local branch is then
 # deleted and `git worktree prune` runs. One line per action, a summary with the freed size at the end.
 # Exit 0 always (2 on usage error). Safe to run repeatedly.
@@ -48,18 +53,47 @@ merged_into(){ # $1 sha, $2 own branch → prints the first base that contains t
     [[ "$b" == "$2" || "$b" == "origin/$2" ]] && continue
     g merge-base --is-ancestor "$1" "$b" 2>/dev/null && { echo "$b"; return 0; }
   done; return 1; }
-pr_merged(){ # $1 branch → prints the merged PR number, if gh can tell
-  command -v gh >/dev/null 2>&1 || return 1
-  local n; n=$(cd "$MAIN" && gh pr list --state merged --head "$1" --json number --jq '.[0].number' 2>/dev/null)
-  [[ -n "$n" && "$n" != null ]] && echo "$n"; }
-decide(){ # $1 sha, $2 branch → prints the reason to remove, or nothing
-  local m n; m=$(merged_into "$1" "$2") && { echo "merged into $m"; return 0; }
-  n=$(pr_merged "$2") && { echo "PR #$n merged"; return 0; }   # squash-merged PRs leave no ancestry: ask gh even if the remote branch still exists
-  return 1; }
+is_anc(){ g merge-base --is-ancestor "$1" "$2" 2>/dev/null; }
+history(){ # $1 tip sha, $2 branch → reads the branch's reflog oldest first; prints own | fresh <start> | remote <start> | unknown
+  local h s start="" seen=0 own=0
+  while read -r h s; do
+    case "$s" in
+      "branch: Created from "*) start="${s#branch: Created from }";;
+      # `branch -c` / `branch -m` carry another ref's reflog along: what came before was written on that ref
+      "Branch: copied "*|"Branch: renamed "*) start=""; seen=0; own=0;;
+      # an entry that made a commit on this branch, still in its history (a reset past it takes it away)
+      commit:*|"commit ("*|cherry-pick:*|revert:*|am:*|*": Merge made by "*) seen=1; is_anc "$h" "$1" && own=1;;
+      # a rebase rewrites the commits above: it carries them only if there were some to replay
+      *" (finish): refs/heads/"*|"rebase finished: "*) (( seen )) && is_anc "$h" "$1" && own=1;;
+    esac   # fast-forwards, resets, `branch -f`, update-ref: moves that make no commit of its own
+  done < <(g reflog show --format='%H %gs' "refs/heads/$2" -- 2>/dev/null | awk '{l[NR]=$0} END{for(i=NR;i>0;i--) print l[i]}')
+  if (( own )); then echo own
+  elif [[ -z "$start" ]]; then echo unknown   # no reflog, pruned past the creation, or copied/renamed: cannot tell, so keep
+  elif [[ "$start" == "origin/$2" || "$start" == "refs/remotes/origin/$2" ]]; then echo "remote $start"
+  else echo "fresh $start"; fi; }
+decide(){ # $1 sha, $2 branch → prints the reason; exit 0 = remove, 1 = keep
+  local k m n oid found=""
+  k=$(history "$1" "$2")
+  case "$k" in
+    unknown) echo "reflog cannot tell whether it has commits of its own"; return 1;;
+    fresh*)  echo "no commits of its own (created from ${k#fresh })"; return 1;;
+    own)     m=$(merged_into "$1" "$2") && { echo "merged into $m"; return 0; };;
+  esac
+  # Squash-merged PRs leave no ancestry: ask gh even if the remote branch still exists, and remove only if the PR's
+  # head contains the local tip — commits made after the merge are work the PR never carried.
+  if command -v gh >/dev/null 2>&1; then
+    while read -r n oid; do
+      [[ -z "$n" || "$n" == null ]] && continue
+      [[ -n "$oid" ]] && is_anc "$1" "$oid" && { echo "PR #$n merged"; return 0; }
+      found="$n"
+    done < <(cd "$MAIN" && gh pr list --state merged --head "$2" --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null)
+  fi
+  [[ -n "$found" ]] && { echo "commits not in merged PR #$found"; return 1; }
+  [[ "$k" == remote* ]] && { echo "created from ${k#remote }, no merged PR contains it"; return 1; }
+  echo "not merged"; return 1; }
 protected(){ case "$1" in epic/*|main|master|fix-*) return 0;; esac; return 1; }
 is_scratch(){ case "$1" in /tmp/*|/private/tmp/*) return 0;; esac; return 1; }
 older_24h(){ [[ -n "$(find "$1" -maxdepth 0 -mmin +1440 2>/dev/null)" ]]; }
-clean(){ [[ -z "$(git -C "$1" status --porcelain 2>/dev/null)" ]]; }
 kb(){ du -sk "$1" 2>/dev/null | cut -f1; }
 
 removed=0; deleted=0; kept=0; before=0; after=0
@@ -91,8 +125,9 @@ for e in "${entries[@]}"; do
     if is_scratch "$(abs "$p")" && older_24h "$p"; then remove "$p" "detached scratch older than 24 h" ""; else keep "$p" "detached"; fi; continue;; esac
   [[ -z "$branch" ]] && { keep "$p" "no branch"; continue; }
   protected "$branch" && (( ! ALL )) && { keep "$p" "protected branch $branch"; continue; }
-  why=$(decide "$sha" "$branch") || { keep "$p" "not merged"; continue; }
-  clean "$p" || { keep "$p" "dirty"; continue; }
+  st=$(git -C "$p" status --porcelain 2>/dev/null) || { keep "$p" "git status failed"; continue; }   # unreadable is never clean
+  [[ -n "$st" ]] && { keep "$p" "dirty"; continue; }
+  why=$(decide "$sha" "$branch") || { keep "$p" "$why"; continue; }
   remove "$p" "$why" "$branch"
 done
 (( DRY )) || g worktree prune >/dev/null 2>&1
