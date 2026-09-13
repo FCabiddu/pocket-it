@@ -172,4 +172,107 @@ ok "T-1.2.3a and T-1.2.3b are distinct ids, not merged" '! has "ERROR"'
 ok "QF-10 and QF-10b are distinct ids, not merged"      '! has "ERROR"'
 ok "letter-suffixed ids: doctor stays green"            '[[ $rc -eq 0 ]]'
 
+# --- repo 10: base branch integrity across a real timeline (PI-29) — first run, a normal advance,
+# a rewrite (force-push) and a deletion, all against a real local "origin" (a bare repo), so the
+# fetch/force-fetch/merge-base machinery in doctor.sh runs for real, not simulated.
+seed_origin(){ # seed_origin <bare-path> <scratch-dir> — bare origin + one commit on main, echoes the sha
+  q git init -q --bare -b main "$1"
+  q git -C "$1" config receive.denyDeleteCurrent ignore  # AC3 needs to delete "main" while it is the bare repo's HEAD
+  q git init -q -b main "$2"
+  q git -C "$2" remote add origin "$1"
+  printf 'v1\n' > "$2/f.txt"
+  q git -C "$2" add -A; q git -C "$2" commit -qm c1
+  q git -C "$2" push -q origin main
+  git -C "$2" rev-parse HEAD
+}
+common(){ # <work-dir> — the shared, never-committed .git; --git-common-dir is relative for a main checkout
+  local d; d=$(git -C "$1" rev-parse --git-common-dir)
+  case "$d" in /*) echo "$d" ;; *) echo "$1/$d" ;; esac
+}
+seen_has(){ grep -q "$2" "$(common "$1")/pocket-it/base-seen" 2>/dev/null; } # <work-dir> <"branch sha">
+
+BARE10="$S/repo10-origin.git"; SEED10="$S/repo10-seed"
+SHA1=$(seed_origin "$BARE10" "$SEED10")
+WORK10="$S/repo10-work"
+q git clone -q "$BARE10" "$WORK10"
+
+# AC4: first run ever — record the current tip, report nothing about the base branch
+OUT=$(cd "$WORK10" && bash "$SCRIPT")
+ok "AC4 first run: base branch not reported"       '! has "base branch '"'"'main'"'"'"'
+ok "AC4 first run: seen commit recorded"           'seen_has "$WORK10" "main $SHA1"'
+
+# advance origin normally (a real commit on top of the seen one)
+printf 'v2\n' > "$SEED10/f.txt"; q git -C "$SEED10" add -A; q git -C "$SEED10" commit -qm c2; q git -C "$SEED10" push -q origin main
+SHA2=$(git -C "$SEED10" rev-parse HEAD)
+
+# AC1: base advanced normally since the last run — no report, seen commit follows the tip
+OUT=$(cd "$WORK10" && bash "$SCRIPT")
+ok "AC1 normal advance: base branch not reported"  '! has "base branch '"'"'main'"'"'"'
+ok "AC1 normal advance: seen commit follows tip"   'seen_has "$WORK10" "main $SHA2"'
+
+# rewrite origin: force-push an unrelated history — the seen commit falls out of it
+SCRATCH10="$S/repo10-scratch"
+q git init -q -b main "$SCRATCH10"; q git -C "$SCRATCH10" remote add origin "$BARE10"
+printf 'other\n' > "$SCRATCH10/g.txt"; q git -C "$SCRATCH10" add -A; q git -C "$SCRATCH10" commit -qm orphan
+q git -C "$SCRATCH10" push -q --force origin main
+
+# AC2: rewritten base — an ERROR naming the lost commit and how to get it back
+OUT=$(cd "$WORK10" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC2 rewritten base: ERROR names the lost commit"   "has \"ERROR base branch 'main' was rewritten on origin: commit $SHA2 is no longer in its history\""
+ok "AC2 rewritten base: recovery command names it"     "has \"git push --force origin $SHA2:refs/heads/main\""
+ok "AC2 rewritten base: doctor exits 1"                '[[ $rc -eq 1 ]]'
+ok "AC2 rewritten base: seen commit NOT advanced (keeps reporting until fixed)" 'seen_has "$WORK10" "main $SHA2"'
+
+# mutation for AC2: with the rewrite check commented out, the same scenario must go green —
+# proves the assertion above is load-bearing, not vacuous
+MUT=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
+sed '/err(f"base branch {base!r} was rewritten/s/.*/                    pass  # MUTATED for PI-29 AC2 proof/' "$SCRIPT" > "$MUT"
+OUTMUT=$(cd "$WORK10" && bash "$MUT"); rcmut=$?
+rm -f "$MUT"
+ok "AC2 mutation: removing the check makes it green (proves the test is not vacuous)" '[[ $rcmut -eq 0 ]] && ! grep -q "was rewritten on origin" <<<"$OUTMUT"'
+
+# delete the branch on origin entirely
+q git -C "$SCRATCH10" push -q origin --delete main
+
+# AC3: deleted base — an ERROR naming the last known-good commit to recover from
+OUT=$(cd "$WORK10" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC3 deleted base: ERROR reported"                  "has \"ERROR base branch 'main' no longer exists on origin (last seen at $SHA2)\""
+ok "AC3 deleted base: recovery command names the commit" "has \"git push origin $SHA2:refs/heads/main\""
+ok "AC3 deleted base: doctor exits 1"                  '[[ $rc -eq 1 ]]'
+
+# --- repo 11: the seen commit is shared across worktrees of the same repo (AC5) ---
+BARE11="$S/repo11-origin.git"; SEED11="$S/repo11-seed"
+SHA11=$(seed_origin "$BARE11" "$SEED11")
+WORK11="$S/repo11-work"
+q git clone -q "$BARE11" "$WORK11"
+WT11="$S/repo11-wt2"
+q git -C "$WORK11" worktree add -q -b repo11-wt2-branch "$WT11" main
+
+# a first run from the SECOND worktree records the seen commit
+q sh -c "cd '$WT11' && bash '$SCRIPT'"
+ok "AC5 setup: worktree 2 recorded the seen commit"    'seen_has "$WORK11" "main $SHA11"'
+
+printf 'v2\n' > "$SEED11/f.txt"; q git -C "$SEED11" add -A; q git -C "$SEED11" commit -qm c2; q git -C "$SEED11" push -q origin main
+SHA11B=$(git -C "$SEED11" rev-parse HEAD)
+
+# the FIRST worktree, which never ran doctor before, must see what the second one recorded —
+# a normal advance from $SHA11, not a first-ever run (which would silently record and never compare)
+OUT=$(cd "$WORK11" && bash "$SCRIPT")
+ok "AC5 the other worktree sees it: normal advance, no report" '! has "base branch '"'"'main'"'"'"'
+ok "AC5 seen commit shared, advanced from the other worktree's own record" 'seen_has "$WORK11" "main $SHA11B"'
+
+# --- repo 12: origin unreachable — a warn, never a false ERROR (Notes: no network must not lie) ---
+BARE12="$S/repo12-origin.git"; SEED12="$S/repo12-seed"
+seed_origin "$BARE12" "$SEED12" >/dev/null
+WORK12="$S/repo12-work"
+q git clone -q "$BARE12" "$WORK12"
+rm -rf "$BARE12"   # origin vanishes from under the clone — unreachable, not "branch deleted"
+OUT=$(cd "$WORK12" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "unreachable origin: warn, not ERROR"            'has "warn  could not verify base branch '"'"'main'"'"' integrity"'
+ok "unreachable origin: no false ERROR"             '! has "ERROR base branch"'
+ok "unreachable origin: warnings never fail doctor" '[[ $rc -eq 0 ]]'
+
 exit $fail
