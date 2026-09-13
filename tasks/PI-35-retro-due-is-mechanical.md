@@ -1,6 +1,6 @@
 # PI-35 — Uno script dice quando serve un retro, e run-wave e quickfix lo lanciano senza aspettare nessuno
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: `bin/retro-due.sh` (nuovo), `bin/retro-due.test.sh` (nuovo), `.pocket-it.json` (`testCommand`), `.claude/skills/run-wave/SKILL.md`, `.claude/skills/quickfix/SKILL.md`, `.claude/agents/retro.md`
 **TAD**: none — follow existing conventions (`bin/next-wave.sh`, `bin/doctor.sh`: gli script decidono, il modello lancia)
 **Contract**: output di `bin/retro-due.sh` (vedi AC1), letto da skill e hook
-**Branch**: 
+**Branch**: task/pi-35-retro-due
 **PR**: 
 
 ## Goal
