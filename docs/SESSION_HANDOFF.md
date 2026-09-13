@@ -31,6 +31,8 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A verification procedure written into a shared agent doc must be executed, as literally written, against every technique in the same doc that cites it (and against a decorative non-text neighbour), not only against the author's fixture: PI-23 rounds 3-4 each shipped a method that the doc's own techniques contradicted (a metrics fallback with a false negative; a step scope 'ancestors' that misses the #1 line-mask markup).
 - An intentional-truncation exclusion in a glyph-clip check must keep closed only the side the truncation cuts on purpose, and be proven with a real cut on every other side: PI-24 round 5 measured three neutralisations blind to an unintended side (line-clamp: last kept line's descenders 0; scroller excluded entirely: top-accent cut 0; ellipsis overflow-x:clip: inline-start ink cut 0), each written from fixtures that only cut the side already tested. A 1-2 px diff at a box edge that goes to 0 when the glyph changes (A->Z) or padding moves it inside is real ink, not a renderer artifact.
 - clip-path basic shapes (inset/polygon) resolve against the border-box by default, while overflow clips at the padding edge: a reset that swaps an overflow clip for a clip-path on the same side must say padding-box, or a bordered element shows content under its (transparent) border only in the reset shot — PI-24 round 6 measured a false red 291/1024 on a clean bordered scroller. Clean fixtures for any exclusion must include a border on the excused side.
+- Numerazione dei task: verificare 'ls tasks/' prima di assegnare un id — due task con lo stesso id si mascherano a vicenda in next-wave.sh (PI-12 aveva proposto PI-13, già occupato)
+- Guardie su git log --name-status: sempre -m --first-parent (altrimenti la D dentro un merge sparisce) e --no-renames (altrimenti una cancellazione con file simile esce come R e l'esito dipende da diff.renames)
 - worktree.sh creates agent worktrees locked ('pocket-it: agent worktree for <branch> since <date>'); cleanup-merged.sh judges such a worktree ONLY by a merged PR whose head contains its tip (never reflog/ancestry), releases the lock then removes it; any other lock reason is never released. To remove a locked worktree by hand: 'worktree.sh --unlock <repo> <branch>' first — 'git worktree remove --force' silently fails on a locked one.
 - Any script that asks gh must tell 'gh cannot answer' (missing, non-zero exit, unreadable output) from 'gh says no': reporting the unknown as 'not merged / no merged PR' leaves locks and worktrees kept forever with a false reason (cleanup-merged.sh merged_pr exits 2 for unknown). status.sh reads worktrees from --porcelain: the plain 'git worktree list' last field is 'locked'/'prunable', not the branch.
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
@@ -38,6 +40,12 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-13 PI-31 round 3 pushed on PR #59 — printed commands quoted, C-quoted lock reasons read — 56 tests
 - 2026-09-13 PI-31 PR #59 needs work (delta 2) — release hint breaks on shell-special branch — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
+- 2026-09-13 PI-12 PR #39 fix pushed round 4 — guardia con --no-renames, compact 1/N e rinomina vera come casi — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 3 delta — compact esce come R, serve --no-renames — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 3 — segnale where fuori repo, guardia MRTD con -m --first-parent — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 2 delta — where scrive, guardia frammenti solo M — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 2 — frammento per invocazione, congelamento, retract, AC per PI-14…18 — nessun test (documento)
 - 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
 - 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
 - 2026-09-13 PI-31 PR #59 needs work — gh failure reported as not merged
@@ -63,6 +71,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
 - 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
 - 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
+- 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
 - 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
 - 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
 - 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
@@ -74,5 +83,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
 - 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
 - 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class
-- 2026-09-13 PI-25 PR #50 fix pushed round 4 — repo8's vacuous 'no error' assertions replaced with real duplicate pairs per id shape
-- 2026-09-13 PI-25 PR #50 needs work (delta 3) — doctor alnum-id test is vacuous — cause: other: vacuous test
