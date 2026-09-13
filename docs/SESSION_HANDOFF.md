@@ -31,8 +31,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A verification procedure written into a shared agent doc must be executed, as literally written, against every technique in the same doc that cites it (and against a decorative non-text neighbour), not only against the author's fixture: PI-23 rounds 3-4 each shipped a method that the doc's own techniques contradicted (a metrics fallback with a false negative; a step scope 'ancestors' that misses the #1 line-mask markup).
 - An intentional-truncation exclusion in a glyph-clip check must keep closed only the side the truncation cuts on purpose, and be proven with a real cut on every other side: PI-24 round 5 measured three neutralisations blind to an unintended side (line-clamp: last kept line's descenders 0; scroller excluded entirely: top-accent cut 0; ellipsis overflow-x:clip: inline-start ink cut 0), each written from fixtures that only cut the side already tested. A 1-2 px diff at a box edge that goes to 0 when the glyph changes (A->Z) or padding moves it inside is real ink, not a renderer artifact.
 - clip-path basic shapes (inset/polygon) resolve against the border-box by default, while overflow clips at the padding edge: a reset that swaps an overflow clip for a clip-path on the same side must say padding-box, or a bordered element shows content under its (transparent) border only in the reset shot — PI-24 round 6 measured a false red 291/1024 on a clean bordered scroller. Clean fixtures for any exclusion must include a border on the excused side.
+- A worktree path built as a relative $WT and cd'd into once, then reused inside per-command (cd "$WT" && …) subshells, double-nests and fails silently into whatever error path follows — build $WT absolute ($ORIG/…) instead.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-28 PR #58 round 2 pushed afb6287 — 8 findings closed, overlay now Mode: overlay reviewer
 - 2026-09-13 PI-28 PR #58 needs work — overlay in sessione principale, non eseguibile — cause: first-round
 - 2026-09-13 PI-28 PR #58 draft — overlay-test wave PRs before merge, sharpen finding rules — prose task, no tests
 - 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
@@ -72,4 +74,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
 - 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
 - 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
-- 2026-09-13 PI-13 review round 4 pushed — unparseable commands deny every push, continuations joined — 179 guard cases
