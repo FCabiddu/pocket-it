@@ -56,4 +56,9 @@ Da non rifare: la strada del driver di merge è già stata provata ed è quella 
 Il vincolo vero da rispettare è che la memoria è nel percorso di avvio di **ogni** agente: qualunque struttura si scelga, leggerla deve restare economico e deve restare una cosa sola da capire per chi la legge.
 
 ## Esito
-Design prodotto in `tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md`. La direzione proposta è confermata (frammenti per ramo) con due correzioni: la composizione avviene **in lettura** e non in una PR di chiusura (che sarebbe di nuovo un punto di serializzazione e di modifica a mano), e la migrazione vive **dentro `handoff.sh`** ed è pigra, perché lo script è installato una volta e usato da più repo. Implementazione in cinque task, PI-14…PI-18 (§12).
+Design prodotto in `tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md` (v2.0, dopo la review di PR #39). La direzione proposta è confermata, con tre correzioni:
+- **un frammento per invocazione**, non per ramo: un file per ramo confligge su `_base.md` (misurato in review) e in add/add dopo uno squash (misurato);
+- la composizione avviene **in lettura**, e nessuna lettura scrive;
+- il vecchio file **si congela** invece di migrare.
+
+Un fatto si toglie con `retract`. Implementazione in cinque task, PI-14…PI-18, in ordine «prima i lettori, poi gli scrittori», con criteri Given/When/Then (§12).

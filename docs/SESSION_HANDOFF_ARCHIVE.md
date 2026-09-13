@@ -74,3 +74,5 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-25 PR #50 needs work (delta) — id regex drops alphanumeric real ids — cause: example-not-class
 - 2026-09-13 PI-22 PR #46 approved round 3 — copied/renamed branches kept, §5/§6 aligned — merge: user
 - 2026-09-13 PI-13 review round 3 pushed — redirections, newlines, keywords covered; lexer error denies — 161 guard cases, 4 mutations proven
+- 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
+- 2026-09-13 PI-13 review round 4 pushed — unparseable commands deny every push, continuations joined — 179 guard cases
