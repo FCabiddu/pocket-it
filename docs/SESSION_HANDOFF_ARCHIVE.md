@@ -21,3 +21,5 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-8 PR #30 approved — archive one order end to end, LOGCAP sole source of 40, merge: orchestrator
 - 2026-09-12 PI-9 PR #32 draft — handoff log/fact now name the file path — 7 tests
 - 2026-09-12 PI-9 PR #32 approved — codici di uscita e canali verificati invariati, merge: orchestrator
+- 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
+- 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests

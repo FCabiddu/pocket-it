@@ -16,8 +16,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - cleanup-merged.sh: ancestry or topology never proves a branch has work of its own — a fresh branch is an ancestor of its base, and the base it came from may since be merged and deleted. 'Commits of its own' is read from the branch's own reflog (a commit/cherry-pick/revert/am/merge-commit entry, or a rebase replaying one, still in the tip's history); fresh (only 'branch: Created from') and no-reflog branches are kept; 'Branch: copied'/'Branch: renamed' entries restart the reading (git branch -c/-m carry another ref's reflog, commit entries included). Commit criteria cannot tell a live agent on an already-merged branch from a leftover: liveness is the worktree lock (PI-31). A merged PR removes only if its headRefOid contains the local tip. Under set -o pipefail never 'producer | grep -q' (the early exit SIGPIPEs the producer and the pipe reads as false).
 - PI-26: a task's Files list can miss occurrences of a repo-wide wording rule (planner didn't grep every phrasing) — before closing such a task, grep the mechanism with several phrasings across the whole repo, not just the cited files.
 - Hooks, skills and agents must be read from the installed copy (~/.claude/pocket-it-live, written only by bin/install-live.sh from the published main), never from the development checkout; after every merge into main run: bash ~/.claude/pocket-it-live/bin/install-live.sh — until the README switch is applied, the development checkout is still what every session runs.
+- A hook command that runs a guard file fails open whenever that file is absent or half-written (exit 127 is non-blocking): hook commands are written 'bash …/guard.sh || exit 2' (guard.sh exits only 0 or 2), and nothing updates the copy the hook reads in place — build beside, then exchange. A symlink rename is not atomic for readers on macOS (measured); renamex_np RENAME_SWAP of directories is.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-30 PR #53 needs work — guard file absent during update fails open
 - 2026-09-13 PI-30 PR #53 draft — installed copy separate from dev checkout — 36 tests
 - 2026-09-13 PI-22 PR #46 approved round 3 — copied/renamed branches kept, §5/§6 aligned — merge: user
 - 2026-09-12 PI-22 PR #46 round 3 — copied/renamed reflog restarts; §5 guard simplified, §6 aligned — 2 checks added
@@ -57,5 +59,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-11 CI fix pushed — registered verify.test.sh in testCommand, scoped its cleanup to per-run path (PR #35 review)
 - 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
-- 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
-- 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
