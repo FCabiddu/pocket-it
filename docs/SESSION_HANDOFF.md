@@ -25,8 +25,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A hook command that runs a guard file fails open whenever that file is absent or half-written (exit 127 is non-blocking): hook commands are written 'bash …/guard.sh || exit 2' (guard.sh exits only 0 or 2), and nothing updates the copy the hook reads in place — build beside, then exchange. A symlink rename is not atomic for readers on macOS (measured); renamex_np RENAME_SWAP of directories is.
 - A hook command must be fail-closed ('bash …/guard.sh || exit 2'): a missing guard file exits 127, and 127 does not block. Swapping a symlink with rename is not atomic for readers on macOS; exchange directories with renamex_np RENAME_SWAP (renameat2 RENAME_EXCHANGE on Linux). BSD grep -R does not follow a symlink given as an argument: resolve paths first.
 - guard.sh word rules (merge, push, kill-by-pattern, APP_STATUS, sleep) read CMD or NORM, both built from DROPPED: the command with the value of textual options (-m/--message, --body/--title/--notes, heredoc read by -F - or --body-file -) replaced by TEXT, only when that value is data. A new word rule must read CMD or NORM, never RAW; reading A stays on RAW.
+- guard.sh: testo per la guardia significa dato per la shell che lo esegue davvero, cioè la $SHELL dell'utente (zsh su macOS), non bash. Un ${(e)…} o ${x@P} nel valore, oppure un eval "$_" / | sh più avanti nella riga, rende di nuovo codice un valore che il lexer considera testo: in quei casi non si sostituisce.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-32 PR #54 needs work — TEXT hides pushes zsh re-evaluates
 - 2026-09-13 PI-32 review fixes pushed on PR #54 — inert-prefix test isolated, word rules skip textual-option values, escaped quote fix — 313 guard rows, 6 mutations red
 - 2026-09-13 PI-32 PR #54 needs work — merge ban reads body text — cause: first-round
 - 2026-09-13 PI-32 PR #54 draft — guard reads agent_id, agents denied base — 69 tests
@@ -66,4 +68,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-10 PR #36 fix pushed — F3 digit cluster + F4 base-branch deletion closed — 10 tests
 - 2026-09-12 PI-11 PR #35 conflict resolved — union of handoff log lines, 0 lost, MERGEABLE
 - 2026-09-12 PI-10 PR #36 needs work (delta 2) — -f4/-4f clusters and base-branch deletion pass with the prefix
-- 2026-09-12 PI-11 PR #35 approved — verify.test.sh registered, run-scoped cleanup — merge: orchestrator

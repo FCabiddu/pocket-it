@@ -1,6 +1,6 @@
 # PI-32 — La guardia non sa se un comando arriva dall'orchestratore o da un agente
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
