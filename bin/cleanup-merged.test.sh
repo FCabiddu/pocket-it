@@ -184,6 +184,23 @@ ok "--all removes the merged epic worktree" "has 'removed worktree .*epic-e1 \(m
 ok "--all still keeps live, dirty, locked" "has 'kept .*agent-live \(not merged\)' && has 'kept .*agent-dirty \(dirty\)' && has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released — its owner runs: git -C [^ ]+ worktree unlock .*agent-locked\)'"
 ok "--all still keeps worktrees with no commits of its own" "has 'kept .*task-atbase \($NOOWN' && has 'kept .*task-behind \($NOOWN' && has 'kept .*task-fromepic \($NOOWN' && has 'kept .*task-fromgoneepic \($NOOWN' && has 'kept .*task-noreflog'"
 ok "worktree list is consistent" "[[ \$(git -C $M worktree list | wc -l | tr -d ' ') -eq 26 ]]"
+# 5b. PI-34 finding 4 — .claude/worktrees/verify-*/wave-overlay-* scratch is removed once no process uses it,
+# never gated by a 24h age like the legacy /tmp layout above: a kill -9'd verify.sh or overlay pass must not
+# leave a permanent orphan. Isolated fixtures, own bash "$SCRIPT" runs, no effect on the counts checked above.
+NEWSCRATCH_UNUSED="$WT/verify-999999-unused"
+q git -C "$M" worktree add -q --detach "$NEWSCRATCH_UNUSED" main
+INUSE_BASENAME="wave-overlay-$$-inuse"
+NEWSCRATCH_INUSE="$WT/$INUSE_BASENAME"
+q git -C "$M" worktree add -q --detach "$NEWSCRATCH_INUSE" main
+(cd "$NEWSCRATCH_INUSE" && exec tail -f /dev/null) &
+INUSE_PID=$!
+sleep 0.2   # let the backgrounded process actually chdir before lsof looks
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 unused verify-* scratch removed immediately, no 24h wait" "has 'removed worktree .*verify-999999-unused \(detached scratch, unused\)' && [[ ! -d \"$NEWSCRATCH_UNUSED\" ]]"
+ok "PI-34 in-use wave-overlay-* scratch kept while a process has it as cwd" "has 'kept .*$INUSE_BASENAME \(detached scratch, in use\)' && [[ -d \"$NEWSCRATCH_INUSE\" ]]"
+kill "$INUSE_PID" 2>/dev/null; wait "$INUSE_PID" 2>/dev/null
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 scratch removed on the next run once no process uses it (kill -9 recovery)" "has 'removed worktree .*$INUSE_BASENAME \(detached scratch, unused\)' && [[ ! -d \"$NEWSCRATCH_INUSE\" ]]"
 # 6. PI-31 — locked worktrees, created by the real worktree.sh: a protection independent of the commit criteria
 WTSH="$PWD/worktree.sh"
 lockof(){ git -C "$M" worktree list --porcelain | awk -v w="/$1" '/^worktree /{f=(substr($0,length($0)-length(w)+1)==w)} f && /^locked/{print}'; }

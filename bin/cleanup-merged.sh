@@ -20,8 +20,11 @@
 # and the report line says it is locked, by what, and why it stays. A locked worktree missing on disk has its lock released
 # and its entry pruned (its branch is deleted only on that same merged-PR condition). A lock with any other reason was
 # placed by someone else and is never released.
-# Only clean worktrees are removed; dirty ones (or ones whose `git status` fails) are kept. Detached-HEAD worktrees under /tmp
-# older than 24 h (reviewer scratch, e.g. verify.sh leftovers) are removed too. The corresponding local branch is then
+# Only clean worktrees are removed; dirty ones (or ones whose `git status` fails) are kept. Detached-HEAD scratch
+# worktrees (PI-34: `.claude/worktrees/verify-*` and `wave-overlay-*` — verify.sh and the reviewer's wave overlay
+# pass; the legacy `/tmp/*` layout still recognised too) are removed as soon as no process has them open or as a
+# cwd (`lsof +D`), never gated by an age — a `kill -9`'d run must not leave an orphan waiting 24 h. `lsof` missing
+# falls back to the old 24h-age rule so a live one is never guessed at. The corresponding local branch is then
 # deleted and `git worktree prune` runs. One line per action, a summary with the freed size at the end.
 # Exit 0 always (2 on usage error). Safe to run repeatedly.
 set -uo pipefail
@@ -135,8 +138,12 @@ decide(){ # $1 sha, $2 branch → prints the reason; exit 0 = remove, 1 = keep
   [[ "$k" == remote* ]] && { echo "created from ${k#remote }, no merged PR contains it"; return 1; }
   echo "not merged"; return 1; }
 protected(){ case "$1" in epic/*|main|master|fix-*) return 0;; esac; return 1; }
-is_scratch(){ case "$1" in /tmp/*|/private/tmp/*) return 0;; esac; return 1; }
+is_scratch_legacy(){ case "$1" in /tmp/*|/private/tmp/*) return 0;; esac; return 1; }   # pre-PI-34 layout, age-gated
+is_scratch_new(){ case "$(basename "$1")" in verify-*|wave-overlay-*|reviewer-conflict-*) return 0;; esac; return 1; }
 older_24h(){ [[ -n "$(find "$1" -maxdepth 0 -mmin +1440 2>/dev/null)" ]]; }
+in_use(){ command -v lsof >/dev/null 2>&1 && [[ -n "$(lsof +D "$1" 2>/dev/null)" ]]; }   # exit status is not
+  # reliable here — measured 1 even with a match printed, once the open file sits below $1 rather than at it —
+  # so this reads the actual listing (empty = nothing open there) instead of trusting lsof's own exit code.
 kb(){ du -sk "$1" 2>/dev/null | cut -f1; }
 
 removed=0; deleted=0; kept=0; before=0; after=0
@@ -195,7 +202,14 @@ for e in "${entries[@]}"; do
     [[ -n "$branch" ]] && ( protected "$branch" && (( ! ALL )) ) && continue
     [[ -n "$branch" ]] && decide "$sha" "$branch" >/dev/null && drop_branch "$branch"; continue;; esac
   case " $flags " in *" detached "*)
-    if is_scratch "$(abs "$p")" && older_24h "$p"; then remove "$p" "detached scratch older than 24 h" ""; else keep "$p" "detached"; fi; continue;; esac
+    P="$(abs "$p")"
+    if is_scratch_new "$P"; then
+      if in_use "$p"; then keep "$p" "detached scratch, in use"
+      elif command -v lsof >/dev/null 2>&1; then remove "$p" "detached scratch, unused" ""
+      elif older_24h "$p"; then remove "$p" "detached scratch older than 24 h (lsof unavailable)" ""
+      else keep "$p" "detached scratch, cannot confirm unused (lsof unavailable, under 24 h)"; fi
+    elif is_scratch_legacy "$P" && older_24h "$p"; then remove "$p" "detached scratch older than 24 h" ""
+    else keep "$p" "detached"; fi; continue;; esac
   [[ -z "$branch" ]] && { keep "$p" "no branch"; continue; }
   protected "$branch" && (( ! ALL )) && { keep "$p" "protected branch $branch"; continue; }
   st=$(git -C "$p" status --porcelain 2>/dev/null) || { keep "$p" "git status failed"; continue; }   # unreadable is never clean
