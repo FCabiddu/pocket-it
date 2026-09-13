@@ -33,22 +33,39 @@ abs(){ (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
 SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)   # worktree.sh sits beside this script: the --unlock hint is a runnable command
 CUR=$(abs "$(git rev-parse --show-toplevel)")
 
-# Parse `git worktree list --porcelain` (bash 3.2 friendly: one "path|sha|branch|flags|lock reason" string per entry;
-# the lock reason is last, so a "|" inside it stays in it).
+# git prints a lock reason C-quoted ("…", \" \\ \n \t \ooo) when it holds a quote, a backslash or a non-ASCII byte: read it back
+cunquote(){ local s="$1" o="" i c
+  [[ ${#s} -ge 2 && "$s" == \"*\" ]] || { printf '%s' "$s"; return 0; }
+  s="${s:1:${#s}-2}"
+  for (( i=0; i<${#s}; i++ )); do
+    c="${s:i:1}"
+    if [[ "$c" == '\' ]]; then
+      i=$((i+1)); c="${s:i:1}"
+      case "$c" in
+        n) c=$'\n';; t) c=$'\t';;
+        [0-7]) printf -v c "\\${s:i:3}"; i=$((i+2));;
+      esac
+    fi
+    o="$o$c"
+  done
+  printf '%s' "$o"; }
+# Parse `git worktree list --porcelain` (bash 3.2 friendly: one "path US sha US branch US flags US lock reason" string per
+# entry, US = the unit separator \x1f, which no branch name can hold — "|", ";", "$" and the like are valid in branch names).
+SEP=$'\x1f'
 entries=(); path=""; sha=""; branch=""; flags=""; lockr=""
-flush(){ [[ -n "$path" ]] && entries+=("$path|$sha|$branch|$flags|$lockr"); path=""; sha=""; branch=""; flags=""; lockr=""; return 0; }
+flush(){ [[ -n "$path" ]] && entries+=("$path$SEP$sha$SEP$branch$SEP$flags$SEP$lockr"); path=""; sha=""; branch=""; flags=""; lockr=""; return 0; }
 while IFS= read -r line; do
   case "$line" in
     "worktree "*) flush; path="${line#worktree }";;
     "HEAD "*)     sha="${line#HEAD }";;
     "branch "*)   branch="${line#branch refs/heads/}";;
     detached)     flags="$flags detached";;
-    locked|"locked "*) flags="$flags locked"; lockr="${line#locked}"; lockr="${lockr# }";;
+    locked|"locked "*) flags="$flags locked"; lockr="${line#locked}"; lockr=$(cunquote "${lockr# }");;
     prunable*)    flags="$flags prunable";;
   esac
 done < <(git worktree list --porcelain)
 flush
-MAIN="${entries[0]%%|*}"   # the first entry is always the main checkout
+MAIN="${entries[0]%%"$SEP"*}"   # the first entry is always the main checkout
 g(){ git -C "$MAIN" "$@"; }
 
 g remote get-url origin >/dev/null 2>&1 && g fetch --prune -q origin 2>/dev/null
@@ -145,7 +162,7 @@ remove(){ # $1 path, $2 reason, $3 branch to delete afterwards ("" for none), $4
 locked_entry(){ # $1 path, $2 sha, $3 branch, $4 lock reason → the only way out of a lock is a merged PR containing the tip
   local p="$1" sha="$2" b="$3" lr="$4" shown st why rc rel
   shown="locked: ${lr:-no reason given}"
-  case "$lr" in "pocket-it: "*) ;; *) keep "$p" "$shown; not a pocket-it lock, never released — its owner runs: git worktree unlock $(printf '%q' "$p")"; return 0;; esac
+  case "$lr" in "pocket-it: "*) ;; *) keep "$p" "$shown; not a pocket-it lock, never released — its owner runs: git -C $(printf '%q' "$MAIN") worktree unlock $(printf '%q' "$p")"; return 0;; esac
   if [[ ! -d "$p" ]]; then   # deleted from disk: the lock protects nothing any more, only the branch is left to judge
     if (( DRY )); then echo "would unlock and prune worktree $p (missing on disk)"
     elif g worktree unlock "$p" >/dev/null 2>&1; then g worktree prune >/dev/null 2>&1; echo "unlocked and pruned worktree $p (missing on disk)"
@@ -158,7 +175,7 @@ locked_entry(){ # $1 path, $2 sha, $3 branch, $4 lock reason → the only way ou
     (( rc == 2 )) && why="merged PRs unknown: $why"
     echo "kept branch $b (${why:-no merged PR contains its tip})"; return 0; fi
   [[ -z "$b" ]] && { keep "$p" "$shown; no branch"; return 0; }
-  rel="release if abandoned or merged without a PR: bash $(printf '%q' "$SELF_DIR/worktree.sh") --unlock $(printf '%q' "$MAIN") $b"
+  rel="release if abandoned or merged without a PR: bash $(printf '%q' "$SELF_DIR/worktree.sh") --unlock $(printf '%q' "$MAIN") $(printf '%q' "$b")"
   protected "$b" && (( ! ALL )) && { keep "$p" "$shown; protected branch $b (--all to judge it); $rel"; return 0; }
   st=$(git -C "$p" status --porcelain 2>/dev/null) || { keep "$p" "$shown; git status failed"; return 0; }
   [[ -n "$st" ]] && { keep "$p" "$shown; dirty"; return 0; }
@@ -170,7 +187,7 @@ locked_entry(){ # $1 path, $2 sha, $3 branch, $4 lock reason → the only way ou
 i=0
 for e in "${entries[@]}"; do
   i=$((i+1)); (( i == 1 )) && continue
-  IFS='|' read -r p sha branch flags lockr <<<"$e"
+  IFS="$SEP" read -r p sha branch flags lockr <<<"$e"
   [[ "$(abs "$p")" == "$CUR" ]] && { keep "$p" "current worktree"; continue; }
   case " $flags " in *" locked "*) locked_entry "$p" "$sha" "$branch" "$lockr"; continue;; esac
   case " $flags " in *" prunable "*)

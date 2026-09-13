@@ -132,4 +132,16 @@ WTOLD="$M/.claude/worktrees/task-oldgit"
 ok "PI-31 older git: worktree created" "[[ $rc -eq 0 && \"$OUT\" == \"$WTOLD\" && -d $WTOLD ]]"
 ok "PI-31 older git: locked, reason names branch and date" "[[ \"\$(lockof $WTOLD)\" =~ ^locked\ pocket-it:\ agent\ worktree\ for\ task/oldgit\ since\ $DATE_RE\$ ]]"
 
+# 13. PI-31 round 3 — branch names with shell characters and a quote (git prints such a lock reason C-quoted)
+for b in 'task/q"u(x)$y' "task/it's;a|b" 'task/caffè'; do
+  P=$(cd / && bash "$SCRIPT" "$M" "$b" 2>/dev/null); rc=$?
+  LK=$(git -C "$M" worktree list --porcelain | W="worktree $P" awk '/^worktree /{f=($0==ENVIRON["W"])} f && /^locked/{print}')
+  ok "PI-31 r3 [$b] created from another folder and locked" '[[ $rc -eq 0 && -d "$P" && -n "$LK" ]]'
+  ERR=$(cd / && bash "$SCRIPT" "$M" "$b" 2>&1 >/dev/null)
+  ok "PI-31 r3 [$b] reuse recognises its own lock (not someone else's)" '! grep -q "someone else" <<<"$ERR"'
+  OUT=$(cd / && bash "$SCRIPT" --unlock "$M" "$b" 2>/dev/null); rc=$?
+  LK=$(git -C "$M" worktree list --porcelain | W="worktree $P" awk '/^worktree /{f=($0==ENVIRON["W"])} f && /^locked/{print}')
+  ok "PI-31 r3 [$b] --unlock from another folder releases it" '[[ $rc -eq 0 && "$OUT" == "$P" && -z "$LK" ]]'
+done
+
 exit $fail

@@ -32,16 +32,35 @@ REPO=$(cd "$REPO_ARG" 2>/dev/null && pwd -P) || { echo "worktree.sh: not a direc
 g(){ git -C "$REPO" "$@"; }
 g rev-parse --git-dir >/dev/null 2>&1 || { echo "worktree.sh: not a git repository: $REPO_ARG" >&2; exit 2; }
 
-# lock_of <path> → prints "none", or "locked <reason>" (reason may be empty) for the registered worktree at <path>
-lock_of(){ g worktree list --porcelain | awk -v w="worktree $1" '
-  /^worktree /{f=($0==w)} f && /^locked( |$)/{r=$0; sub(/^locked ?/,"",r); s="locked " r}
-  END{print (s==""?"none":s)}'; }
+# git prints a lock reason C-quoted ("…", \" \\ \n \t \ooo) when it holds a quote, a backslash or a non-ASCII byte: read it back
+cunquote(){ local s="$1" o="" i c
+  [[ ${#s} -ge 2 && "$s" == \"*\" ]] || { printf '%s' "$s"; return 0; }
+  s="${s:1:${#s}-2}"
+  for (( i=0; i<${#s}; i++ )); do
+    c="${s:i:1}"
+    if [[ "$c" == '\' ]]; then
+      i=$((i+1)); c="${s:i:1}"
+      case "$c" in
+        n) c=$'\n';; t) c=$'\t';;
+        [0-7]) printf -v c "\\${s:i:3}"; i=$((i+2));;
+      esac
+    fi
+    o="$o$c"
+  done
+  printf '%s' "$o"; }
+# lock_of <path> → prints "none", or "locked <reason>" (reason unquoted, may be empty) for the registered worktree at <path>
+lock_of(){ local r
+  r=$(g worktree list --porcelain | W="worktree $1" awk '
+    /^worktree /{f=($0==ENVIRON["W"])} f && /^locked( |$)/{r=$0; sub(/^locked ?/,"",r); s="L" r}
+    END{print (s==""?"none":s)}')
+  [[ "$r" == none ]] && { echo none; return 0; }
+  echo "locked $(cunquote "${r#L}")"; }
 lock(){ # $1 path → locks it with the pocket-it reason; a failure is reported, the worktree stays usable
   g worktree lock --reason "$LOCK_TAG $BRANCH since $(date -u +%Y-%m-%dT%H:%MZ)" "$1" >/dev/null 2>&1 \
     || echo "worktree.sh: WARNING could not lock $1 — cleanup-merged.sh protects it only by its commit criteria" >&2; }
 
 if (( UNLOCK )); then
-  P=$(g worktree list --porcelain | awk -v b="branch refs/heads/$BRANCH" '/^worktree /{p=substr($0,10)} $0==b{print p}')
+  P=$(g worktree list --porcelain | B="branch refs/heads/$BRANCH" awk '/^worktree /{p=substr($0,10)} $0==ENVIRON["B"]{print p}')
   [[ -z "$P" ]] && { echo "worktree.sh: no worktree has $BRANCH checked out" >&2; exit 2; }
   L=$(lock_of "$P")
   case "$L" in
@@ -70,7 +89,7 @@ elif [[ -d "$WT" ]]; then
   exit 2
 fi
 
-[[ -z "$BASE" ]] && BASE=$(python3 -c 'import json;print(json.load(open("'"$REPO"'/.pocket-it.json")).get("baseBranch","main"))' 2>/dev/null || echo main)
+[[ -z "$BASE" ]] && BASE=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]+"/.pocket-it.json")).get("baseBranch","main"))' "$REPO" 2>/dev/null || echo main)
 
 EXCLUDE="$REPO/.git/info/exclude"
 mkdir -p "$(dirname "$EXCLUDE")"

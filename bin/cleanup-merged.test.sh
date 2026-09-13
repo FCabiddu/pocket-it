@@ -17,6 +17,9 @@
 #   its tip; removed by the ordinary criteria once released with --unlock; a foreign lock never released; missing on disk:
 #   lock released, entry pruned, branch deleted only on a merged PR. AC5: a mutant with the reflog criterion broken
 #   removes the unlocked twin and still keeps the locked worktree.
+# PI-31 round 3: every command a kept line prints runs as printed — copied from the output and executed from another folder,
+#   in bash and zsh — for branch names holding ( ) $ ' " ; | & ` and non-ASCII, in a repo whose path holds a space ( ) $ ' ";
+#   lock reasons git prints C-quoted are read back, so such worktrees are still released on a merged PR.
 cd "$(dirname "$0")" || exit 2
 SCRIPT="$PWD/cleanup-merged.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/cleanup-merged-test.XXXXXX")
@@ -161,7 +164,7 @@ ok "AC4 dirty worktree kept" "has 'kept .*agent-dirty \(dirty\)' && [[ -f $WT/ag
 ok "AC4 uncommitted edit with no commits of its own: kept as dirty" "has 'kept .*task-freshdirty \(dirty\)' && grep -q edit $WT/task-freshdirty/f"
 ok "untracked file only: kept as dirty" "has 'kept .*task-untracked \(dirty\)' && [[ -f $WT/task-untracked/new ]]"
 ok "git status failing: kept, never taken as clean" "has 'kept .*task-badstatus \(git status failed\)' && [[ -d $WT/task-badstatus ]] && branch_exists task/badstatus"
-ok "worktree locked by someone else kept, merged or not" "has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released — its owner runs: git worktree unlock .*agent-locked\)' && [[ -d $WT/agent-locked ]] && branch_exists task/locked"
+ok "worktree locked by someone else kept, merged or not" "has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released — its owner runs: git -C [^ ]+ worktree unlock .*agent-locked\)' && [[ -d $WT/agent-locked ]] && branch_exists task/locked"
 ok "epic worktree kept without --all" "has 'kept .*epic-e1 \(protected branch epic/e1\)' && [[ -d $OLD/epic-e1 ]]"
 ok "detached worktree outside /tmp kept" "has 'kept .*/detached \(detached\)' && [[ -d $WT/detached ]]"
 ok "old detached scratch under /tmp removed" "has 'removed worktree .*pocket-it-cleanup-test-$$ \(detached scratch older than 24 h\)' && [[ ! -d $SCRATCH_WT ]]"
@@ -178,7 +181,7 @@ ok "third run is a no-op" "has '^cleanup-merged: 0 worktrees removed, 0 branches
 # 5. --all also cleans the merged epic branch, and still keeps everything with work in it
 OUT=$(cd "$M" && bash "$SCRIPT" --all)
 ok "--all removes the merged epic worktree" "has 'removed worktree .*epic-e1 \(merged into origin/main\)' && [[ ! -d $OLD/epic-e1 ]] && ! branch_exists epic/e1"
-ok "--all still keeps live, dirty, locked" "has 'kept .*agent-live \(not merged\)' && has 'kept .*agent-dirty \(dirty\)' && has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released — its owner runs: git worktree unlock .*agent-locked\)'"
+ok "--all still keeps live, dirty, locked" "has 'kept .*agent-live \(not merged\)' && has 'kept .*agent-dirty \(dirty\)' && has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released — its owner runs: git -C [^ ]+ worktree unlock .*agent-locked\)'"
 ok "--all still keeps worktrees with no commits of its own" "has 'kept .*task-atbase \($NOOWN' && has 'kept .*task-behind \($NOOWN' && has 'kept .*task-fromepic \($NOOWN' && has 'kept .*task-fromgoneepic \($NOOWN' && has 'kept .*task-noreflog'"
 ok "worktree list is consistent" "[[ \$(git -C $M worktree list | wc -l | tr -d ' ') -eq 26 ]]"
 # 6. PI-31 — locked worktrees, created by the real worktree.sh: a protection independent of the commit criteria
@@ -234,7 +237,7 @@ ok "PI-31 AC2 locked, commits after its merged PR: kept" "has \"kept .*task-lock
 ok "PI-31 AC4 locked, PR merged, dirty: kept as dirty" "has \"kept .*task-lockdirty \\($LOCKED task/lockdirty $WHEN; dirty\\)\" && grep -q edit $L_DIRTY/f"
 ok "PI-31 AC3 locked, a merged PR contains its tip: unlocked and removed, branch deleted" "has 'unlocked worktree .*task-lockmerged$' && has 'removed worktree .*task-lockmerged \(PR #20 merged, lock released\)' && [[ ! -d $L_MERGED ]] && ! branch_exists task/lockmerged"
 ok "PI-31 released with --unlock, PR merged: removed by the ordinary criteria" "has 'removed worktree .*task-lockreleased \(PR #23 merged\)' && [[ ! -d $L_REL ]] && ! branch_exists task/lockreleased"
-ok "PI-31 foreign lock, PR merged: kept, lock never released" "has 'kept .*task-lockforeign \(locked: manual hold; not a pocket-it lock, never released — its owner runs: git worktree unlock .*task-lockforeign\)' && [[ \"\$(lockof task-lockforeign)\" == 'locked manual hold' ]]"
+ok "PI-31 foreign lock, PR merged: kept, lock never released" "has 'kept .*task-lockforeign \(locked: manual hold; not a pocket-it lock, never released — its owner runs: git -C [^ ]+ worktree unlock .*task-lockforeign\)' && [[ \"\$(lockof task-lockforeign)\" == 'locked manual hold' ]]"
 ok "PI-31 locked and missing on disk, PR merged: lock released, entry pruned, branch deleted" "has 'unlocked and pruned worktree .*task-lockgone \(missing on disk\)' && [[ -z \"\$(lockof task-lockgone)\" ]] && ! git -C $M worktree list | grep -q task-lockgone\  && ! branch_exists task/lockgone"
 ok "PI-31 locked and missing on disk, not merged: entry pruned, branch kept" "has 'unlocked and pruned worktree .*task-lockgonelive \(missing on disk\)' && branch_exists task/lockgonelive"
 ok "PI-31 unlocked twin at the base tip: kept by the reflog criterion" "has 'kept .*task-lockctl \(no commits of its own \(created from origin/main\)\)'"
@@ -246,4 +249,42 @@ ok "PI-31 AC5 mutant really differs from the script" "grep -q 'if true; then ech
 OUT=$(cd "$M" && bash "$S/mutant.sh")
 ok "PI-31 AC5 mutant removes the unlocked twin (the reflog criterion is really broken)" "has 'removed worktree .*task-lockctl \(merged into (origin/)?main\)' && [[ ! -d $L_CTL ]]"
 ok "PI-31 AC5 mutant still keeps the locked worktree at the base tip" "has \"kept .*task-lockfresh \\($LOCKED task/lockfresh $WHEN; no merged PR contains its tip; $REL task/lockfresh\\)\" && [[ -d $L_FRESH && -n \"\$(lockof task-lockfresh)\" ]]"
+# 7. PI-31 round 3 — printed commands run as printed, for any valid branch name and repo path, from any folder
+check(){ local name="$1"; shift; if "$@"; then echo "ok    $name"; else echo "FAIL  $name"; fail=1; fi; }
+R7="$S/repo (7) \$x 'q' \"d\""
+q git init -q --bare "$S/origin7.git"
+q git init -q -b main "$R7"; echo base > "$R7/f"; q git -C "$R7" add f; q git -C "$R7" commit -qm base
+q git -C "$R7" remote add origin "$S/origin7.git"; q git -C "$R7" push -q -u origin main
+is_locked(){ git -C "$R7" worktree list --porcelain | P="worktree $1" awk '/^worktree /{f=($0==ENVIRON["P"])} f && /^locked/{x=1} END{exit !x}'; }
+after(){ [[ "$1" == *"$2"* ]] || return 0; local l="${1##*"$2"}"; printf '%s' "${l%)}"; }   # $1 kept line, $2 text before the command → the command, or nothing
+run_from_elsewhere(){ [[ -n "$2" ]] && (cd / && "$1" -c "$2") >/dev/null 2>&1; }   # $1 shell, $2 command (never an empty one)
+line_of(){ grep -F "kept $1 (" <<<"$2" | head -1; }
+SHELLS=(bash); command -v zsh >/dev/null && SHELLS+=(zsh)
+NAMES=('task/sp(a)' 'task/$USER-x' "task/it's" 'task/q"u' 'task/s;c|p&b`t' 'task/caffè')
+check "PI-31 r3 git rejects a space in a branch name (so the space is covered by the repo path)" eval '! git check-ref-format --branch "task/a b" >/dev/null 2>&1'
+for b in "${NAMES[@]}"; do
+  check "PI-31 r3 git accepts the branch name $b" git check-ref-format --branch "$b"
+  P=$(bash "$WTSH" "$R7" "$b" 2>/dev/null)
+  check "PI-31 r3 [$b] worktree.sh creates it locked" eval '[[ -d "$P" ]] && is_locked "$P"'
+  for sh in "${SHELLS[@]}"; do
+    OUT=$(cd "$R7" && bash "$SCRIPT"); L=$(line_of "$P" "$OUT")
+    check "PI-31 r3 [$b] kept line shows the reason read back, with the real branch name" eval '[[ "$L" == *"(locked: pocket-it: agent worktree for $b since "* ]]'
+    CMD=$(after "$L" "release if abandoned or merged without a PR: ")
+    check "PI-31 r3 [$b] printed --unlock command runs as printed in $sh from / and releases the lock" eval 'is_locked "$P" && run_from_elsewhere "$sh" "$CMD" && ! is_locked "$P"'
+    q bash "$WTSH" "$R7" "$b"   # locked again for the next shell and for the merge below
+  done
+  commit "$P" "work on $b"; q git -C "$R7" merge -q --squash "$b"; q git -C "$R7" commit -qm "squash"
+  echo "70 $(git -C "$R7" rev-parse "$b")" >> "$PRS/${b//\//__}"
+  OUT=$(cd "$R7" && bash "$SCRIPT")
+  check "PI-31 r3 [$b] locked, merged PR: released and removed, branch deleted" eval '[[ ! -d "$P" ]] && grep -qF "removed worktree $P (PR #70 merged, lock released)" <<<"$OUT" && ! git -C "$R7" rev-parse -q --verify "refs/heads/$b" >/dev/null'
+done
+FB='task/f(o)'"'"'o"x'; FP="$R7/.claude/worktrees/foreign"
+q git -C "$R7" worktree add -q -b "$FB" "$FP" main; FP=$(cd "$FP" && pwd -P); q git -C "$R7" worktree lock --reason 'manual "hold"' "$FP"
+for sh in "${SHELLS[@]}"; do
+  OUT=$(cd "$R7" && bash "$SCRIPT"); L=$(line_of "$FP" "$OUT")
+  check "PI-31 r3 foreign lock with a quoted reason: shown read back" eval '[[ "$L" == *"(locked: manual \"hold\"; not a pocket-it lock"* ]]'
+  CMD=$(after "$L" "its owner runs: ")
+  check "PI-31 r3 foreign lock: printed git command runs as printed in $sh from / and releases the lock" eval 'is_locked "$FP" && run_from_elsewhere "$sh" "$CMD" && ! is_locked "$FP"'
+  q git -C "$R7" worktree lock --reason 'manual "hold"' "$FP"
+done
 exit $fail
