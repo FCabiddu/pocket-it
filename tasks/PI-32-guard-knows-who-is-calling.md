@@ -1,6 +1,6 @@
 # PI-32 — La guardia non sa se un comando arriva dall'orchestratore o da un agente
 
-**Status**: Todo
+**Status**: Cancelled
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -14,7 +14,10 @@
 **TAD**: none — convenzioni dell'hook
 **Contract**: none
 **Branch**: 
-**PR**: 
+**PR**: #54 (chiusa senza merge)
+
+## Decisione (2026-09-13) — annullato
+Quattro giri di review, e ogni giro ha trovato un nuovo modo di far eseguire del testo come comando (espansioni zsh, `eval "$_"`, editor impostato a una shell); su `main` passano già `GIT_EDITOR=…`, `GIT_PAGER=…` e `echo … | xargs git push`. Una guardia che legge il testo dei comandi non si completa contro un chiamante che offusca, e ogni irrigidimento bloccava flussi ordinari (commit e corpi PR con heredoc: 4/113, 5/54, 11/79). Il proprietario ha deciso di togliere il lavoro: costa solo tempo, e la difesa reale è il lavoro a branch dedicati. La guardia su `main` resta com'è: rete contro gli errori distratti, non contro l'aggiramento. Il lavoro dei giri 1–3 resta sul branch `task/pi-32-guard-knows-caller` della PR #54.
 
 ## Goal
 La guardia permette il push verso il ramo base e il merge delle PR solo quando il comando porta un prefisso di audit. Il prefisso doveva distinguere la sessione principale, che ha il mandato di farlo, dagli agenti, che non devono mai scrivere sul ramo base.
