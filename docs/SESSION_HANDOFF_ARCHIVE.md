@@ -87,3 +87,17 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-25 PR #50 conflict resolved — union of handoff/archive (0 lines lost), next-wave.test both blocks kept; PI-26 fixtures T-HI/T-LO -> T-HI-1/T-LO-1 (digit-less ids are not ids under PI-25) — testCommand 357 ok
 - 2026-09-13 PI-30 PR #53 draft — installed copy separate from dev checkout — 36 tests
 - 2026-09-13 PI-30 PR #53 needs work — guard file absent during update fails open
+- 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
+- 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
+- 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
+- 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
+- 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
+- 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
+- 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
+- 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
+- 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
+- 2026-09-12 PI-23 PR #49 needs work (delta) — mask offset and clipper class incomplete — cause: example-not-class
+- 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
+- 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
+- 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
+- 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)
