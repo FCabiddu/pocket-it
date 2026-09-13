@@ -47,8 +47,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Estimate: a task that defines or guards a class of cases (a hook guard, a category definition, a shared verification procedure, the commands a script prints) is M, never S, and ships its case table in the ACs — PI-12, PI-23, PI-24, PI-28, PI-29 and PI-33, all sized S or M without a table, took 4 to 7 review rounds each (retro 2026-09-13).
 - bash: 'cmd &' from a non-interactive, job-control-off shell starts with SIGINT pre-ignored — a trap … INT inside it never fires (SIGTERM unaffected); a test harness that signals a backgrounded script needs 'set -m' before the & to get realistic (foreground-equivalent) signal delivery.
 - lsof +D <dir>: exit status is not reliable for 'anything open under here' — measured exit 1 even when it printed a matching process, whenever the open file/cwd sits in a subdirectory of the queried path rather than at it exactly. Check the actual listing output (non-empty), never the exit code.
+- A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-34 PR #64 needs work (delta 2) — trap armato dopo il fetch, scratch sporche rimosse — cause: example-not-class
 - 2026-09-13 PI-34 giro 2 fixes pushed — SIGINT/TERM exit codes, conflict-resolution worktree reuse, scratch liveness, git-common-dir — 24 tests
 - 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
 - 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
@@ -88,4 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
 - 2026-09-13 PI-33 PR #57 needs work round 3 — shared/disposable non complementari — cause: example-not-class
 - 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
-- 2026-09-13 PI-33 PR #57 needs work — shared/disposable overlap, missing stop clause
