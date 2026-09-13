@@ -20,8 +20,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh: redirections (`2>&1 | tail`, `&>/dev/null`, `>file`) are stripped with their fd and target before a push's positionals are counted, since PI-13 round 3; before that a bare push with a redirection stopped looking implicit and passed from the base branch.
 - guard.sh push guard is NOT a security boundary: it stops a COOPERATIVE agent pushing to the base branch by MISTAKE in a normal shell form; deliberate evasions (eval, bash -c, env -i, wrappers, quoted/escaped git, on-the-fly aliases, push-affecting config, send-pack) are left to server-side branch protection, and the threat model is at the top of guard.sh. The classifier tokenises the RAW command quote-aware (never a regex split on raw text), with heredoc bodies removed, an unquoted newline and shell keywords (if/then/do/…) as boundaries and redirections stripped. Any git push in a command it cannot parse is DENIED whatever its target (task branches too), unless the exact prefix sits on that push; a backslash-newline is joined before newlines split commands. The audit prefix authorizes only by exact value on the push's own command word.
 - guard.sh reads the caller from the hook input, not the command: agent_id/agent_type present = subagent (any value, even empty/null), both absent = main session. For agents the audit prefixes authorize nothing (gh pr merge allowed only to agent_type retro, still with its prefix) and every push that can reach main/master is denied by a quote-aware reading A OR a quote-blind reading B (quotes/backslashes deleted, not paired). Price for agents: text spelling a push to main next to a git word, and variable refspecs, are denied — use git commit -F / --body-file / HEAD. Main-session behaviour is unchanged.
+- guard.sh agent mode: a search on the quote-blind text (quotes deleted) must anchor on the command word and its options, never on 'a word later in the same segment' — once quotes are gone, the text of --body/--title/-m reads as arguments, so 'gh pr comment --body "... merge: orchestrator"' matched the merge ban (PI-32 review). A layer that another layer fully covers needs a test on a copy with the other layer disabled, or its mutation stays green.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-32 PR #54 needs work — merge ban reads body text — cause: first-round
 - 2026-09-13 PI-32 PR #54 draft — guard reads agent_id, agents denied base — 69 tests
 - 2026-09-13 PI-25 PR #50 conflict resolved — union of handoff/archive (0 lines lost), next-wave.test both blocks kept; PI-26 fixtures T-HI/T-LO -> T-HI-1/T-LO-1 (digit-less ids are not ids under PI-25) — testCommand 357 ok
 - 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
@@ -61,5 +63,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
 - 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
-- 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
-- 2026-09-12 PI-13 PR #47 delta needs work — redirections, newlines, lexer error reopen main
