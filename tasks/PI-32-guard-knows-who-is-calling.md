@@ -31,6 +31,8 @@ La guardia permette il push verso il ramo base e il merge delle PR solo quando i
 - [ ] AC5 — Dato un input con `agent_id` presente ma vuoto, o di tipo inatteso, quando l'hook lo valuta, allora lo tratta come agente: nel dubbio si nega.
 - [ ] AC6 — Il commento in testa all'hook spiega il meccanismo, la verifica fatta e perché il prefisso da solo non bastava.
 
+- [ ] AC7 — Dato un comando lanciato da un agente in cui la rimozione delle virgolette si sfasa, per esempio una stringa `$'…\'…'` seguita più avanti da un'altra stringa fra apici singoli che nasconde un push, quando l'hook lo valuta, allora il push verso il ramo base è comunque negato: per un agente la decisione non deve dipendere dalla lettura corretta del testo.
+
 ## Tests expected
 Un caso per criterio in `.claude/hooks/guard.test.sh`, costruendo l'input JSON con e senza `agent_id` e `agent_type`. Prova per mutazione AC1: ignorando `agent_id`, il suo caso deve diventare rosso. Integration/E2E: la verifica sul campo è già stata fatta e descritta sopra; ripetila nel report solo se il formato dell'input risulta cambiato.
 
