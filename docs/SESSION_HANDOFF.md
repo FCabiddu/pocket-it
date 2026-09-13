@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh push guard is NOT a security boundary: it stops a COOPERATIVE agent pushing to the base branch by MISTAKE in a normal shell form; deliberate evasions (eval, bash -c, env -i, wrappers, quoted/escaped git, on-the-fly aliases, push-affecting config, send-pack) are left to server-side branch protection, and the threat model is at the top of guard.sh. The classifier tokenises the RAW command quote-aware (never a regex split on raw text), with heredoc bodies removed, an unquoted newline and shell keywords (if/then/do/…) as boundaries and redirections stripped. Any command it cannot parse is DENIED if it pushes to main/master, never waved through. The audit prefix authorizes only by exact value on the push's own command word.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
 - 2026-09-13 PI-13 review round 3 pushed — redirections, newlines, keywords covered; lexer error denies — 161 guard cases, 4 mutations proven
 - 2026-09-12 PI-13 PR #47 delta needs work — redirections, newlines, lexer error reopen main
 - 2026-09-12 PI-13 review round 2 pushed — threat model reframed, quote-split regression fixed, F5/F6/F8 closed — 140 guard cases, 5 mutations proven
@@ -55,4 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
 - 2026-09-09 PI-4 PR #19 draft — guard.sh resolves branch for bare/HEAD git push — 20 tests
 - 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator
-- 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
