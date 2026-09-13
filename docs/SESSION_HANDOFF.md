@@ -24,8 +24,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Hooks, skills and agents must be read from the installed copy (~/.claude/pocket-it-live, written only by bin/install-live.sh from the published main), never from the development checkout; after every merge into main run: bash ~/.claude/pocket-it-live/bin/install-live.sh — until the README switch is applied, the development checkout is still what every session runs.
 - A hook command that runs a guard file fails open whenever that file is absent or half-written (exit 127 is non-blocking): hook commands are written 'bash …/guard.sh || exit 2' (guard.sh exits only 0 or 2), and nothing updates the copy the hook reads in place — build beside, then exchange. A symlink rename is not atomic for readers on macOS (measured); renamex_np RENAME_SWAP of directories is.
 - A hook command must be fail-closed ('bash …/guard.sh || exit 2'): a missing guard file exits 127, and 127 does not block. Swapping a symlink with rename is not atomic for readers on macOS; exchange directories with renamex_np RENAME_SWAP (renameat2 RENAME_EXCHANGE on Linux). BSD grep -R does not follow a symlink given as an argument: resolve paths first.
+- guard.sh word rules (merge, push, kill-by-pattern, APP_STATUS, sleep) read CMD or NORM, both built from DROPPED: the command with the value of textual options (-m/--message, --body/--title/--notes, heredoc read by -F - or --body-file -) replaced by TEXT, only when that value is data. A new word rule must read CMD or NORM, never RAW; reading A stays on RAW.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-32 review fixes pushed on PR #54 — inert-prefix test isolated, word rules skip textual-option values, escaped quote fix — 313 guard rows, 6 mutations red
 - 2026-09-13 PI-32 PR #54 needs work — merge ban reads body text — cause: first-round
 - 2026-09-13 PI-32 PR #54 draft — guard reads agent_id, agents denied base — 69 tests
 - 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
@@ -65,6 +67,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-11 PR #35 conflict resolved — union of handoff log lines, 0 lost, MERGEABLE
 - 2026-09-12 PI-10 PR #36 needs work (delta 2) — -f4/-4f clusters and base-branch deletion pass with the prefix
 - 2026-09-12 PI-11 PR #35 approved — verify.test.sh registered, run-scoped cleanup — merge: orchestrator
-- 2026-09-12 PI-10 CI fix pushed — closed 2 force-push detection gaps (clustered -f, +refspec) — 7 new tests
-- 2026-09-12 PI-11 CI fix pushed — registered verify.test.sh in testCommand, scoped its cleanup to per-run path (PR #35 review)
-- 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
