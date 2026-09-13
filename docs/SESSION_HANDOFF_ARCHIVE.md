@@ -70,3 +70,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-24 PR #48 needs work (delta) — settle hangs on infinite animations — cause: verification-reintroduced
 - 2026-09-12 PI-25 PR draft — doctor.sh flags duplicate task ids as ERROR — 8 new tests
 - 2026-09-12 PI-25 PR #50 needs work — hyphenated words read as task ids — cause: first-round
+- 2026-09-12 PI-25 PR #50 fix pushed — id regex now requires a numeric segment, AC3 test hardened
