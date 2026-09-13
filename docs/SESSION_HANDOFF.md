@@ -13,11 +13,18 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh: the prefix must never authorize a destructive push to the base branch. Beyond force flags there are three more families: the + refspec, branch deletion (--delete, -d, empty refspec), and --mirror/--prune. Any new guard must cover all four.
 - force-push detection in guard.sh must cover clustered short flags (-uf, -fu, -qf) and a leading + on the refspec (+main, +HEAD:main), not just -f/--force as standalone tokens
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
+- cleanup-merged.sh: ancestry or topology never proves a branch has work of its own — a fresh branch is an ancestor of its base, and the base it came from may since be merged and deleted. 'Commits of its own' is read from the branch's own reflog (a commit/cherry-pick/revert/am/merge-commit entry, or a rebase replaying one, still in the tip's history); fresh (only 'branch: Created from') and no-reflog branches are kept; 'Branch: copied'/'Branch: renamed' entries restart the reading (git branch -c/-m carry another ref's reflog, commit entries included). Commit criteria cannot tell a live agent on an already-merged branch from a leftover: liveness is the worktree lock (PI-31). A merged PR removes only if its headRefOid contains the local tip. Under set -o pipefail never 'producer | grep -q' (the early exit SIGPIPEs the producer and the pipe reads as false).
 - PI-26: a task's Files list can miss occurrences of a repo-wide wording rule (planner didn't grep every phrasing) — before closing such a task, grep the mechanism with several phrasings across the whole repo, not just the cited files.
 - Hooks, skills and agents must be read from the installed copy (~/.claude/pocket-it-live, written only by bin/install-live.sh from the published main), never from the development checkout; after every merge into main run: bash ~/.claude/pocket-it-live/bin/install-live.sh — until the README switch is applied, the development checkout is still what every session runs.
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-13 PI-30 PR #53 draft — installed copy separate from dev checkout — 36 tests
+- 2026-09-13 PI-22 PR #46 approved round 3 — copied/renamed branches kept, §5/§6 aligned — merge: user
+- 2026-09-12 PI-22 PR #46 round 3 — copied/renamed reflog restarts; §5 guard simplified, §6 aligned — 2 checks added
+- 2026-09-12 PI-22 PR #46 delta needs work — inherited reflog, §5 BR before branch
+- 2026-09-12 PI-22 PR #46 round 2 — commits of its own read from branch reflog; worktree guard rule executable — 12 checks added
+- 2026-09-12 PI-22 PR #46 needs work — fresh branch off merged epic removed
+- 2026-09-12 PI-22 PR #46 draft — cleanup-merged keeps no-own-commit worktrees; lost-worktree stop rule — 17 test checks added
 - 2026-09-12 orchestrator: dopo il merge di PI-22, aggiungere in shared/implementing-common.md che una migrazione o una backfill non si applica mai a un database reale prima di review e merge: si prova su una copia, e sul database reale la applica chi mergia. Emerso da un task che l'ha applicata prima della review, lasciando il database in uno stato che il codice in produzione gestiva male. Causa anche nella specifica del task, che diceva di provarla su una copia prima che sul database reale senza dire quando.
 - 2026-09-12 PI-27 PR #51 needs work — AC3 forbids the exact file AC4 requires
 - 2026-09-12 PI-26 PR #52 approved — merge: orchestrator
@@ -52,9 +59,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
 - 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
 - 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
-- 2026-09-12 PI-9 PR #32 approved — codici di uscita e canali verificati invariati, merge: orchestrator
-- 2026-09-12 PI-9 PR #32 draft — handoff log/fact now name the file path — 7 tests
-- 2026-09-12 PI-8 PR #30 approved — archive one order end to end, LOGCAP sole source of 40, merge: orchestrator
-- 2026-09-12 PI-8 PR #30 needs work — archive ordering contradicts its own header comment
-- 2026-09-12 PI-8 PR #30 fix pushed — one archive order, LOGCAP-only hardcode fix — 9 tests
-- 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests

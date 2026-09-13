@@ -15,3 +15,9 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
 - 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged
 - 2026-09-11 PI-6 PR #24 draft - next-wave.sh total-order sort key for mixed alphanumeric ids - 6 tests
+- 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests
+- 2026-09-12 PI-8 PR #30 fix pushed — one archive order, LOGCAP-only hardcode fix — 9 tests
+- 2026-09-12 PI-8 PR #30 needs work — archive ordering contradicts its own header comment
+- 2026-09-12 PI-8 PR #30 approved — archive one order end to end, LOGCAP sole source of 40, merge: orchestrator
+- 2026-09-12 PI-9 PR #32 draft — handoff log/fact now name the file path — 7 tests
+- 2026-09-12 PI-9 PR #32 approved — codici di uscita e canali verificati invariati, merge: orchestrator
