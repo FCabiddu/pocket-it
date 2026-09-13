@@ -36,8 +36,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A command printed for a human or agent to run (recovery, release, accept) must be runnable exactly as printed from the directory the user is in: the script's absolute path (never bin/x.sh, which exists only in the pocket-it checkout), every interpolated value shell-quoted (printf %q — git branch names may contain ( ) $ '), no step described in words ('fast-forward by hand') when a command exists, and a test that extracts it from the output and executes it from a directory without bin/. PI-29/PI-31 review round 2 found each of these missing.
 - doctor.sh: a script that PRINTS a shell command for the operator to run must have that exact command extracted and eval'd by its own test (not just grepped) — round 2 shipped a recovery command that never converged, an --accept-base that assumed pocket-it's own bin/ dir, and a locale test that passed under both fixed and broken code because this machine's git has no NLS translations; all three were only caught by round 3 executing the printed text for real.
 - A recovery command a pocket-it script prints never writes to the base branch on origin (refs/heads/<base>): it saves the lost commit on a new branch (git branch rescue-<sha12> <sha>, pushed only under that new name) and leaves restoring or accepting the base to a person (--accept-base). A merge that re-parents the dropped commit makes a deliberate rewrite (a removed secret) reachable again from the base, and guard.sh blocks it on main — PI-29 round 3.
+- doctor.sh recovery: never print a command that writes to refs/heads/<base> on origin — save the lost commit to a new rescue-<sha12> branch and push only that; restoring the base is a human decision, not the script's
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
 - 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
 - 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
 - 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
@@ -77,4 +79,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
 - 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
 - 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
-- 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
