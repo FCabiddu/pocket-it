@@ -104,8 +104,8 @@ ok "PI-31 reuse of a released worktree: locked again" "[[ $rc -eq 0 && \"\$(lock
 q git -C "$M" worktree unlock "$WT2"; q git -C "$M" worktree lock --reason "manual hold" "$WT2"
 ERR=$(bash "$SCRIPT" --unlock "$M" task/existing 2>&1 >/dev/null); rc=$?
 ok "PI-31 --unlock on a foreign lock: exit 1, says so, lock kept" "[[ $rc -eq 1 && \"\$(lockof $WT2)\" == 'locked manual hold' ]] && grep -q 'locked by someone else (manual hold)' <<<\"$ERR\""
-q bash "$SCRIPT" "$M" task/existing
-ok "PI-31 reuse of a foreign-locked worktree: foreign reason left as it is" "[[ \"\$(lockof $WT2)\" == 'locked manual hold' ]]"
+ERR=$(bash "$SCRIPT" "$M" task/existing 2>&1 >/dev/null)
+ok "PI-31 reuse of a foreign-locked worktree: foreign reason left as it is, and said" "[[ \"\$(lockof $WT2)\" == 'locked manual hold' ]] && grep -q 'locked by someone else (manual hold), left as it is' <<<\"$ERR\""
 ERR=$(bash "$SCRIPT" --unlock "$M" task/nowhere 2>&1 >/dev/null); rc=$?
 ok "PI-31 --unlock of a branch with no worktree: exit 2" "[[ $rc -eq 2 ]] && grep -q 'no worktree has task/nowhere' <<<\"$ERR\""
 bash "$SCRIPT" --unlock "$M" task/new1 extra >/dev/null 2>&1; rc=$?

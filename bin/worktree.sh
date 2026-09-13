@@ -57,7 +57,12 @@ SLUG="${BRANCH//\//-}"
 WT="$REPO/.claude/worktrees/$SLUG"
 if g worktree list --porcelain | grep -xF "worktree $WT" >/dev/null; then
   echo "worktree.sh: reusing existing worktree for $BRANCH" >&2
-  [[ "$(lock_of "$WT")" == none ]] && lock "$WT"
+  L=$(lock_of "$WT")
+  case "$L" in
+    none) lock "$WT";;
+    "locked $LOCK_TAG "*) ;;
+    *) echo "worktree.sh: $WT is locked by someone else (${L#locked }), left as it is" >&2;;
+  esac
   echo "$WT"
   exit 0
 elif [[ -d "$WT" ]]; then
