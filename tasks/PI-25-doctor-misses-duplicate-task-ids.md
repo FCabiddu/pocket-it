@@ -1,6 +1,6 @@
 # PI-25 — `doctor.sh` non si accorge di due task con lo stesso id
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/doctor.sh, bin/doctor.test.sh
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-25-doctor-duplicate-ids
+**PR**: https://github.com/FCabiddu/pocket-it/pull/50
 
 ## Goal
 Due file di task con lo stesso id si mascherano a vicenda in `next-wave.sh`: uno dei due sparisce dalla board senza che nessuno se ne accorga. È già successo più volte, in questo repo e in un progetto, e ogni volta la contromisura è stata una regola scritta per chi crea i task: «controlla l'elenco prima di assegnare un numero». La regola non basta, perché si affida a chi la legge. L'ultima volta un task duplicato è rimasto sulla board per giorni con uno stato che contraddiceva il lavoro già mergiato.

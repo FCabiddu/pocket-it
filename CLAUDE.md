@@ -13,7 +13,7 @@ This file is for working on the agents themselves. The rules the *orchestrator* 
              └▶ tech-architect ─▶ PROJECT TAD once, then a DELTA per feature + best-practices/
                   └▶ implementation-planner ─▶ tasks/*.md · INDEX.md · DEPS.json (waves, contract-first, risk)
                        └▶ 👤 board gate (the one human review)
-                            └▶ /run-wave ×N: doctor → next-wave → developers in worktrees (opus if risk high) → one reviewer (verify.sh first) → orchestrator merges (👤 only when `draft` was asked)
+                            └▶ /run-wave ×N: doctor → next-wave → developers in worktrees (model is the orchestrator's per-launch choice, see Model choice) → reviewers in parallel, grouped by cost (verify.sh first) → orchestrator merges (👤 only when `draft` was asked)
                                  └▶ [qa-engineer only for justified QA tasks] ─▶ [documentation-agent] ─▶ retro
 Small change? ─▶ /quickfix: task file → developer → reviewer. No documents.
 ```
@@ -49,7 +49,7 @@ tools: [Read, Write, ...]
 | `ux-ui-designer.md` | Opus | — | (A) audits a static site, (B) static direction, (C) enterprise Design Spec → `design-specs/` |
 | `tech-architect.md` | Opus | — | First feature: `PROJECT_TECH_ANALYSIS.md` (fixed numbering). Later features: `{NAME}_TECH_DELTA.md` with only the changed sections. Writes/updates `best-practices/` per tech group |
 | `implementation-planner.md` | Sonnet | 80 | Board: self-contained task files (Files, TAD §, Contract, Risk, AC1…n as Given/When/Then, Non-goals), `INDEX.md`, `DEPS.json` with waves; contract-first tasks so backend and frontend run in the same wave; runs `doctor.sh`. No Linear |
-| `developer.md` | Sonnet (Opus when `Risk: high`) | 120 | One task — **Backend, Frontend or DevOps** — with its unit tests, task branch, draft PR whose body maps AC→test |
+| `developer.md` | Sonnet (floor); the orchestrator raises it to Opus per launch — see Model choice | 120 | One task — **Backend, Frontend or DevOps** — with its unit tests, task branch, draft PR whose body maps AC→test |
 | `qa-engineer.md` | Sonnet | 150 | Integration/E2E only for QA tasks the planner justified; files bug tasks |
 | `reviewer.md` | Opus | 60 | `verify.sh` first (red = needs work), then diff vs criteria, contract, TAD, best practices; comments + labels; conflicts; CI routing to `developer` |
 | `retro.md` | Opus | 60 | End of epic: repeated findings → best-practices rules (PR) + proposed template/heuristic lines for pocket-it |
@@ -65,7 +65,7 @@ An orchestrator in front of pocket-it (private, not part of this repo) needs not
 |---|---|
 | `/intake` | The only place questions are asked. One `AskUserQuestion`, writes `.pocket-it.json` + `business-analysis/BRIEF.md`, commits, hands off to business-analyst |
 | `/quickfix {sentence}` | Fast lane: writes and commits `tasks/QF-n-*.md` with real file paths and Given/When/Then criteria, launches developer (worktree) then reviewer. No documents |
-| `/run-wave` | `doctor` → `next-wave` → all ready tasks in one message (worktree, background, opus if high risk) → one reviewer → at most two fix rounds → index + report. Next wave = next call |
+| `/run-wave` | `doctor` → `next-wave` → all ready tasks in one message (worktree, background, model per launch — see Model choice) → reviewers in parallel, grouped by cost → a red PR gets its cause fixed where it lives before another round, never a bigger model or a round count as the trigger → index + report. Next wave = next call |
 | `/retro EPIC-n` | launcher for the retro agent |
 
 ### Scripts (`bin/`, zero tokens)
@@ -73,7 +73,7 @@ An orchestrator in front of pocket-it (private, not part of this repo) needs not
 | Script | Use |
 |---|---|
 | `doctor.sh [--wave N]` | pre-flight: config valid and committed, task files complete and committed, DEPS.json consistent, no shared files in a wave, TAD numbering, hygiene. Exit 1 on errors |
-| `next-wave.sh` | prints one JSON line per launchable task (deps Done, no file overlap with tasks launched in the same call, model by risk) + a blocked list |
+| `next-wave.sh` | prints one JSON line per launchable task (deps Done, no file overlap with tasks launched in the same call, `model_hint` — a suggestion from Risk alone, not a decision, see Model choice) + a blocked list |
 | `verify.sh <PR|branch>` | lint, type-check, affected tests on the PR branch in a throwaway worktree, ≤ 40 lines. The reviewer runs it before reading |
 | `status.sh` | the project state computed from disk in ~25 lines: config, docs, board counts and high-risk open tasks, ready wave, open PRs with labels, worktrees, handoff facts + last log lines. What an orchestrator reads first; replaces `--resume` |
 | `handoff.sh log|fact|show` | the narrative memory `docs/SESSION_HANDOFF.md`: `log` prepends a dated line (kept to 40), `fact` adds an evergreen fact (cap 100). Agents call it at every PR and review; humans read it after a week away |
@@ -159,7 +159,8 @@ Skipped sections keep their heading with a one-line `N/A`. A delta uses the same
 | Hosted CI | opt-in via `pipeline: true`; `APP_STATUS` starts `dev`; only a human flips it to `prod` |
 | History log | `docs/SESSION_HANDOFF.md`, **mandatory**, written only through `bin/handoff.sh`: `## Fatti che non scadono` (≤ 100, gotchas and decisions) + `## Log` (≤ 40 dated lines). State is never written here — `status.sh` computes it |
 | Project isolation | **Nothing from a project pocket-it works on ever lands in this repo.** No project name, no product or domain vocabulary, no file paths, no PR or issue numbers, no excerpts of its code, documents or data — in task files, reports, commit messages, PR bodies, `lessons.md` or `SESSION_HANDOFF.md`. This repo is public and the projects are not. A tooling bug found while working on a project is described by its mechanism alone: the failing line, the input shape that triggers it, the expected behaviour. Id shapes this repo defines itself (`T-{e}.{s}.{t}`, `T-BUG-{n}`, `QF-{n}`, `PI-{n}`) are its own conventions, not project data, and stay usable as examples and test fixtures. When a diagnosis cannot be written without naming a project, it belongs in that project's report, and only the mechanism comes here |
-| Cost rules | task file + cited sections only; read once; capped output; budget per task (stop on stall, not on size; `maxTurns` 300 is the safety net); one reviewer per wave; resume partial agents, never relaunch; two waves per session, then the orchestrator states the call and the user presses `/compact`; only named agents, never `general-purpose` |
+| Model choice | the orchestrator picks the model at every launch, not `Risk` alone — `next-wave.sh`'s `model_hint` is a starting suggestion, and the prompt states the reason in one line. Bigger model (opus): irreversible or destructive work, security or permission boundaries, open-ended reasoning (diagnosis, design, root-cause analysis, and their review), a wide surface to keep coherent. Smaller model (sonnet): mechanical, well-specified work, or prose only. The `model` in an agent's frontmatter stays as the floor — no subagent has a default model, so one launched without an explicit model inherits the session's, the most expensive; never omit it. Never change the model as a reaction to a failed round: find the cause first, and raise the model only if the analysis itself names the model as the cause |
+| Cost rules | task file + cited sections only; read once; capped output; budget per task (stop on stall, not on size; `maxTurns` 300 is the safety net); reviewers grouped by measured cost, never one for an arbitrarily large wave; a stopped agent or a red PR gets its cause fixed before anything is relaunched, never a bigger model as the first move — resume the same agent unless the analysis says otherwise, relaunch from scratch only when the worktree is gone; two waves per session, then the orchestrator states the call and the user presses `/compact`; only named agents, never `general-purpose` |
 | Learning loop | three layers of memory, each read by the agents that need it: **facts** (this project, `docs/SESSION_HANDOFF.md`, ≤ 100), **best-practices** (this stack, per project), **lessons** (method, every project, `shared/lessons.md`, ≤ 40, `provisional` → `confirmed` → promoted to a rule). Developers log `BUDGET`/`STALL`; the reviewer writes repeated findings as facts; `run-wave` launches `retro` when the board is complete; retro writes all three layers and **merges its own text-only PRs immediately** (audit prefix) so nothing waits on a human — unless `automerge: false` or draft mode. Promotion of a lesson to a rule in this repo is the only step a human does |
 
 ---

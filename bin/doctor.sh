@@ -41,10 +41,12 @@ files = [f for f in glob.glob("tasks/**/*.md", recursive=True) if not f.endswith
 if not files: warn("tasks/ has no task files (run implementation-planner or quickfix first)")
 hdr = re.compile(r"^\*\*([A-Za-z ]+?)(\*\*:|:\*\*)\s*(.*)$")
 required = ["Status","Label","Files","TAD"]
+id_files = {}  # declared id -> [files] — same extraction as next-wave.sh, so both scripts agree on what "same id" means
 for f in files:
     txt = open(f, errors="ignore").read()
-    m = re.match(r"^#\s*(\S+)", txt)
+    m = re.match(r"^#\s*(?=[A-Za-z][A-Za-z0-9]*-[^\s:]*\d)([A-Za-z][A-Za-z0-9]*(?:[-.][A-Za-z0-9]+)+)", txt)  # a real id: a letter-led prefix (alphanumeric segments allowed, e.g. E2E, I18N) then one or more -/.  segments, with a digit somewhere past the first hyphen; never a plain hyphenated word ("Follow-up": no digit, lookahead fails) and never trailing punctuation ("T-2.1.1." stops at "T-2.1.1")
     tid = m.group(1) if m else os.path.basename(f).split("-")[0]
+    if m: id_files.setdefault(m.group(1), []).append(f)  # only a genuinely declared id counts as a duplicate candidate; a filename-guessed fallback never does
     fields = {}
     for line in txt.splitlines()[:40]:
         h = hdr.match(line)
@@ -60,6 +62,10 @@ for f in files:
         dep = dep.strip()
         if dep and dep.lower() not in ("none","nessuna","-") and re.match(r"^[A-Z]+-", dep) and dep not in tasks and not (glob.glob(f"tasks/**/{dep}-*.md", recursive=True) or glob.glob(f"tasks/**/{dep}.md", recursive=True)):
             (warn if fields.get("Status","").lower().startswith("done") else err)(f"{f}: depends on {dep} which has no task file")
+
+for tid, tfiles in sorted(id_files.items()):
+    if len(tfiles) > 1:
+        err(f"duplicate task id {tid}: {', '.join(sorted(tfiles))}")
 
 # 2b. legacy nested board: EPIC.md / STORY-n.m.md status vs their T-*.md children (summaries nobody updates)
 status_re = re.compile(r"^\*\*Status(\*\*:|:\*\*)\s*(.*)$", re.M)
