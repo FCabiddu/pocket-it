@@ -57,3 +57,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-19 PR draft — compaction call is orchestrator's, not user's — no automated tests
 - 2026-09-12 PI-19 PR #42 needs work — segnali elencati ma non decidono nulla
 - 2026-09-12 PI-19 fix pushed — segnali OR, vincolo assoluto, entry point privato tolto
+- 2026-09-12 PI-19 PR #42 delta needs work — report nomina l'entry point privato
