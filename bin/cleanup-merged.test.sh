@@ -12,6 +12,11 @@
 #            pushed · pushed and not merged · new commits after a merge · new commits after a squash-merged PR ·
 #            git status failing · locked · protected epic · detached outside /tmp · current worktree · missing on disk
 #            with no commits of its own (pruned, branch kept)
+# PI-31, locked by worktree.sh (the real script): kept when not merged (at the base tip; merged by ancestry only; commits
+#   after its PR; dirty) with the lock and its reason in the report line; released and removed when a merged PR contains
+#   its tip; removed by the ordinary criteria once released with --unlock; a foreign lock never released; missing on disk:
+#   lock released, entry pruned, branch deleted only on a merged PR. AC5: a mutant with the reflog criterion broken
+#   removes the unlocked twin and still keeps the locked worktree.
 cd "$(dirname "$0")" || exit 2
 SCRIPT="$PWD/cleanup-merged.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/cleanup-merged-test.XXXXXX")
@@ -154,7 +159,7 @@ ok "AC4 dirty worktree kept" "has 'kept .*agent-dirty \(dirty\)' && [[ -f $WT/ag
 ok "AC4 uncommitted edit with no commits of its own: kept as dirty" "has 'kept .*task-freshdirty \(dirty\)' && grep -q edit $WT/task-freshdirty/f"
 ok "untracked file only: kept as dirty" "has 'kept .*task-untracked \(dirty\)' && [[ -f $WT/task-untracked/new ]]"
 ok "git status failing: kept, never taken as clean" "has 'kept .*task-badstatus \(git status failed\)' && [[ -d $WT/task-badstatus ]] && branch_exists task/badstatus"
-ok "locked worktree kept" "has 'kept .*agent-locked \(locked\)' && [[ -d $WT/agent-locked ]] && branch_exists task/locked"
+ok "worktree locked by someone else kept, merged or not" "has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released\)' && [[ -d $WT/agent-locked ]] && branch_exists task/locked"
 ok "epic worktree kept without --all" "has 'kept .*epic-e1 \(protected branch epic/e1\)' && [[ -d $OLD/epic-e1 ]]"
 ok "detached worktree outside /tmp kept" "has 'kept .*/detached \(detached\)' && [[ -d $WT/detached ]]"
 ok "old detached scratch under /tmp removed" "has 'removed worktree .*pocket-it-cleanup-test-$$ \(detached scratch older than 24 h\)' && [[ ! -d $SCRATCH_WT ]]"
@@ -171,7 +176,46 @@ ok "third run is a no-op" "has '^cleanup-merged: 0 worktrees removed, 0 branches
 # 5. --all also cleans the merged epic branch, and still keeps everything with work in it
 OUT=$(cd "$M" && bash "$SCRIPT" --all)
 ok "--all removes the merged epic worktree" "has 'removed worktree .*epic-e1 \(merged into origin/main\)' && [[ ! -d $OLD/epic-e1 ]] && ! branch_exists epic/e1"
-ok "--all still keeps live, dirty, locked" "has 'kept .*agent-live \(not merged\)' && has 'kept .*agent-dirty \(dirty\)' && has 'kept .*agent-locked \(locked\)'"
+ok "--all still keeps live, dirty, locked" "has 'kept .*agent-live \(not merged\)' && has 'kept .*agent-dirty \(dirty\)' && has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released\)'"
 ok "--all still keeps worktrees with no commits of its own" "has 'kept .*task-atbase \($NOOWN' && has 'kept .*task-behind \($NOOWN' && has 'kept .*task-fromepic \($NOOWN' && has 'kept .*task-fromgoneepic \($NOOWN' && has 'kept .*task-noreflog'"
 ok "worktree list is consistent" "[[ \$(git -C $M worktree list | wc -l | tr -d ' ') -eq 26 ]]"
+# 6. PI-31 — locked worktrees, created by the real worktree.sh: a protection independent of the commit criteria
+WTSH="$PWD/worktree.sh"
+lockof(){ git -C "$M" worktree list --porcelain | awk -v w="/$1" '/^worktree /{f=(substr($0,length($0)-length(w)+1)==w)} f && /^locked/{print}'; }
+wt(){ bash "$WTSH" "$M" "$1" 2>/dev/null; }   # $1 branch → prints the locked worktree's path
+L_FRESH=$(wt task/lockfresh)                                                    # AC2/AC5: at the base tip, locked
+L_CTL=$(wt task/lockctl); q bash "$WTSH" --unlock "$M" task/lockctl             # AC5 control: its unlocked twin
+L_MERGED=$(wt task/lockmerged);     commit "$L_MERGED" m;   q git -C "$L_MERGED" push -q -u origin task/lockmerged;   squash task/lockmerged; pr task/lockmerged 20   # AC3
+L_ANC=$(wt task/lockancestry);      commit "$L_ANC" a;      q git -C "$M" merge -q --no-ff task/lockancestry -m "merge task/lockancestry"                     # merged, no PR
+L_AFTER=$(wt task/lockafterpr);     commit "$L_AFTER" b;    squash task/lockafterpr; pr task/lockafterpr 21; commit "$L_AFTER" "after the PR"
+L_DIRTY=$(wt task/lockdirty);       commit "$L_DIRTY" d;    squash task/lockdirty; pr task/lockdirty 22; echo edit >> "$L_DIRTY/f"
+L_REL=$(wt task/lockreleased);      commit "$L_REL" r;      squash task/lockreleased; pr task/lockreleased 23; q bash "$WTSH" --unlock "$M" task/lockreleased
+L_FOREIGN="$WT/task-lockforeign"; mk task/lockforeign "$L_FOREIGN"; squash task/lockforeign; pr task/lockforeign 24; q git -C "$M" worktree lock --reason "manual hold" "$L_FOREIGN"
+L_GONE=$(wt task/lockgone);         commit "$L_GONE" g;     squash task/lockgone; pr task/lockgone 25
+L_GONELIVE=$(wt task/lockgonelive); commit "$L_GONELIVE" gl
+rm -rf "$L_GONE" "$L_GONELIVE"
+q git -C "$M" push -q origin main
+LOCKED='locked: pocket-it: agent worktree for'; WHEN='since [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z'
+ok "PI-31 fixtures: worktree.sh locked what it created" "[[ -n \"\$(lockof task-lockfresh)\" && -n \"\$(lockof task-lockmerged)\" && -z \"\$(lockof task-lockctl)\" && -z \"\$(lockof task-lockreleased)\" ]]"
+OUT=$(cd "$M" && bash "$SCRIPT" --dry-run)
+ok "PI-31 dry-run announces the unlock and the removal, touches nothing" "has 'would unlock worktree .*task-lockmerged' && has 'would remove worktree .*task-lockmerged \(PR #20 merged, lock released\)' && [[ -d $L_MERGED && -n \"\$(lockof task-lockmerged)\" ]]"
+OUT=$(cd "$M" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | grep lock | sed 's/^/      | /'
+ok "PI-31 exit 0" "[[ $rc -eq 0 ]]"
+ok "PI-31 AC2+AC4 locked, at the base tip: kept, still locked, the line says locked and why" "has \"kept .*task-lockfresh \\($LOCKED task/lockfresh $WHEN; no merged PR contains its tip\\)\" && [[ -d $L_FRESH && -n \"\$(lockof task-lockfresh)\" ]] && branch_exists task/lockfresh"
+ok "PI-31 AC2 locked, merged by ancestry but by no PR: kept (the unlocked rule would remove it)" "has \"kept .*task-lockancestry \\($LOCKED task/lockancestry $WHEN; no merged PR contains its tip\\)\" && [[ -d $L_ANC ]] && branch_exists task/lockancestry"
+ok "PI-31 AC2 locked, commits after its merged PR: kept" "has \"kept .*task-lockafterpr \\($LOCKED task/lockafterpr $WHEN; commits not in merged PR #21\\)\" && [[ -d $L_AFTER ]]"
+ok "PI-31 AC4 locked, PR merged, dirty: kept as dirty" "has \"kept .*task-lockdirty \\($LOCKED task/lockdirty $WHEN; dirty\\)\" && grep -q edit $L_DIRTY/f"
+ok "PI-31 AC3 locked, a merged PR contains its tip: unlocked and removed, branch deleted" "has 'unlocked worktree .*task-lockmerged$' && has 'removed worktree .*task-lockmerged \(PR #20 merged, lock released\)' && [[ ! -d $L_MERGED ]] && ! branch_exists task/lockmerged"
+ok "PI-31 released with --unlock, PR merged: removed by the ordinary criteria" "has 'removed worktree .*task-lockreleased \(PR #23 merged\)' && [[ ! -d $L_REL ]] && ! branch_exists task/lockreleased"
+ok "PI-31 foreign lock, PR merged: kept, lock never released" "has 'kept .*task-lockforeign \(locked: manual hold; not a pocket-it lock, never released\)' && [[ \"\$(lockof task-lockforeign)\" == 'locked manual hold' ]]"
+ok "PI-31 locked and missing on disk, PR merged: lock released, entry pruned, branch deleted" "has 'unlocked and pruned worktree .*task-lockgone \(missing on disk\)' && [[ -z \"\$(lockof task-lockgone)\" ]] && ! git -C $M worktree list | grep -q task-lockgone\  && ! branch_exists task/lockgone"
+ok "PI-31 locked and missing on disk, not merged: entry pruned, branch kept" "has 'unlocked and pruned worktree .*task-lockgonelive \(missing on disk\)' && branch_exists task/lockgonelive"
+ok "PI-31 unlocked twin at the base tip: kept by the reflog criterion" "has 'kept .*task-lockctl \(no commits of its own \(created from origin/main\)\)'"
+# AC5 — break the PI-22 criterion (every branch reads as having commits of its own) in a copy of the script
+sed 's/if (( own )); then echo own/if true; then echo own/' "$SCRIPT" > "$S/mutant.sh"
+ok "PI-31 AC5 mutant really differs from the script" "grep -q 'if true; then echo own' $S/mutant.sh && ! cmp -s $SCRIPT $S/mutant.sh"
+OUT=$(cd "$M" && bash "$S/mutant.sh")
+ok "PI-31 AC5 mutant removes the unlocked twin (the reflog criterion is really broken)" "has 'removed worktree .*task-lockctl \(merged into (origin/)?main\)' && [[ ! -d $L_CTL ]]"
+ok "PI-31 AC5 mutant still keeps the locked worktree at the base tip" "has \"kept .*task-lockfresh \\($LOCKED task/lockfresh $WHEN; no merged PR contains its tip\\)\" && [[ -d $L_FRESH && -n \"\$(lockof task-lockfresh)\" ]]"
 exit $fail
