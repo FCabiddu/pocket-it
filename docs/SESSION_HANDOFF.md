@@ -34,6 +34,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Two-way category definitions in a shared doc (e.g. shared/disposable database) must be one criterion and its exact complement, with the unit named (the database, not the server): PI-33 rounds 1-3 each shipped two independent criteria ('existed before' vs 'created and dropped') that left a case in neither (created, not dropped) and an example crossing units (createdb on a pre-existing server) in both. Check every concrete case against the text alone before closing.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-33 PR #57 needs work round 4 — in-memory/fake DB senza categoria — cause: example-not-class
 - 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
 - 2026-09-13 PI-33 PR #57 needs work round 3 — shared/disposable non complementari — cause: example-not-class
 - 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
@@ -73,4 +74,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 conflict resolved — union of handoff/archive (0 lines lost), next-wave.test both blocks kept; PI-26 fixtures T-HI/T-LO -> T-HI-1/T-LO-1 (digit-less ids are not ids under PI-25) — testCommand 357 ok
 - 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
 - 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
-- 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class
