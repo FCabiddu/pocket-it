@@ -1,6 +1,6 @@
 # PI-14 — Compositore in sola lettura per la memoria della pipeline
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
