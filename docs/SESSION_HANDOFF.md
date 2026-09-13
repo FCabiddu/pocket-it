@@ -33,6 +33,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - clip-path basic shapes (inset/polygon) resolve against the border-box by default, while overflow clips at the padding edge: a reset that swaps an overflow clip for a clip-path on the same side must say padding-box, or a bordered element shows content under its (transparent) border only in the reset shot — PI-24 round 6 measured a false red 291/1024 on a clean bordered scroller. Clean fixtures for any exclusion must include a border on the excused side.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
 - 2026-09-13 PI-29 round 2 fix pushed — locale-proof deletion check + --accept-base — 10 new tests
 - 2026-09-13 PI-29 PR #60 needs work — deleted-branch match breaks under locale
 - 2026-09-13 PI-29 PR draft — doctor.sh flags a rewritten/deleted base branch — 20 tests
@@ -73,3 +74,4 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
 - 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
 - 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
+- 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
