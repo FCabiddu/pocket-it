@@ -5,7 +5,7 @@ For a bug, a copy change, a small UI fix or a chore that fits in one PR and need
 Arguments: a plain-language description of the change: `$ARGUMENTS`
 
 ### 1. Sanity
-`cat .pocket-it.json 2>/dev/null` (defaults if missing). `git status --short | head` — if the working tree is dirty on tracked files, say so and stop: the developer branches off the base branch and nothing is lost, but the user should know.
+`cat .pocket-it.json 2>/dev/null` (defaults if missing). `git status --short | head` — if the working tree is dirty on tracked files, note it in the report and continue: the developer works in its own worktree off the base branch, so the dirty files never reach it; nothing here is a reason to stop the launch.
 
 If the request is clearly not small (new screens + new tables + new endpoints, or "add a feature that…"), say so in one line and offer `/intake` → pipeline instead. Do not stretch the quickfix lane.
 
@@ -54,18 +54,28 @@ git add tasks/QF-{n}-*.md && git commit -q -m "task: QF-{n} {title}" && POCKET_I
 (Committed so a worktree-isolated developer can see it. The prefix is the hook's authorized form for a push to the base branch — see `/quickfix` §4.)
 
 ### 3. Launch
-One Agent call: `subagent_type: developer`, `isolation: worktree` (only when the session cwd is this project's repo — otherwise create the worktree with `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh <project-path> task/QF-{n}-{slug})`, omit `isolation` and add `Worktree: $WT` to the prompt), `model: opus` only if Risk is high, prompt:
+One Agent call: `subagent_type: developer`, `isolation: worktree` (only when the session cwd is this project's repo — otherwise create the worktree with `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh <project-path> task/QF-{n}-{slug})`, omit `isolation` and add `Worktree: $WT` to the prompt), `model`: your explicit choice for this launch (see "Model choice" below), motivated in one line in the prompt — `Risk` alone is not the decision, prompt:
 
 ```
 Issue: QF-{n} — {title}
 Label: {label}
 ```
 
+**Model choice**: yours to make at every launch, not `Risk` alone. Bigger model (opus): irreversible or destructive work, security or permission boundaries, open-ended reasoning (diagnosis, design, root-cause analysis, and their review), a wide surface to keep coherent. Smaller model (sonnet): mechanical, well-specified work, or prose only. The `model` in an agent's frontmatter stays as the floor — no subagent has a default model, so one launched without an explicit model inherits the session's, the most expensive; never omit it. Never change the model as a reaction to a failed round: find the cause first (Step 4), and raise the model only if the analysis itself names the model as the cause.
+
 When it reports, one Agent call: `subagent_type: reviewer`, prompt `Tasks: QF-{n}` plus `Draft: yes` when config `automerge` is `false` or the user's request contains `draft`.
 
 ### 4. Close
 - APPROVED: merge it — `POCKET_IT_USER_MERGE=1 gh pr merge {m} --squash --delete-branch` (the hook's authorised form; the prefix is the audit trail that the merge is covered by the `automerge: true` default). Skip the merge only when config `automerge` is `false` or the user's request contains `draft`: then report the PR as ready for the user to merge. After a merge, `git pull --ff-only` the base branch and make sure `tasks/QF-{n}-*.md` says `**Status**: Done` (set it if the developer left it otherwise).
-- NEEDS WORK: a second developer round with `Branch: … ALREADY EXISTS` and `PR: {m}` plus the reviewer's findings verbatim, then one more reviewer call with `Mode: delta`; at most two rounds, then it goes to the user. Never merge a `needs-work` PR without that re-review, even for a one-command fix.
+- NEEDS WORK: read the cause and its destination straight from the reviewer's Step 6 report line — `cause: {…} — fix at: {…}` — never from the PR comment or the diff. Apply the fix at the place the cause names, before relaunching:
+  - **example-not-class** (the task or finding named one or two cases of a class, bypassed by a third case): rewrite the acceptance criterion in `tasks/QF-{n}-*.md` to enumerate the whole class, on the base branch, and paste the corrected criterion into the relaunch prompt directly.
+  - **base-moved** (main changed while it waited; branch tests were green against the old state): the relaunch prompt says, as its first instruction, to merge/rebase onto the current base and rerun the scoped tests before touching anything else.
+  - **verification-reintroduced** (a report or check written to prove something absent contains that same thing): the fix belongs in `shared/implementing-common.md`'s report-writing rules and in `reviewer.md`'s own check wording — name that as the destination, do not restate its content here.
+  - **other: …**: apply the cause exactly where the reviewer's `fix at:` points.
+
+  **When a cause's fix lives in a pocket-it file** (`shared/implementing-common.md`, an agent template, this skill, `verify.sh`, a hook) rather than in the project: that correction goes through a `/quickfix` on pocket-it (mechanism only, no project data) — never an edit made here directly. Name it in the closing report.
+
+  Then a developer round with `Branch: … ALREADY EXISTS` and `PR: {m}` plus the reviewer's findings verbatim, the cause, and the fix already applied or the instruction to apply it first. Then one more reviewer call with `Mode: delta`. Park the PR only when the analysis concludes its cause is outside what the pipeline can reach — never on a round count, and never because the same cause came back once already (that means the earlier fix landed in the wrong place, which is a new cause, not grounds to stop) — `gh pr comment {m} --body "⏸ parked — {reason}"`, `gh label create parked --color eab308 2>/dev/null || true; gh pr edit {m} --add-label parked`, leave the task `Needs Work`. Never merge a `needs-work` PR without that re-review, even for a one-command fix.
 - Then `bash ~/.claude/agents/pocket-it/bin/tasks-index.sh`, `bash ~/.claude/agents/pocket-it/bin/handoff.sh log "QF-{n} PR #{m} {merged|approved, awaiting user merge|needs work} — {title}"`, commit the task file, the index and the handoff on the base branch, `POCKET_IT_ORCHESTRATOR_PUSH=1 git push` (the hook's authorized form for a push to the base branch, same audit-prefix shape as the merge above).
 - Then `bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh`: removes the worktree and local branch of the merged PR (dirty, locked and unmerged ones are kept and listed). Report its summary line (`cleanup-merged: N worktrees removed, … freed X MB`).
-- Report: PR URL, review outcome, merged or awaiting the user (draft), what is next.
+- Report: PR URL, review outcome, merged or awaiting the user (draft). If a NEEDS WORK round happened, add `Decided on its own: {cause found, where the fix went}` — the owner sees it even though nothing was asked of them. Then what is next.
