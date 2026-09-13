@@ -1,6 +1,6 @@
 # PI-29 — Nessuno si accorge se il ramo base viene riscritto o cancellato
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
