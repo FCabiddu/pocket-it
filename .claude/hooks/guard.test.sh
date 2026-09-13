@@ -277,5 +277,42 @@ expect_case ALLOW "$TMPROOT/feat-repo" "git push -o ci.skip origin task/x"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push origin @"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push origin task/x:refs/tags/v1"
 
+# ── PI-13 round 3 (delta review of PR #47). Three everyday forms the tokenizer did not model,
+# each blocked by the removed greps before round 2 and allowed after it.
+NL=$'\n'
+
+# F1 — a redirection is not a refspec. Operator, fd digit and target are dropped before the
+# positionals are counted, or a bare push from the base branch stops looking implicit.
+# Mutation-provable: making strip_redirections() return its input unchanged turns these red.
+expect_case BLOCK "$TMPROOT/main-repo" "git push 2>&1"
+expect_case BLOCK "$TMPROOT/main-repo" "git push 2>&1 | tail -5"
+expect_case BLOCK "$TMPROOT/main-repo" "git push &>/dev/null"
+expect_case BLOCK "$TMPROOT/main-repo" "git push >/tmp/push.log 2>&1"
+expect_case BLOCK "$TMPROOT/main-repo" "git push -u origin 2>&1 | tail -3"
+expect_case BLOCK "$TMPROOT/main-repo" "git push origin 2>/dev/null"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push 2>&1 | tail -5"
+expect_case ALLOW "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 git push 2>&1 | tail -3"
+
+# F2 — an unquoted newline separates commands; a newline inside quotes does not.
+# Mutation-provable: putting the newline back into the lexer's whitespace turns these red.
+expect_case BLOCK "$TMPROOT/feat-repo" "git add -A${NL}git commit -m x${NL}git push origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "cd $TMPROOT/main-repo${NL}git push"
+expect_case BLOCK "$TMPROOT/main-repo" "git add -A${NL}git commit -m x${NL}git push"
+expect_case BLOCK "$TMPROOT/main-repo" "POCKET_IT_ORCHESTRATOR_PUSH=1 true${NL}git push"
+expect_case ALLOW "$TMPROOT/feat-repo" "git add -A${NL}git commit -m x${NL}git push -u origin HEAD"
+expect_case ALLOW "$TMPROOT/feat-repo" "git commit -m \"line1${NL}line2 ; git push origin main\" && git push -u origin HEAD"
+
+# F3 — a command bash accepts but the lexer rejects is DENIED when it pushes to the base
+# branch, never waved through. A heredoc delimiter outside \w (MSG-END) is removed too.
+# Mutation-provable: printing an empty verdict on ValueError turns the BLOCK rows red.
+expect_case BLOCK "$TMPROOT/feat-repo" "git commit -m \$'it\\'s' && git push origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git commit -F- <<'MSG-END'${NL}it's a note${NL}MSG-END${NL}git push origin main"
+expect_case ALLOW "$TMPROOT/feat-repo" "printf \$'a\\'b' && git push -u origin HEAD"
+expect_case ALLOW "$TMPROOT/feat-repo" "git commit -F- <<'MSG-END'${NL}it's a note${NL}MSG-END${NL}git push -u origin HEAD"
+
+# F4 — a push under a shell keyword is still a push.
+expect_case BLOCK "$TMPROOT/main-repo" "if git push origin main; then echo hi; fi"
+expect_case BLOCK "$TMPROOT/feat-repo" "for r in a; do git push origin main; done"
+expect_case ALLOW "$TMPROOT/feat-repo" "if git push -u origin HEAD; then echo ok; fi"
 
 exit $fail
