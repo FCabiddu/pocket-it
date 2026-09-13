@@ -52,4 +52,124 @@ OUT=$(cd "$R2" && bash "$SCRIPT"); rc=$?
 ok "AC4 flat board: no summary warning emitted"     '! has "update the summary"'
 ok "AC4 flat board: exit 0, 2 task files counted"   '[[ $rc -eq 0 ]] && has "doctor: 0 error(s), 1 warning(s), 2 task file(s)"'
 
+# --- repo 3: duplicate task ids (PI-25) ---
+# task() ties the header id to the filename, so a real duplicate needs two files declaring the
+# same id in their header with different filenames — write those by hand instead of via task().
+decl(){ # decl <path> <declared-id> [title]
+  mkdir -p "$(dirname "$1")"
+  printf '# %s — %s\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: `x`\n**TAD**: none\n\n## Acceptance criteria\n- ok\n' "$2" "${3:-t}" > "$1"
+}
+R3="$S/repo3"
+q git init -q -b main "$R3"
+decl "$R3/tasks/PI-9-hello.md" "PI-9" "Hello"          # AC1: two files declare PI-9
+decl "$R3/tasks/PI-9-world.md" "PI-9" "World"
+decl "$R3/tasks/PI-19-other.md" "PI-19" "Other"        # AC3: PI-9 vs PI-19 must not collide
+decl "$R3/tasks/EPIC-9-x/EPIC.md" "PI-9" "Epic summary"        # AC4: excluded before duplicate check ever sees it
+decl "$R3/tasks/EPIC-9-x/STORY-9.1.md" "PI-9" "Story summary"  # AC4: same
+q git -C "$R3" add -A; q git -C "$R3" commit -qm board
+OUT=$(cd "$R3" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC1 duplicate id is an ERROR with id and both paths" 'has "ERROR duplicate task id PI-9: tasks/PI-9-hello.md, tasks/PI-9-world.md"'
+ok "AC1 duplicate id fails doctor (exit 1)"               '[[ $rc -eq 1 ]]'
+ok "AC3 PI-9 and PI-19 not treated as the same id"        '! has "duplicate task id PI-19"'
+ok "AC4 epic/story summaries not pulled into the duplicate error" '! has "EPIC.md" && ! has "STORY-9.1.md"'
+
+# --- repo 4: no duplicate ids — the check is silent (AC2) ---
+R4="$S/repo4"
+q git init -q -b main "$R4"
+decl "$R4/tasks/PI-30-a.md" "PI-30" "A"
+decl "$R4/tasks/PI-31-b.md" "PI-31" "B"
+q git -C "$R4" add -A; q git -C "$R4" commit -qm board
+OUT=$(cd "$R4" && bash "$SCRIPT"); rc=$?
+ok "AC2 no duplicates: check produces no output"  '! has "duplicate task id"'
+ok "AC2 no duplicates: doctor stays green"        '[[ $rc -eq 0 ]]'
+
+# --- repo 5: AC3 regression — a same-prefix, different-number pair alone must never collide.
+# Catches a dedup key like "prefix + last digit" (PI-19 -> PI-9), which repo 3's AC3 assertion
+# above misses because it only greps for the exact string "duplicate task id PI-19".
+R5="$S/repo5"
+q git init -q -b main "$R5"
+decl "$R5/tasks/PI-9-only.md" "PI-9" "Only"
+decl "$R5/tasks/PI-19-only.md" "PI-19" "Only"
+q git -C "$R5" add -A; q git -C "$R5" commit -qm board
+OUT=$(cd "$R5" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC3 regression: PI-9 alone next to PI-19 alone — no duplicate at all" '! has "duplicate task id"'
+ok "AC3 regression: doctor stays green"                                   '[[ $rc -eq 0 ]]'
+
+# --- repo 6: a plain hyphenated word is not an id (PI-25 second round — false positive on real boards) ---
+# Five closed notes titled "# Follow-up: ..." on a real board all produced the same fake id
+# "Follow-up" under the old regex (any word with a hyphen), which doctor.sh then reported as
+# a duplicate even though these are not tasks at all.
+R6="$S/repo6"
+q git init -q -b main "$R6"
+decl "$R6/tasks/follow-up-1.md" "Follow-up" "the first one"
+decl "$R6/tasks/follow-up-2.md" "Follow-up" "the second one"
+decl "$R6/tasks/PI-41-real.md" "PI-41" "a real task, so the board is not empty"
+q git -C "$R6" add -A; q git -C "$R6" commit -qm board
+OUT=$(cd "$R6" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "no id: two Follow-up notes are not a duplicate id"  '! has "duplicate task id"'
+ok "no id: doctor stays green"                           '[[ $rc -eq 0 ]]'
+
+# --- repo 7: a numbered id must not swallow trailing punctuation ("T-2.1.1." vs "T-2.1.1") ---
+# If the id regex greedily consumes a trailing "." after the last digit, "T-2.1.1." and "T-2.1.1"
+# extract to two different strings and a real duplicate goes undetected.
+R7="$S/repo7"
+q git init -q -b main "$R7"
+mkdir -p "$R7/tasks"
+printf '# T-2.1.1. Title with a period after the number\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: `x`\n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R7/tasks/t-2.1.1-a.md"
+printf '# T-2.1.1 Title without a period\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: `x`\n**TAD**: none\n\n## Acceptance criteria\n- ok\n' > "$R7/tasks/t-2.1.1-b.md"
+q git -C "$R7" add -A; q git -C "$R7" commit -qm board
+OUT=$(cd "$R7" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "trailing dot stripped: both extract to T-2.1.1, caught as duplicate" 'has "ERROR duplicate task id T-2.1.1: tasks/t-2.1.1-a.md, tasks/t-2.1.1-b.md"'
+ok "trailing dot stripped: doctor exits 1"                                '[[ $rc -eq 1 ]]'
+
+# --- repo 8: an id must actually be READ for each shape of the class (PI-25 fourth round) ---
+# Asserting "no ERROR" on a single, un-duplicated file per shape is a vacuous test: if the regex
+# stops reading that shape as an id entirely, there is still no ERROR (nothing to compare against),
+# so the assertion holds either way. The reviewer proved it: putting the round-2 (pure-digit-only)
+# regex back in doctor.sh left those old assertions green. The only way to prove the id is read is
+# to declare the SAME id, of that exact shape, in two different files and require the duplicate to
+# be caught — that fails shut if the shape stops being recognised.
+R8="$S/repo8"
+q git init -q -b main "$R8"
+decl "$R8/tasks/style-pr1-a.md" "STYLE-PR1" "letters and digits in the same segment, copy A"
+decl "$R8/tasks/style-pr1-b.md" "STYLE-PR1" "letters and digits in the same segment, copy B"
+decl "$R8/tasks/qf-10b-a.md" "QF-10b" "a letter after the number, copy A"
+decl "$R8/tasks/qf-10b-b.md" "QF-10b" "a letter after the number, copy B"
+decl "$R8/tasks/t-1.2.3-a.md" "T-1.2.3" "more than one numeric segment, copy A"
+decl "$R8/tasks/t-1.2.3-b.md" "T-1.2.3" "more than one numeric segment, copy B"
+decl "$R8/tasks/e2e-4-a.md" "E2E-4" "digit inside the prefix itself, copy A"
+decl "$R8/tasks/e2e-4-b.md" "E2E-4" "digit inside the prefix itself, copy B"
+decl "$R8/tasks/welcome-a11y-1-a.md" "WELCOME-A11Y-1" "digit in a middle segment, copy A"
+decl "$R8/tasks/welcome-a11y-1-b.md" "WELCOME-A11Y-1" "digit in a middle segment, copy B"
+q git -C "$R8" add -A; q git -C "$R8" commit -qm board
+OUT=$(cd "$R8" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "letters+digits in the trailing segment (STYLE-PR1) is read: duplicate caught" 'has "ERROR duplicate task id STYLE-PR1: tasks/style-pr1-a.md, tasks/style-pr1-b.md"'
+ok "letter after the number (QF-10b) is read: duplicate caught"                  'has "ERROR duplicate task id QF-10b: tasks/qf-10b-a.md, tasks/qf-10b-b.md"'
+ok "more than one numeric segment (T-1.2.3) is read: duplicate caught"          'has "ERROR duplicate task id T-1.2.3: tasks/t-1.2.3-a.md, tasks/t-1.2.3-b.md"'
+ok "digit inside the prefix itself (E2E-4) is read: duplicate caught"           'has "ERROR duplicate task id E2E-4: tasks/e2e-4-a.md, tasks/e2e-4-b.md"'
+ok "digit in a middle segment (WELCOME-A11Y-1) is read: duplicate caught"       'has "ERROR duplicate task id WELCOME-A11Y-1: tasks/welcome-a11y-1-a.md, tasks/welcome-a11y-1-b.md"'
+ok "all five shapes: doctor exits 1"                                             '[[ $rc -eq 1 ]]'
+
+# --- repo 9: a letter suffix on the numeric segment must not be truncated away (PI-25 third round) ---
+# The round-2 regex stopped at the digit run, so "T-1.2.3a"/"T-1.2.3b" both extracted to "T-1.2.3"
+# and "QF-10b" extracted to "QF-10": two distinct real ids collided into one, a false duplicate
+# (or a silent overwrite in next-wave.sh, same family of bug PI-25 exists to catch).
+R9="$S/repo9"
+q git init -q -b main "$R9"
+decl "$R9/tasks/t-1.2.3a.md" "T-1.2.3a" "letter suffix a"
+decl "$R9/tasks/t-1.2.3b.md" "T-1.2.3b" "letter suffix b"
+decl "$R9/tasks/qf-10.md" "QF-10" "plain"
+decl "$R9/tasks/qf-10b.md" "QF-10b" "letter suffix on a shorter id"
+q git -C "$R9" add -A; q git -C "$R9" commit -qm board
+OUT=$(cd "$R9" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "T-1.2.3a and T-1.2.3b are distinct ids, not merged" '! has "ERROR"'
+ok "QF-10 and QF-10b are distinct ids, not merged"      '! has "ERROR"'
+ok "letter-suffixed ids: doctor stays green"            '[[ $rc -eq 0 ]]'
+
 exit $fail
