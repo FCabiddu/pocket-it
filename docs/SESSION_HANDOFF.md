@@ -37,6 +37,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - git merge-file --union / merge=union on docs/SESSION_HANDOFF*.md produces a wrong file (measured: log over its cap, rotated lines duplicated in log and archive): use it only in a detached throwaway tree that is never pushed; a pushed handoff conflict is resolved by section. A union branch in a script must also handle add/add (no stage 1: git show :1: fails) and check that the merge really landed (merge-base --is-ancestor), or a failed resolution runs the tests without that PR and reports green.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
 - 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
 - 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
 - 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
@@ -76,4 +77,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
 - 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
 - 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
-- 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator

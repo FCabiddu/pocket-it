@@ -88,3 +88,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-30 PR #53 draft — installed copy separate from dev checkout — 36 tests
 - 2026-09-13 PI-30 PR #53 needs work — guard file absent during update fails open
 - 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
+- 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
