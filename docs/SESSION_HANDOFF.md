@@ -31,6 +31,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A verification procedure written into a shared agent doc must be executed, as literally written, against every technique in the same doc that cites it (and against a decorative non-text neighbour), not only against the author's fixture: PI-23 rounds 3-4 each shipped a method that the doc's own techniques contradicted (a metrics fallback with a false negative; a step scope 'ancestors' that misses the #1 line-mask markup).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-24 review round 5 pushed — exclusions moved into compass Glyph-clipping verification, round-3 Notes finding closed — 6 cases reproduced
 - 2026-09-13 PI-24 PR #48 needs work — esclusioni per asse senza forma eseguibile — cause: base-moved
 - 2026-09-13 PI-24 review round 4 pushed — qa-engineer cites compass Glyph-clipping verification instead of local method — polygon+mask cases now caught
 - 2026-09-13 PI-24 PR #48 needs work — striscia fuori dal riquadro manca ritagli interni
@@ -70,4 +71,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-25 PR #50 fix pushed — id regex now requires a numeric segment, AC3 test hardened
 - 2026-09-12 PI-25 PR #50 needs work — hyphenated words read as task ids — cause: first-round
 - 2026-09-12 PI-25 PR draft — doctor.sh flags duplicate task ids as ERROR — 8 new tests
-- 2026-09-12 PI-24 PR #48 needs work (delta) — settle hangs on infinite animations — cause: verification-reintroduced

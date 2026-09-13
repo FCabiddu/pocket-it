@@ -67,3 +67,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-24 PR draft — render-before-score for ux-ui-designer + qa-engineer overflow check — no automated tests (agent md files)
 - 2026-09-12 PI-24 PR #48 needs work — DOM rect misses clipped ink — cause: first-round
 - 2026-09-12 PI-24 fix pushed — ink metrics/exclusions for qa, settle-before-shoot for designer, unified condition — 4 findings closed
+- 2026-09-12 PI-24 PR #48 needs work (delta) — settle hangs on infinite animations — cause: verification-reintroduced
