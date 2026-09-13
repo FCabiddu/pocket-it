@@ -16,8 +16,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - PI-26: a task's Files list can miss occurrences of a repo-wide wording rule (planner didn't grep every phrasing) — before closing such a task, grep the mechanism with several phrasings across the whole repo, not just the cited files.
 - guard.sh: redirections (`2>&1 | tail`, `&>/dev/null`, `>file`) are stripped with their fd and target before a push's positionals are counted, since PI-13 round 3; before that a bare push with a redirection stopped looking implicit and passed from the base branch.
 - guard.sh push guard is NOT a security boundary: it stops a COOPERATIVE agent pushing to the base branch by MISTAKE in a normal shell form; deliberate evasions (eval, bash -c, env -i, wrappers, quoted/escaped git, on-the-fly aliases, push-affecting config, send-pack) are left to server-side branch protection, and the threat model is at the top of guard.sh. The classifier tokenises the RAW command quote-aware (never a regex split on raw text), with heredoc bodies removed, an unquoted newline and shell keywords (if/then/do/…) as boundaries and redirections stripped. Any git push in a command it cannot parse is DENIED whatever its target (task branches too), unless the exact prefix sits on that push; a backslash-newline is joined before newlines split commands. The audit prefix authorizes only by exact value on the push's own command word.
+- guard.sh reads the caller from the hook input, not the command: agent_id/agent_type present = subagent (any value, even empty/null), both absent = main session. For agents the audit prefixes authorize nothing (gh pr merge allowed only to agent_type retro, still with its prefix) and every push that can reach main/master is denied by a quote-aware reading A OR a quote-blind reading B (quotes/backslashes deleted, not paired). Price for agents: text spelling a push to main next to a git word, and variable refspecs, are denied — use git commit -F / --body-file / HEAD. Main-session behaviour is unchanged.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-32 PR #54 draft — guard reads agent_id, agents denied base — 69 tests
 - 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
 - 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
 - 2026-09-13 PI-13 review round 4 pushed — unparseable commands deny every push, continuations joined — 179 guard cases
@@ -57,13 +59,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-19 PR draft — compaction call is orchestrator's, not user's — no automated tests
 - 2026-09-12 PI-10 PR #36 conflict resolved — unione di fatti e log, 0 righe perse, MERGEABLE
 - 2026-09-12 PI-10 PR #36 approved round 3 — tutte e 4 le famiglie di push distruttivo chiuse, 58 casi, merge: orchestrator
-- 2026-09-12 PI-10 PR #36 fix pushed — F3 digit cluster + F4 base-branch deletion closed — 10 tests
-- 2026-09-12 PI-11 PR #35 conflict resolved — union of handoff log lines, 0 lost, MERGEABLE
-- 2026-09-12 PI-10 PR #36 needs work (delta 2) — -f4/-4f clusters and base-branch deletion pass with the prefix
-- 2026-09-12 PI-11 PR #35 approved — verify.test.sh registered, run-scoped cleanup — merge: orchestrator
-- 2026-09-12 PI-10 CI fix pushed — closed 2 force-push detection gaps (clustered -f, +refspec) — 7 new tests
-- 2026-09-12 PI-11 CI fix pushed — registered verify.test.sh in testCommand, scoped its cleanup to per-run path (PR #35 review)
-- 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
-- 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
-- 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
-- 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
