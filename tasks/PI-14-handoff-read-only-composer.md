@@ -1,6 +1,6 @@
 # PI-14 — Compositore in sola lettura per la memoria della pipeline
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
@@ -13,7 +13,7 @@
 **Files**: bin/handoff.sh, bin/handoff.test.sh
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§2.1, §2.4 ADR-2, §4.1–§4.4, §5.1–§5.3, §8.1, §11.1–§11.3, §12 PI-14)
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-14-handoff-read-only-composer
 **PR**: 
 
 ## Goal
