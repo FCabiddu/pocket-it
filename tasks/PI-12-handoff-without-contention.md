@@ -1,6 +1,6 @@
 # PI-12 — La memoria della pipeline è scritta da tutti nello stesso punto, e la piattaforma la blocca
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff

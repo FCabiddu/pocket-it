@@ -76,3 +76,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-13 review round 3 pushed — redirections, newlines, keywords covered; lexer error denies — 161 guard cases, 4 mutations proven
 - 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
 - 2026-09-13 PI-13 review round 4 pushed — unparseable commands deny every push, continuations joined — 179 guard cases
+- 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
