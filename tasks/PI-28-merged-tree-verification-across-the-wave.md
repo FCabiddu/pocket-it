@@ -1,6 +1,6 @@
 # PI-28 — Le PR di una stessa wave non vengono mai testate sovrapposte
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
