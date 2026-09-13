@@ -69,20 +69,28 @@
 #   with `--agent`, that session would lose merge and base-branch push; the pipeline does not use
 #   `--agent` today.
 #
-# TEXT OPTIONS — free text is not a command (PI-32 round 2).
+# TEXT OPTIONS — free text is not a command (PI-32 rounds 2 and 3).
 # Every rule below that looks for a word (merge, push, main, pkill, prod…) reads a text in which
-# the VALUE of a textual option has been replaced by the word TEXT: `-m`/`--message` of
+# the VALUE of a textual option may have been replaced by the word TEXT: `-m`/`--message` of
 # git commit|tag|merge|stash|notes, `-b`/`--body`, `-t`/`--title`, `-n`/`--notes`, `--subject` of
 # gh pr|issue|release, and the quoted-delimiter heredoc read by `git … -F -` or
-# `gh … --body-file -`, or wrapped as `"$(cat <<'EOF' … EOF)"` in one of those values. Without
-# it, a quote-blind search reads `gh pr comment --body "… merge: orchestrator"` as a merge.
-# A value is replaced only when it is data for bash, never code: a small bash lexer (single and
-# double quotes, backslashes, `$(…)` nested inside double quotes, backticks, heredoc bodies)
-# finds the value, and nothing is replaced when the value holds `$(…)`, a backtick or a process
-# substitution (it runs), when the heredoc delimiter is unquoted (its body expands), when the
-# command holds ANSI-C `$'…'` or a `case` (where quote pairing can go out of step), or when the
-# lexer cannot close a quote, a substitution or a heredoc. In every such doubt the command is
-# read whole, as before: the price moves back to a false positive, never to a missed push.
+# `gh … --body-file -`. Without it, a quote-blind search reads
+# `gh pr comment --body "… merge: orchestrator"` as a merge.
+# The replacement is decided by construction, with an ALLOWLIST, never by listing forms of code
+# to exclude: shells have an open set of expansions (zsh `${(e)…}`, `$_`, `!!`, an `eval` further
+# on), so a denylist does not converge — round 2 had one and two bypasses went through it.
+#   1. The value is provably literal: one single-quoted string, or one double-quoted string with
+#      no `$`, backtick, backslash or `!` inside; a heredoc only with a quoted delimiter. Any other
+#      value (unquoted, concatenated, any expansion character) stays visible to every rule.
+#   2. The whole line is ONE simple command: no `;`, `&&`, `||`, `|`, `&`, `(`/`)` or newline
+#      outside strings and heredoc bodies, and no `eval`, `source`, `exec`, `.` or `sh -c`-style
+#      word anywhere in the line (searched with quotes deleted). Otherwise nothing is replaced,
+#      so a later command cannot run the text through `$_`, `eval` or history.
+# If either point fails, or the lexer cannot close a quote, a substitution or a heredoc, the
+# command is read whole: blocking is the safe failure. The price, accepted: a PR comment or
+# commit message whose text holds a `$` (or is built with `"$(cat <<'EOF' …)"`), or a compound
+# command, is read whole — if that text names a merge or a push to main, an agent is denied and
+# passes it through a file (`--body-file`, `git commit -F`) in a command of its own.
 set -uo pipefail
 INPUT=$(cat)
 # The raw command, quotes and heredocs intact. The push classifier is fed this, not the
@@ -115,6 +123,8 @@ META = ' \t\r\n;&|()<>'
 class Lexer:
     def __init__(self, s):
         self.s, self.n, self.segs = s, len(s), []
+        # True as soon as the top level holds more than one simple command (point 2 of TEXT OPTIONS).
+        self.compound = False
 
     def level(self, i, closer):
         # One nesting level (the whole command, or the inside of a command substitution). Appends the level's
@@ -167,6 +177,8 @@ class Lexer:
                             raise GiveUp()
                         i = j + 1
                 pending = []
+                if closer is None and s[i:].strip():
+                    self.compound = True
                 continue
             if c == '#' and ws is None:
                 j = s.find('\n', i)
@@ -179,16 +191,22 @@ class Lexer:
                     if pending:
                         raise GiveUp()
                     return i + 1
+                if closer is None:
+                    self.compound = True
                 depth -= 1; end_seg(); i += 1; continue
             if c in '<>' and nx == '(':
                 if ws is None:
                     ws = i
                 i = self.level(i + 2, ')'); code = True; continue
             if c == '(':
+                if closer is None:
+                    self.compound = True
                 end_word(i); depth += 1; end_seg(); i += 1; continue
             if c == '&' and nx == '>':
                 end_word(i); i += 2; continue
             if c in ';&|':
+                if closer is None:
+                    self.compound = True
                 end_word(i); end_seg(); i += 1; continue
             if c == '<' and s.startswith('<<', i) and not s.startswith('<<<', i):
                 end_word(i)
@@ -296,20 +314,17 @@ class Lexer:
                 i += 1
         raise GiveUp()
 
-def is_cat_heredoc_word(t):
-    # Exactly a double-quoted command substitution of cat reading a heredoc, with a quoted delimiter: one argument of literal text.
-    m = re.match(r'"\x24\([ \t]*cat[ \t]+<<(-?)[ \t]*([\x27"])([A-Za-z_][A-Za-z0-9_.-]*)\2[ \t]*\n', t)
-    if not m:
-        return False
-    strip, delim = m.group(1) == '-', m.group(3)
-    lines = t[m.end():].split('\n')
-    for k, line in enumerate(lines):
-        if (line.lstrip('\t') if strip else line) == delim:
-            return re.fullmatch(r'[ \t\n]*\)"', '\n'.join(lines[k + 1:])) is not None
-    return False
+def is_literal(t):
+    # Point 1 of TEXT OPTIONS, an allowlist: a value is text only when it is provably literal — one
+    # single-quoted string, or one double-quoted string holding no dollar, backtick, backslash or
+    # bang. Anything else (unquoted, concatenated, any expansion character) stays visible.
+    if len(t) >= 2 and t[0] == t[-1] == '\x27' and '\x27' not in t[1:-1]:
+        return True
+    return (len(t) >= 2 and t[0] == t[-1] == '"'
+            and not any(ch in t[1:-1] for ch in '"\x24\x60\x5c!'))
 
 def droppable(w):
-    return not w['code'] or is_cat_heredoc_word(w['t'])
+    return is_literal(w['t'])
 
 def spans_of(seg):
     words = [t for t in seg if t['k'] == 'w']
@@ -352,7 +367,7 @@ def spans_of(seg):
         pre = next((p for p in attached if t.startswith(p) and len(t) > len(p)), None)
         if pre is None and short_attached and t.startswith(short_attached) and len(t) > 2:
             pre = short_attached
-        if pre is not None and droppable(args[a]):
+        if pre is not None and is_literal(t[len(pre):]):
             out.append((args[a]['s'] + len(pre), args[a]['e'], 'TEXT'))
         a += 1
     if stdin_text:
@@ -361,9 +376,23 @@ def spans_of(seg):
                 out.append((h['bs'], h['be'], 'TEXT\n'))
     return out
 
+# Point 2 of TEXT OPTIONS: words that run text as code, searched in the whole line with quotes
+# deleted, so they are found wherever they sit.
+RUNS_TEXT_RE = re.compile(r'(^|[^A-Za-z0-9_./-])(eval|source|exec)([^A-Za-z0-9_-]|$)'
+                          r'|(^|[\s;&|(])\.([\s]|$)'
+                          r'|(^|[^A-Za-z0-9_-])(ba|z|da|k|mk|fi|c|tc)?sh[ \t]+(-[A-Za-z]*[ \t]+)*-[A-Za-z]*c')
+
+def single_simple_command(lx):
+    # Point 2: the whole line is one simple command and nothing in it runs text as code.
+    if lx.compound:
+        return False
+    return RUNS_TEXT_RE.search(re.sub(r'[\x27\x22\x5c]', '', raw)) is None
+
 try:
     lx = Lexer(raw)
     lx.level(0, None)
+    if not single_simple_command(lx):
+        raise GiveUp()
     spans = sorted(sp for seg in lx.segs for sp in spans_of(seg))
     parts, last = [], 0
     for a, b, rep in spans:
