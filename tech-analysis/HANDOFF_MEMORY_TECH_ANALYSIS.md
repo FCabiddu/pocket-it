@@ -3,7 +3,7 @@
 | Campo | Valore |
 |---|---|
 | Sistema | Sottosistema memoria di pocket-it (`docs/SESSION_HANDOFF.md`, `bin/handoff.sh`, `bin/status.sh`, punti di lettura e scrittura degli agenti) |
-| Versione | 2.0 |
+| Versione | 2.1 |
 | Data | 2026-09-13 |
 | Scope | MVP tooling — `scope: simple`, `pipeline: false`, teamSize 1 |
 | Fonte | `tasks/PI-12-handoff-without-contention.md`, review di PR #39 (7 punti) |
@@ -58,7 +58,7 @@ graph TD
 | `docs/SESSION_HANDOFF_ARCHIVE.md` | Sorgente congelata | log ruotato da PI-8; stesso trattamento | markdown |
 | `docs/handoff/archive/{AAAA-MM}-{stamp}-{rand}.md` | Dato | mesi chiusi compattati (PI-18), sezioni per frammento d'origine | markdown |
 | `bin/status.sh` | Lettore | fatti e ultime righe tramite il compositore | bash |
-| `bin/doctor.sh` | Guardia | righe tolte da una sorgente congelata dopo il congelamento | bash |
+| `bin/doctor.sh` | Guardia | righe tolte da una sorgente congelata; frammenti alterati (`M`/`R`/`T`/`D` non coperta) | bash |
 
 ### 2.4 Decisioni
 
@@ -186,7 +186,7 @@ Il punto d'ingresso non cambia: `bash ~/.claude/agents/pocket-it/bin/handoff.sh 
 | `log "testo"` | crea un frammento `## Log` con `- {AAAA-MM-GG HH:MM} testo` | developer, reviewer, qa, run-wave, quickfix, deps — **chiamata invariata** | PI-16 |
 | `fact "testo"` | crea un frammento `## Fatti` se il testo non è già visibile; esce con 3 al tetto | idem | PI-16 |
 | `retract "testo esatto"` | crea un frammento `## Ritirati` con l'hash; esce con 2 se il testo non è fra i fatti visibili | retro, chi corregge un fatto | PI-16 |
-| `where` | stampa la cartella in cui scriverebbe (`docs/handoff/{AAAA-MM}/`) ed esce con 0. È anche il **segnale** che PI-16 è installato (§9.2): lo script vecchio risponde `usage` con uscita 2 | orchestratore, regola ponte, test | PI-16 |
+| `where` | stampa la cartella relativa in cui scriverebbe (`docs/handoff/{AAAA-MM}/`) ed esce con 0. **Non richiede un repo e non scrive niente.** È anche il **segnale** che PI-16 è installato, e si legge fuori da qualunque repo (§9.2): lo script vecchio, fuori da un repo, esce con 1 senza scrivere | orchestratore, regola ponte, test | PI-16 |
 
 ### 5.3 Costo della lettura di avvio
 
@@ -237,7 +237,7 @@ Le sessioni leggono script e prompt dalla copia installata. `bin/install-live.sh
 | Agente lanciato prima dell'installazione che scrive dopo | lo script si legge al momento dell'invocazione, quindi scrive un frammento |
 | Agente con un prompt vecchio che fa `awk` sul file | non esiste: prompt e script arrivano con la stessa installazione, e PI-15 entra prima di PI-16 |
 | Lettori fuori da questo repo: le istruzioni globali della sessione principale e i prompt di lancio dei progetti che citano «i Fatti di `docs/SESSION_HANDOFF.md`» | li aggiorna l'orchestratore, non un task di questo repo, quando `handoff.sh where` esce con 0. Fino ad allora il testo resta corretto, perché le scritture vanno ancora nel vecchio file |
-| **Regola ponte** | un progetto che scrive il diario in `docs/reports/` finché i frammenti non sono in uso smette il giorno in cui `bash ~/.claude/agents/pocket-it/bin/handoff.sh where` esce con 0, il segnale verificabile che PI-14, PI-15 e PI-16 sono installati. Le righe già scritte nei report non vengono importate: restano nei report, che il retro legge. Da quel momento il diario torna a `handoff.sh log`. Nota: con lo script vecchio `where` crea o normalizza `docs/SESSION_HANDOFF.md` prima di rispondere 2 (righe 16–29 dello script attuale). È innocuo in un progetto che ha già il file, ma il segnale va letto nella radice del progetto e non altrove |
+| **Regola ponte** | un progetto che scrive il diario in `docs/reports/` finché i frammenti non sono in uso smette il giorno in cui `bash ~/.claude/agents/pocket-it/bin/handoff.sh where` esce con 0, il segnale verificabile che PI-14, PI-15 e PI-16 sono installati. Le righe già scritte nei report non vengono importate: restano nei report, che il retro legge. Da quel momento il diario torna a `handoff.sh log`. Il segnale si legge **fuori da qualunque repo**, così lo script vecchio non arriva mai al punto in cui crea o normalizza il file: `(cd "$(mktemp -d)" && bash ~/.claude/agents/pocket-it/bin/handoff.sh where)`. Con lo script vecchio esce con 1 senza scrivere nulla (misurato: `handoff: not a git repository`, cartella vuota); con PI-16 esce con 0. Non va letto nella radice del progetto: lì lo script vecchio esce con 2 ma lascia `?? docs/` o ` M docs/SESSION_HANDOFF.md` (misurato in review), cioè un segnale che scrive, contro ADR-2 |
 | Ritorno indietro | ripristinare lo script precedente. I frammenti restano in git, e `handoff.sh show > file` ricostruisce una vista unica se serve |
 
 ### 9.3 CI/CD
@@ -247,7 +247,7 @@ Le sessioni leggono script e prompt dalla copia installata. `bin/install-live.sh
 N/A — `CAP=100` e `LOGCAP=40` restano variabili in testa allo script (PI-8).
 
 ### 9.5 Osservabilità
-`handoff.sh where` e `recent --all`. `doctor.sh` segnala righe tolte da una sorgente congelata (PI-17).
+`handoff.sh where` e `recent --all`. `doctor.sh` segnala righe tolte da una sorgente congelata e ogni frammento modificato, rinominato, cambiato di tipo o cancellato senza sezione d'archivio (PI-17).
 
 ### 9.6 Recupero
 La memoria è fatta di file immutabili in git, e le sorgenti congelate sono protette da `doctor.sh`.
@@ -313,7 +313,7 @@ Cinque task: due M, tre S. L'ordine segue §9.1, prima i lettori e poi gli scrit
 - **AC3:** Given un repo senza memoria (né vecchio file né frammenti), When `bash bin/status.sh`, Then stampa una riga «handoff: nessuna memoria» ed esce con 0, senza creare file.
 
 ### PI-16 — Le scritture diventano frammenti immutabili; congelamento; `retract`
-**File:** `bin/handoff.sh` (con l'intestazione 4–10), `bin/handoff.test.sh` (i test di rotazione PI-8 diventano test di non-rotazione), e tutti i testi che descrivono o prescrivono la scrittura:
+**File:** `bin/handoff.sh` (con l'intestazione 4–10), `bin/handoff.test.sh` (i test di rotazione PI-8 diventano test di non-rotazione), e tutti i testi che descrivono o prescrivono la scrittura (16 righe):
 - `.claude/agents/shared/implementing-common.md:104,118`
 - `.claude/agents/developer.md:112`
 - `.claude/agents/retro.md:3,34,48,58`
@@ -329,7 +329,7 @@ Restano invariate le chiamate di sola scrittura in `reviewer.md:95-96`, `qa-engi
 - **AC4 (ritiro senza toccare altri):** Given un fatto presente in un frammento creato su un altro ramo e in una sorgente congelata, When `retract "testo"`, Then `facts` non lo mostra più e quei file sono invariati byte per byte (hash prima e dopo).
 - **AC5 (tetto):** Given 100 fatti visibili, When `fact "nuovo"`, Then esce con 3 e il messaggio contiene `retract`. When si esegue `retract` di un fatto e poi `fact "nuovo"`, Then esce con 0 e i visibili sono 100.
 - **AC6 (memoria reale):** Given la copia della memoria di questo repo, When una `log` e una `fact`, Then l'insieme di `facts` contiene l'insieme dell'`awk` di oggi più il nuovo fatto, e il multinsieme di `recent --all` contiene log più archivio di oggi più la nuova riga.
-- **AC7 (segnale):** Given lo script installato, When `handoff.sh where`, Then stampa `docs/handoff/{AAAA-MM}/` ed esce con 0.
+- **AC7 (segnale che non scrive):** Given lo script installato, When `handoff.sh where` in una cartella che non è un repo git, Then stampa `docs/handoff/{AAAA-MM}/`, esce con 0 e la cartella resta vuota (`find "$D" -mindepth 1` vuoto). When `where` nella radice di un repo, con e senza il vecchio file, Then stesso output e `git status --porcelain` identico prima e dopo. Mutazione: lo script vecchio nella cartella non-repo esce con 1 e la cartella resta vuota; nella radice di un repo senza `docs/` lo script vecchio lascia `?? docs/`, e il test lo rileva come rosso.
 - **AC8 (testi):** Given il repo dopo il task, When `git grep -n "SESSION_HANDOFF" -- ':!docs' ':!tech-analysis' ':!tasks'`, Then ogni riga restituita descrive la sorgente congelata o sta in `bin/handoff.sh` o nel suo test. Nessuna riga dice «prepends», «kept to 40», «creates docs/SESSION_HANDOFF.md» o «remove one line by hand», e la Facts hygiene di `retro.md` pota con `retract`.
 - **Note:** i lettori fuori dal repo (istruzioni globali della sessione principale, prompt di lancio con la regola ponte) li aggiorna l'orchestratore dopo l'installazione. Non sono un AC di questo task.
 
@@ -337,14 +337,20 @@ Restano invariate le chiamate di sola scrittura in `reviewer.md:95-96`, `qa-engi
 **File:** `bin/doctor.sh`, `bin/doctor.test.sh`, `bin/handoff.test.sh`.
 - **AC1:** Given un ramo creato prima del cambio che aggiunge righe (log con rotazione e fatto) al vecchio file con lo script vecchio, e `main` che dopo il cambio ha frammenti nuovi, When si fonde il ramo su `main`, Then 0 conflitti, e `facts` e `recent --all` mostrano le righe del ramo.
 - **AC2:** Given il punto di congelamento, cioè il primo commit che aggiunge un file sotto `docs/handoff/` (`git log --diff-filter=A --reverse --format=%H -- docs/handoff | head -1`), e un `HEAD` in cui il multinsieme delle righe `- ` di `SESSION_HANDOFF.md` ∪ `SESSION_HANDOFF_ARCHIVE.md` non contiene più quello del punto di congelamento, When `doctor.sh`, Then esce con errore e nomina la riga mancante. Given uno spostamento dal log all'archivio, fatto dalla rotazione di un ramo pre-cambio, Then nessun errore.
-- **AC3:** Given un commit che modifica un file esistente sotto `docs/handoff/` (stato `M` in `git log --diff-filter=M --format=%H -- docs/handoff`), When `doctor.sh`, Then errore con il percorso. Given solo aggiunte, cancellazioni fatte da `compact` e merge con squash, Then nessun errore.
+- **AC3 (ogni modo di alterare un frammento già scritto):** la guardia legge `git log -m --first-parent --name-status --diff-filter=MRTD -- docs/handoff`. Senza `-m --first-parent` una cancellazione fatta dentro un commit di merge non compare: misurato, il `log` di default mostra `M`, `R`, `T` e perde la `D` del merge, mentre con `-m --first-parent` compaiono tutte e quattro. Un caso di test per ciascuno:
+  - Given un commit che, sotto `docs/handoff/{AAAA-MM}/`, **modifica** (`M`) un frammento, When `doctor.sh`, Then errore con il percorso.
+  - Given un commit che **rinomina** (`R`) un frammento (il rename rompe anche l'identità per nome di §4.3), Then errore con il percorso d'origine.
+  - Given un commit che **cambia tipo** (`T`) a un frammento, per esempio sostituendolo con un symlink, Then errore con il percorso.
+  - Given un commit, anche di merge, che **cancella** (`D`) un frammento, Then errore con il percorso, **tranne** quando il suo `{basename}` compare in HEAD come sezione `### {basename}` di un file `docs/handoff/archive/*.md` con lo stesso multinsieme di righe `- `.
+  - Given solo aggiunte, merge con squash, un frammento ricomparso accanto alla propria sezione d'archivio e cancellazioni coperte da una sezione, Then nessun errore.
+  - Mutazione: un `git rm` di un frammento senza sezione dà errore; con `--diff-filter=M` al posto di `MRTD`, o senza `-m --first-parent` sul caso del merge, l'errore sparisce.
 
 ### PI-18 — Compattazione dei mesi chiusi
 **File:** `bin/handoff.sh`, `bin/handoff.test.sh`, `.claude/agents/retro.md`.
 - **AC1:** Given frammenti di un mese chiuso, alcuni presenti sul ramo base e altri solo su un ramo aperto, When `handoff.sh compact --before AAAA-MM` sul ramo del retro, Then vengono piegati solo i frammenti del ramo base, e i file del ramo aperto non sono toccati (dopo il merge restano visibili).
 - **AC2:** Given la memoria prima e dopo `compact`, When si confrontano `recent --all` e `facts`, Then il multinsieme del log e l'insieme dei fatti sono uguali.
 - **AC3:** Given due `compact` concorrenti su due rami con insiemi sovrapposti, When si fondono, Then 0 conflitti e nessuna riga duplicata nella vista, grazie all'identità per nome di §4.3.
-- **AC4:** Given la vista dopo `compact`, When `doctor.sh`, Then nessun errore (AC3 di PI-17).
+- **AC4:** Given la vista dopo `compact`, When `doctor.sh`, Then nessun errore: ogni `D` prodotta da `compact` è coperta da una sezione `### {basename}` con lo stesso multinsieme (regola di PI-17 AC3). Given un `compact` mutato che scrive la sezione con una riga in meno, Then `doctor.sh` dà errore sul frammento cancellato.
 
 ---
 
@@ -391,3 +397,4 @@ Restano invariate le chiamate di sola scrittura in `reviewer.md:95-96`, `qa-engi
 | 1.1 | 2026-09-12 | Auto-revisione: versioni, alternative, criterio di costo misurabile, deroga |
 | 1.2 | 2026-09-12 | Sequenza PI-14…PI-18, fonti |
 | 2.0 | 2026-09-13 | Review PR #39, 7 punti. (1) Un frammento per invocazione invece che per ramo e `_base.md`: conflitto `_base.md` misurato in review, add/add dopo squash misurato qui, 0 conflitti con quattro rami. (2) `retract` e tetto sui fatti visibili. (3) Log mai deduplicato, verifica a multinsieme, identità per nome delle copie dichiarate. (4) Vecchio file congelato invece che migrato, letture pure. (5) Misura di `union` in ADR-1(a). (6) Elenco completo di lettori e testi da `git grep` in PI-15/PI-16, più i lettori esterni. (7) AC Given/When/Then per PI-14…PI-18, ordine «prima i lettori, poi gli scrittori», regola ponte con `where` |
+| 2.1 | 2026-09-13 | Review delta, 2 punti. (1) Il segnale della regola ponte si legge fuori da qualunque repo: lo script vecchio esce con 1 senza scrivere (misurato); PI-16 AC7 prova che nessun file viene creato o modificato, con lo script vecchio e con quello nuovo; `where` non richiede un repo. (2) La guardia di PI-17 AC3 copre l'intera classe `M`/`R`/`T`/`D` e usa `-m --first-parent`, senza il quale una cancellazione dentro un merge sfugge (misurato); PI-18 AC4 allineato. Conteggio di PI-16: 16 righe |
