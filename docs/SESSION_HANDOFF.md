@@ -37,6 +37,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-28 PR #58 round 2 pushed afb6287 — 8 findings closed, overlay now Mode: overlay reviewer
 - 2026-09-13 PI-28 PR #58 needs work — overlay in sessione principale, non eseguibile — cause: first-round
 - 2026-09-13 PI-28 PR #58 draft — overlay-test wave PRs before merge, sharpen finding rules — prose task, no tests
+- 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
 - 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
 - 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
 - 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
@@ -73,4 +74,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 needs work (delta 3) — doctor alnum-id test is vacuous — cause: other: vacuous test
 - 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
 - 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
-- 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
