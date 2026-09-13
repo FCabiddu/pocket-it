@@ -1,6 +1,6 @@
 # PI-35 — Uno script dice quando serve un retro, e run-wave e quickfix lo lanciano senza aspettare nessuno
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
