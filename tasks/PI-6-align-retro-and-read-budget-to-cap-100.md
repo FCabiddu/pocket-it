@@ -1,6 +1,6 @@
 # PI-6 — Align the retro thresholds and the agent read budget to the 100-fact cap
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: `.claude/agents/retro.md`, `.claude/agents/shared/implementing-common.md`
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-6-facts-cap-100
 **PR**: 
 
 ## Goal
