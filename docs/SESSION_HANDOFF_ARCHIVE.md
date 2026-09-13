@@ -69,3 +69,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-24 fix pushed — ink metrics/exclusions for qa, settle-before-shoot for designer, unified condition — 4 findings closed
 - 2026-09-12 PI-24 PR #48 needs work (delta) — settle hangs on infinite animations — cause: verification-reintroduced
 - 2026-09-12 PI-25 PR draft — doctor.sh flags duplicate task ids as ERROR — 8 new tests
+- 2026-09-12 PI-25 PR #50 needs work — hyphenated words read as task ids — cause: first-round
