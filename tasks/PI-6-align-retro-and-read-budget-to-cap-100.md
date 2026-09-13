@@ -1,6 +1,6 @@
 # PI-6 — Align the retro thresholds and the agent read budget to the 100-fact cap
 
-**Status**: Done
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
