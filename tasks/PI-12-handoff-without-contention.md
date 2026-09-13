@@ -1,6 +1,6 @@
 # PI-12 — La memoria della pipeline è scritta da tutti nello stesso punto, e la piattaforma la blocca
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
@@ -56,9 +56,9 @@ Da non rifare: la strada del driver di merge è già stata provata ed è quella 
 Il vincolo vero da rispettare è che la memoria è nel percorso di avvio di **ogni** agente: qualunque struttura si scelga, leggerla deve restare economico e deve restare una cosa sola da capire per chi la legge.
 
 ## Esito
-Design prodotto in `tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md` (v2.0, dopo la review di PR #39). La direzione proposta è confermata, con tre correzioni:
+Design prodotto in `tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md` (v2.2, dopo quattro giri di review su PR #39, mergiata su main). La direzione proposta è confermata, con tre correzioni:
 - **un frammento per invocazione**, non per ramo: un file per ramo confligge su `_base.md` (misurato in review) e in add/add dopo uno squash (misurato);
 - la composizione avviene **in lettura**, e nessuna lettura scrive;
 - il vecchio file **si congela** invece di migrare.
 
-Un fatto si toglie con `retract`. Implementazione in cinque task, PI-14…PI-18, in ordine «prima i lettori, poi gli scrittori», con criteri Given/When/Then (§12).
+Un fatto si toglie con `retract`. Implementazione in cinque task, PI-14…PI-18, in ordine «prima i lettori, poi gli scrittori», con criteri Given/When/Then (§12). Board creata in questa stessa consegna: PI-14 (wave 1) → PI-15 (wave 2) → PI-16 (wave 3, `Risk: high`) → PI-17 (wave 4) → PI-18 (wave 5, dopo il primo mese chiuso per DA-2).
