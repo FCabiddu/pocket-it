@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-6-facts-cap-100
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/56
 
 ## Goal
 PI-5 raised the handoff fact cap from 30 to 100 in `bin/handoff.sh`, but three prose lines elsewhere still assume 30 and now contradict it. Left as they are, the retro would prune a 100-line facts section down to 20 on its next run — undoing PI-5 — and every implementing agent would read only the first 30 of up to 100 facts, which is the memory loss the cap raise exists to prevent. The owner has set the new thresholds; this task writes them in.
