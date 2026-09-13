@@ -44,8 +44,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh: a script that PRINTS a shell command for the operator to run must have that exact command extracted and eval'd by its own test (not just grepped) — round 2 shipped a recovery command that never converged, an --accept-base that assumed pocket-it's own bin/ dir, and a locale test that passed under both fixed and broken code because this machine's git has no NLS translations; all three were only caught by round 3 executing the printed text for real.
 - A recovery command a script prints must not publish to origin, under any ref name, history the base branch no longer contains: a rewrite may be the removal of a secret, and a pushed rescue-<sha> branch makes every new clone fetch it again (PI-29 round 4, measured). The printed command saves locally only (git branch rescue-<sha12> <sha>); pushing it anywhere is a person's decision, like restoring the base. Tests compare the whole git ls-remote origin before/after, not just refs/heads/<base>.
 - A test that compares a path printed by a script with its own $PWD must resolve it first (pwd -P): the script resolves symlinks, so the test is green under .claude/worktrees and red under macOS /tmp -> /private/tmp, which is where verify.sh builds its worktree (PI-29 round 5: doctor.test.sh 'absolute script path' red only in verify.sh). Reviewers and developers run verify.sh, not only the suite from .claude/worktrees.
+- Estimate: a task that defines or guards a class of cases (a hook guard, a category definition, a shared verification procedure, the commands a script prints) is M, never S, and ships its case table in the ACs — PI-12, PI-23, PI-24, PI-28, PI-29 and PI-33, all sized S or M without a table, took 4 to 7 review rounds each (retro 2026-09-13).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
 - 2026-09-13 PI-29 PR #60 approved (delta 6) — pwd -P paths, suite green via symlink and verify.sh — merge: orchestrator
 - 2026-09-13 PI-29 round 6 fix pushed — test paths resolved with pwd -P, symlink-proof — 88 tests green from a symlinked dir too
 - 2026-09-13 PI-29 PR #60 needs work (delta 5) — test path not resolved, verify RED — cause: other: test path logical vs pwd -P, earlier rounds measured only outside /tmp
@@ -85,4 +87,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-33 round 2 fix pushed on #57 — database terms + resume-report-format sections, 6 findings closed
 - 2026-09-13 PI-33 PR #57 needs work — database condiviso non definito, regole vaghe — cause: first-round
 - 2026-09-13 PI-33 PR #57 draft — six deferred rules in implementing-common.md, origin/$BASE diff fix — no automated tests, prose
-- 2026-09-13 PI-31 PR #59 approved (delta 3) — every printed argument quoted, 2 mutations red — merge: orchestrator
