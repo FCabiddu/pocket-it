@@ -45,3 +45,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
 - 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
+- 2026-09-12 PI-11 PR #35 needs work — new verify.test.sh not registered in testCommand
