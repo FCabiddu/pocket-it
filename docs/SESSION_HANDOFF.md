@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh / next-wave.sh id regex, identical in both files: `^#\s*(?=[A-Za-z][A-Za-z0-9]*-[^\s:]*\d)([A-Za-z][A-Za-z0-9]*(?:[-.][A-Za-z0-9]+)+)` — a letter-led prefix (alphanumeric segments allowed, e.g. E2E, I18N, A11Y), one or more `-`/`.` segments, a digit required somewhere past the first hyphen (lookahead), no trailing punctuation swallowed. A plain hyphenated word ("Follow-up") has no digit and is not an id; a segment that mixes letters and digits (`STYLE-PR1`, `WELCOME-A11Y-1`) or a letter suffix on the number (`T-1.2.3a` vs `T-1.2.3b`, `QF-10` vs `QF-10b`) must stay distinct — a prior regex requiring a pure-digit final segment silently dropped the former and merged the latter, the same disappearing-task failure PI-25 exists to catch. Verified by a per-file id comparison against `main` on a real ~400-file board: only word-only, digit-free headers change (id -> none); zero cases of two different ids collapsing to the same string. doctor.sh's duplicate check counts only a declared header id (never the filename-guess fallback); a summary EPIC/STORY file is excluded before the check even sees it (same pre-existing files filter). Do not tighten this regex again without running it file-by-file against a real board, not just counting errors.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-25 PR #50 needs work (delta 3) — doctor alnum-id test is vacuous — cause: other: vacuous test
 - 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
 - 2026-09-12 PI-25 PR #50 needs work (delta) — id regex drops alphanumeric real ids — cause: example-not-class
 - 2026-09-12 PI-25 PR #50 fix pushed — id regex now requires a numeric segment, AC3 test hardened
@@ -55,4 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
 - 2026-09-09 PI-4 PR #19 draft — guard.sh resolves branch for bare/HEAD git push — 20 tests
 - 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator
-- 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
