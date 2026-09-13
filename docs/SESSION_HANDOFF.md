@@ -33,6 +33,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - clip-path basic shapes (inset/polygon) resolve against the border-box by default, while overflow clips at the padding edge: a reset that swaps an overflow clip for a clip-path on the same side must say padding-box, or a bordered element shows content under its (transparent) border only in the reset shot — PI-24 round 6 measured a false red 291/1024 on a clean bordered scroller. Clean fixtures for any exclusion must include a border on the excused side.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
 - 2026-09-13 PI-33 PR #57 needs work — shared/disposable overlap, missing stop clause
 - 2026-09-13 PI-33 round 2 fix pushed on #57 — database terms + resume-report-format sections, 6 findings closed
 - 2026-09-13 PI-33 PR #57 needs work — database condiviso non definito, regole vaghe — cause: first-round
@@ -72,4 +73,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 fix pushed round 4 — repo8's vacuous 'no error' assertions replaced with real duplicate pairs per id shape
 - 2026-09-13 PI-25 PR #50 needs work (delta 3) — doctor alnum-id test is vacuous — cause: other: vacuous test
 - 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
-- 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
