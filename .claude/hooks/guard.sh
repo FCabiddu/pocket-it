@@ -63,20 +63,27 @@
 #   Residue for agents, left to server-side protection: `git`/`push` reached through a variable,
 #   an eval of a variable, or an encoding outside ANSI-C quoting; a push both misread by the lexer
 #   AND cut by a quoted separator after `push` in the same command.
+#   The caller is an agent as soon as either key is present: an `agent_type` without `agent_id`
+#   counts as an agent too. Should Claude Code ever send `agent_type` to a main session started
+#   with `--agent`, that session would lose merge and base-branch push; the pipeline does not use
+#   `--agent` today.
+#
+# TEXT OPTIONS — free text is not a command (PI-32 round 2).
+# Every rule below that looks for a word (merge, push, main, pkill, prod…) reads a text in which
+# the VALUE of a textual option has been replaced by the word TEXT: `-m`/`--message` of
+# git commit|tag|merge|stash|notes, `-b`/`--body`, `-t`/`--title`, `-n`/`--notes`, `--subject` of
+# gh pr|issue|release, and the quoted-delimiter heredoc read by `git … -F -` or
+# `gh … --body-file -`, or wrapped as `"$(cat <<'EOF' … EOF)"` in one of those values. Without
+# it, a quote-blind search reads `gh pr comment --body "… merge: orchestrator"` as a merge.
+# A value is replaced only when it is data for bash, never code: a small bash lexer (single and
+# double quotes, backslashes, `$(…)` nested inside double quotes, backticks, heredoc bodies)
+# finds the value, and nothing is replaced when the value holds `$(…)`, a backtick or a process
+# substitution (it runs), when the heredoc delimiter is unquoted (its body expands), when the
+# command holds ANSI-C `$'…'` or a `case` (where quote pairing can go out of step), or when the
+# lexer cannot close a quote, a substitution or a heredoc. In every such doubt the command is
+# read whole, as before: the price moves back to a false positive, never to a missed push.
 set -uo pipefail
 INPUT=$(cat)
-# Match against the command with heredoc bodies and quoted strings removed, so a commit
-# message or an echo that *mentions* a blocked command is not a false positive.
-CMD=$(printf '%s' "$INPUT" | python3 -c 'import json,sys,re
-try:
-    d=json.load(sys.stdin); c=d.get("tool_input",{}).get("command","")
-except Exception:
-    c=""
-c=re.sub(r"<<-?\s*[\x27\"]?([^\s\x27\"<>|;&()]+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)", " HEREDOC ", c, flags=re.S)
-c=re.sub(r"\"(?:[^\"\\\\]|\\\\.)*\"", " STR ", c)
-c=re.sub(r"\x27[^\x27]*\x27", " STR ", c)
-print(c)' 2>/dev/null)
-[[ -z "$CMD" ]] && exit 0
 # The raw command, quotes and heredocs intact. The push classifier is fed this, not the
 # stripped CMD, so a legitimately quoted refspec (`git push origin "refs/heads/*:..."`) is
 # seen for what it is instead of collapsing to STR and slipping through. It is safe because
@@ -87,6 +94,297 @@ print(c)' 2>/dev/null)
 RAW=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
 try: print(json.load(sys.stdin).get("tool_input",{}).get("command",""))
 except Exception: pass' 2>/dev/null)
+[[ -z "$RAW" ]] && exit 0
+# The command with the values of textual options replaced by TEXT (see TEXT OPTIONS above).
+# Any failure of this step yields the raw command, never an empty one.
+DROPPED=$(python3 - "$RAW" <<'PYEOF' 2>/dev/null
+import sys, re
+raw = sys.argv[1]
+
+class GiveUp(Exception):
+    pass
+
+KEYWORDS = {'if', 'then', 'elif', 'else', 'fi', 'while', 'until', 'for', 'do', 'done', '{', '}', '!'}
+GIT_VALUE_OPTS = {'-C', '-c', '--namespace', '--git-dir', '--work-tree', '--exec-path', '--super-prefix', '--config-env'}
+GIT_TEXT_SUBS = {'commit', 'tag', 'merge', 'stash', 'notes'}
+GH_TEXT_GROUPS = {'pr', 'issue', 'release'}
+GH_TEXT_OPTS = {'-b', '--body', '-t', '--title', '-n', '--notes', '--subject'}
+META = ' \t\r\n;&|()<>'
+
+class Lexer:
+    def __init__(self, s):
+        self.s, self.n, self.segs = s, len(s), []
+
+    def level(self, i, closer):
+        # One nesting level (the whole command, or the inside of a `$(…)`). Appends the level's
+        # segments (lists of word and heredoc tokens) to self.segs; returns the index after closer.
+        s, n = self.s, self.n
+        seg, pending, depth = [], [], 0
+        ws, code = None, False
+
+        def end_word(j):
+            nonlocal ws, code
+            if ws is not None:
+                t = s[ws:j]
+                if t == 'case':
+                    raise GiveUp()
+                seg.append({'k': 'w', 's': ws, 'e': j, 'code': code, 't': t})
+                ws, code = None, False
+
+        def end_seg():
+            nonlocal seg
+            if seg:
+                self.segs.append(seg)
+            seg = []
+
+        while i < n:
+            c = s[i]
+            nx = s[i + 1] if i + 1 < n else ''
+            if c == '\\':
+                if nx == '\n':
+                    i += 2; continue
+                if ws is None:
+                    ws = i
+                i += 2; continue
+            if c in ' \t\r':
+                end_word(i); i += 1; continue
+            if c == '\n':
+                end_word(i); end_seg(); i += 1
+                for h in pending:
+                    h['bs'] = i
+                    while True:
+                        if i >= n:
+                            raise GiveUp()
+                        j = s.find('\n', i)
+                        le = n if j < 0 else j
+                        line = s[i:le]
+                        if (line.lstrip('\t') if h['strip'] else line) == h['delim']:
+                            h['be'] = i
+                            i = n if j < 0 else j + 1
+                            break
+                        if j < 0:
+                            raise GiveUp()
+                        i = j + 1
+                pending = []
+                continue
+            if c == '#' and ws is None:
+                j = s.find('\n', i)
+                i = n if j < 0 else j
+                continue
+            if c == ')':
+                end_word(i)
+                if closer == ')' and depth == 0:
+                    end_seg()
+                    if pending:
+                        raise GiveUp()
+                    return i + 1
+                depth -= 1; end_seg(); i += 1; continue
+            if c in '<>' and nx == '(':
+                if ws is None:
+                    ws = i
+                i = self.level(i + 2, ')'); code = True; continue
+            if c == '(':
+                end_word(i); depth += 1; end_seg(); i += 1; continue
+            if c == '&' and nx == '>':
+                end_word(i); i += 2; continue
+            if c in ';&|':
+                end_word(i); end_seg(); i += 1; continue
+            if c == '<' and s.startswith('<<', i) and not s.startswith('<<<', i):
+                end_word(i)
+                j = i + 2
+                strip = j < n and s[j] == '-'
+                if strip:
+                    j += 1
+                while j < n and s[j] in ' \t':
+                    j += 1
+                delim, quoted = '', False
+                while j < n and s[j] not in META:
+                    if s[j] in '\x27"':
+                        k = s.find(s[j], j + 1)
+                        if k < 0:
+                            raise GiveUp()
+                        delim += s[j + 1:k]; quoted = True; j = k + 1
+                    elif s[j] == '\\':
+                        delim += s[j + 1:j + 2]; quoted = True; j += 2
+                    elif s[j] == '$':
+                        raise GiveUp()
+                    else:
+                        delim += s[j]; j += 1
+                if not delim:
+                    raise GiveUp()
+                h = {'k': 'h', 'delim': delim, 'quoted': quoted, 'strip': strip}
+                seg.append(h); pending.append(h); i = j
+                continue
+            if c in '<>':
+                end_word(i)
+                while i < n and s[i] in '<>':
+                    i += 1
+                if i < n and s[i] == '&':
+                    i += 1
+                continue
+            if ws is None:
+                ws = i
+            if c == "'":
+                j = s.find("'", i + 1)
+                if j < 0:
+                    raise GiveUp()
+                i = j + 1; continue
+            if c == '"':
+                i, c2 = self.dquote(i + 1); code = code or c2; continue
+            if c == '$' and nx == "'":
+                raise GiveUp()
+            if c == '$' and nx == '(':
+                i = self.level(i + 2, ')'); code = True; continue
+            if c == '$' and nx == '{':
+                i, c2 = self.param(i + 2); code = code or c2; continue
+            if c == '`':
+                i = self.backtick(i + 1); code = True; continue
+            i += 1
+        if closer is not None or pending:
+            raise GiveUp()
+        end_word(n); end_seg()
+        return n
+
+    def dquote(self, i):
+        s, n, code = self.s, self.n, False
+        while i < n:
+            c = s[i]
+            nx = s[i + 1] if i + 1 < n else ''
+            if c == '\\':
+                i += 2
+            elif c == '"':
+                return i + 1, code
+            elif c == '$' and nx == '(':
+                i = self.level(i + 2, ')'); code = True
+            elif c == '$' and nx == '{':
+                i, c2 = self.param(i + 2); code = code or c2
+            elif c == '`':
+                i = self.backtick(i + 1); code = True
+            else:
+                i += 1
+        raise GiveUp()
+
+    def param(self, i):
+        # `${…}`: quotes inside change meaning with the surrounding context — in doubt, give up.
+        s, n, code = self.s, self.n, False
+        while i < n:
+            c = s[i]
+            nx = s[i + 1] if i + 1 < n else ''
+            if c in '\x27"`':
+                raise GiveUp()
+            if c == '\\':
+                i += 2
+            elif c == '}':
+                return i + 1, code
+            elif c == '$' and nx == '(':
+                i = self.level(i + 2, ')'); code = True
+            elif c == '$' and nx == '{':
+                i, c2 = self.param(i + 2); code = code or c2
+            else:
+                i += 1
+        raise GiveUp()
+
+    def backtick(self, i):
+        s, n = self.s, self.n
+        while i < n:
+            if s[i] == '\\':
+                i += 2
+            elif s[i] == '`':
+                return i + 1
+            else:
+                i += 1
+        raise GiveUp()
+
+def is_cat_heredoc_word(t):
+    # Exactly "$(cat <<'EOF' … EOF)" with a quoted delimiter: one argument of literal text.
+    m = re.match(r'"\$\([ \t]*cat[ \t]+<<(-?)[ \t]*([\x27"])([A-Za-z_][A-Za-z0-9_.-]*)\2[ \t]*\n', t)
+    if not m:
+        return False
+    strip, delim = m.group(1) == '-', m.group(3)
+    lines = t[m.end():].split('\n')
+    for k, line in enumerate(lines):
+        if (line.lstrip('\t') if strip else line) == delim:
+            return re.fullmatch(r'[ \t\n]*\)"', '\n'.join(lines[k + 1:])) is not None
+    return False
+
+def droppable(w):
+    return not w['code'] or is_cat_heredoc_word(w['t'])
+
+def spans_of(seg):
+    words = [t for t in seg if t['k'] == 'w']
+    k = 0
+    while k < len(words) and (words[k]['t'] in KEYWORDS or words[k]['t'] == 'env'
+                              or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', words[k]['t'], re.S)):
+        k += 1
+    w = words[k:]
+    if not w or w[0]['t'] not in ('git', 'gh'):
+        return []
+    j = 1
+    if w[0]['t'] == 'git':
+        while j < len(w) and w[j]['t'].startswith('-'):
+            j += 2 if w[j]['t'] in GIT_VALUE_OPTS else 1
+        if j >= len(w) or w[j]['t'] not in GIT_TEXT_SUBS:
+            return []
+        is_opt = lambda t: t in ('-m', '--message') or re.fullmatch(r'-[a-zA-Z]+m', t) is not None
+        attached = ('--message=',)
+        short_attached = '-m'
+        stdin_opts, stdin_eq = ('-F', '--file'), ('-F-', '--file=-')
+    else:
+        while j < len(w) and w[j]['t'].startswith('-'):
+            j += 2 if w[j]['t'] in ('-R', '--repo') else 1
+        if j >= len(w) or w[j]['t'] not in GH_TEXT_GROUPS:
+            return []
+        is_opt = lambda t: t in GH_TEXT_OPTS
+        attached = ('--body=', '--title=', '--notes=', '--subject=')
+        short_attached = None
+        stdin_opts, stdin_eq = ('-F', '--body-file', '--notes-file'), ('--body-file=-', '--notes-file=-')
+    args = w[j + 1:]
+    out, stdin_text, a = [], False, 0
+    while a < len(args):
+        t = args[a]['t']
+        if is_opt(t) and a + 1 < len(args):
+            if droppable(args[a + 1]):
+                out.append((args[a + 1]['s'], args[a + 1]['e'], 'TEXT'))
+            a += 2; continue
+        if (t in stdin_opts and a + 1 < len(args) and args[a + 1]['t'] == '-') or t in stdin_eq:
+            stdin_text = True
+        pre = next((p for p in attached if t.startswith(p) and len(t) > len(p)), None)
+        if pre is None and short_attached and t.startswith(short_attached) and len(t) > 2:
+            pre = short_attached
+        if pre is not None and droppable(args[a]):
+            out.append((args[a]['s'] + len(pre), args[a]['e'], 'TEXT'))
+        a += 1
+    if stdin_text:
+        for h in seg:
+            if h['k'] == 'h' and h['quoted'] and h.get('be', 0) > h.get('bs', 0):
+                out.append((h['bs'], h['be'], 'TEXT\n'))
+    return out
+
+try:
+    lx = Lexer(raw)
+    lx.level(0, None)
+    spans = sorted(sp for seg in lx.segs for sp in spans_of(seg))
+    parts, last = [], 0
+    for a, b, rep in spans:
+        if a < last:
+            raise GiveUp()
+        parts.append(raw[last:a]); parts.append(rep); last = b
+    parts.append(raw[last:])
+    sys.stdout.write(''.join(parts))
+except Exception:
+    sys.stdout.write(raw)
+PYEOF
+)
+[[ -z "$DROPPED" ]] && DROPPED=$RAW
+# Match against the command with heredoc bodies and quoted strings removed, so a commit
+# message or an echo that *mentions* a blocked command is not a false positive.
+CMD=$(printf '%s' "$DROPPED" | python3 -c 'import sys,re
+c=sys.stdin.read()
+c=re.sub(r"<<-?\s*[\x27\"]?([^\s\x27\"<>|;&()]+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)", " HEREDOC ", c, flags=re.S)
+c=re.sub(r"\"(?:[^\"\\\\]|\\\\.)*\"", " STR ", c)
+c=re.sub(r"\x27[^\x27]*\x27", " STR ", c)
+print(c)' 2>/dev/null)
+[[ -z "$CMD" ]] && CMD=$DROPPED
 # The caller: "main" only when the input is a JSON object with neither `agent_id` nor
 # `agent_type`; anything else (either key present with any value, an unreadable input) is an
 # agent — in doubt, deny. AGENT_TYPE is the agent_type string, empty when absent or not a string.
@@ -104,7 +402,7 @@ IS_AGENT=1; AGENT_TYPE=""
 if [[ "$CALLER" == main ]]; then IS_AGENT=0; else AGENT_TYPE=${CALLER#agent:}; fi
 # The quote-blind text (reading B for agents): continuations joined, every quote and backslash
 # deleted rather than paired, so no quoting trick can hide a word from a search on it.
-NORM=$(printf '%s' "$RAW" | python3 -c 'import sys,re
+NORM=$(printf '%s' "$DROPPED" | python3 -c 'import sys,re
 s=sys.stdin.read(); s=re.sub(r"\x5c\r?\n", " ", s); print(re.sub(r"[\x27\x22\x5c]", "", s))' 2>/dev/null)
 
 block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
@@ -113,7 +411,11 @@ block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
 # text-only PRs (and which still needs the prefix below). Read on the quote-blind text: a merge
 # spelled `gh "pr" merge` or through the REST endpoint is still a merge.
 if [[ $IS_AGENT == 1 && "$AGENT_TYPE" != retro ]]; then
-  if grep -qE '(^|[^[:alnum:]_-])gh[[:space:]]+([^;&|()[:space:]]+[[:space:]]+)*pr[[:space:]]+([^;&|()[:space:]]+[[:space:]]+)*merge([^[:alnum:]_-]|$)|pulls/[^/[:space:]]+/merge' <<<"$NORM"; then
+  # `merge` must be the subcommand of `pr`: only options (with their value) may sit between `gh`,
+  # `pr` and `merge`, so `gh pr create --title "…merge…"` or `gh pr comment --body "…merge…"` is not
+  # read as a merge even when the value could not be replaced by TEXT.
+  F='([[:space:]]+-[^;&|()[:space:]]*([[:space:]]+[^-;&|()[:space:]][^;&|()[:space:]]*)?)*'
+  if grep -qE '(^|[^[:alnum:]_-])gh'"$F"'[[:space:]]+pr'"$F"'[[:space:]]+merge([^[:alnum:]_-]|$)|pulls/[^/[:space:]]+/merge' <<<"$NORM"; then
     block "gh pr merge from an agent" "Agents never merge PRs, with or without POCKET_IT_USER_MERGE=1: the prefix is the orchestrator's audit trail, not a permission (only the retro agent merges its own PRs). Report the PR as ready; the orchestrator merges it. If this was only text (a comment or PR body), pass it through --body-file."
   fi
 fi
@@ -149,11 +451,14 @@ elif grep -qE '(^|[^[:alnum:]_])git([^[:alnum:]_]|$)' <<<"$CMD" && grep -qE '(^|
   PUSH_MODE=main
 fi
 if [[ -n "$PUSH_MODE" ]]; then
-  PUSH_VERDICT=$(python3 - "$RAW" "$PWD" "$PUSH_MODE" <<'PYEOF'
+  PUSH_VERDICT=$(python3 - "$RAW" "$PWD" "$PUSH_MODE" "$DROPPED" <<'PYEOF'
 import sys, re, os, subprocess, shlex
 from fnmatch import fnmatch
 
 cmd, hook_cwd, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+# Reading B reads the command with the values of textual options replaced (TEXT OPTIONS above);
+# reading A, quote-aware, reads the raw command.
+dropped = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else cmd
 # The audit prefix authorizes only the main session; for an agent it is inert text.
 PREFIX_COUNTS = (mode == 'main')
 
@@ -562,7 +867,7 @@ if mode == 'agent':
                   }.get(verdict, 'the push reaches main/master')
         print('BLOCK_AGENT ' + reason)
     else:
-        reason = agent_doubt(cmd)
+        reason = agent_doubt(dropped)
         print('BLOCK_AGENT ' + reason if reason else '')
 else:
     print(classify_quote_aware(cmd))
@@ -579,7 +884,9 @@ fi
 # Never kill by pattern on a shared machine.
 grep -qE '(^|[;&|[:space:]])(pkill|killall)\b' <<<"$CMD" && block "pkill/killall" "Kill your own process by PID or by port: lsof -nP -iTCP:PORT -sTCP:LISTEN -t | xargs -r kill."
 # CI budget switch is a human decision.
-grep -qE 'gh[[:space:]]+variable[[:space:]]+set[[:space:]]+APP_STATUS.*prod' <<<"$CMD" && block "APP_STATUS → prod" "Turning hosted CI on is the user's call (initialising it to dev is fine)."
+# Read on the quote-blind text, so `--body "prod"` is seen, and within the command's own segment,
+# so `prod` in a later command or in a PR body does not count.
+grep -qE '(^|[;&|()])[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+variable[[:space:]]+set[[:space:]]+APP_STATUS[^;&|()]*prod' <<<"$NORM" && block "APP_STATUS → prod" "Turning hosted CI on is the user's call (initialising it to dev is fine)."
 # Sleep-and-poll chains are blocked by the harness anyway; fail fast with a hint.
 grep -qE '^[[:space:]]*(cd [^;&]+ (&&|;) *)?sleep[[:space:]]+[0-9]+[[:space:]]*(&&|;)' <<<"$CMD" && block "sleep N && …" "Use 'gh pr checks N --watch' or a bounded until-loop (sleep inside a loop body is fine)."
 # Destructive git on shared history.
