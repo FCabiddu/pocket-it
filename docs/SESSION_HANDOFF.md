@@ -47,6 +47,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Estimate: a task that defines or guards a class of cases (a hook guard, a category definition, a shared verification procedure, the commands a script prints) is M, never S, and ships its case table in the ACs — PI-12, PI-23, PI-24, PI-28, PI-29 and PI-33, all sized S or M without a table, took 4 to 7 review rounds each (retro 2026-09-13).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-14 PI-35 round 2 fix pushed — anchored mark/BUDGET/STALL/needs-work, exit-2 contract, no duplicate retro, initial mark above #65 — 57 tests green
 - 2026-09-13 PI-35 PR #66 needs work — il segno si riconosce anche in prosa — cause: first-round
 - 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests
 - 2026-09-13 retro-mark 2026-09-13 flow-errors
@@ -86,5 +87,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
 - 2026-09-13 PI-33 PR #57 needs work round 3 — shared/disposable non complementari — cause: example-not-class
 - 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
-- 2026-09-13 PI-33 PR #57 needs work — shared/disposable overlap, missing stop clause
-- 2026-09-13 PI-33 round 2 fix pushed on #57 — database terms + resume-report-format sections, 6 findings closed

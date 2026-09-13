@@ -129,3 +129,5 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-31 PR #59 approved (delta 3) — every printed argument quoted, 2 mutations red — merge: orchestrator
 - 2026-09-13 PI-33 PR #57 draft — six deferred rules in implementing-common.md, origin/$BASE diff fix — no automated tests, prose
 - 2026-09-13 PI-33 PR #57 needs work — database condiviso non definito, regole vaghe — cause: first-round
+- 2026-09-13 PI-33 round 2 fix pushed on #57 — database terms + resume-report-format sections, 6 findings closed
+- 2026-09-13 PI-33 PR #57 needs work — shared/disposable overlap, missing stop clause
