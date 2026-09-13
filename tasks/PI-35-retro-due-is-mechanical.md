@@ -1,6 +1,6 @@
 # PI-35 — Uno script dice quando serve un retro, e run-wave e quickfix lo lanciano senza aspettare nessuno
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions (`bin/next-wave.sh`, `bin/doctor.sh`: gli script decidono, il modello lancia)
 **Contract**: output di `bin/retro-due.sh` (vedi AC1), letto da skill e hook
 **Branch**: task/pi-35-retro-due
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/66
 
 ## Goal
 Oggi il miglioramento del flusso dipende dall'orchestratore che si ricorda di lanciare un retro, o dall'utente che lo chiede. Le regole in prosa («un errore si chiude in tre mosse», «il retro chiude il cerchio») non vengono applicate con costanza. Quelle fatte rispettare da uno script o da un hook sì. Il segnale esiste già: ogni NEEDS WORK del reviewer lascia nel log del handoff una riga con `cause: …`, e gli sforamenti lasciano `BUDGET`/`STALL`. Manca un meccanismo che lo legga. Serve uno script deterministico che dica se è dovuto un retro e su cosa, chiamato da `run-wave` e `quickfix` dopo ogni review, e un segno lasciato dal retro che faccia ripartire il conteggio.
