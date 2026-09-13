@@ -1,6 +1,6 @@
 # PI-31 — I worktree degli agenti non sono bloccati mentre sono in uso
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/worktree.sh, bin/worktree.test.sh, bin/cleanup-merged.sh, bin/cleanup-merged.test.sh
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-31-worktree-lock
 **PR**: 
 
 ## Goal
