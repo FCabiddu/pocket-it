@@ -126,20 +126,28 @@ echo "$OUT" | sed 's/^/      | /'
 ok "trailing dot stripped: both extract to T-2.1.1, caught as duplicate" 'has "ERROR duplicate task id T-2.1.1: tasks/t-2.1.1-a.md, tasks/t-2.1.1-b.md"'
 ok "trailing dot stripped: doctor exits 1"                                '[[ $rc -eq 1 ]]'
 
-# --- repo 8: an id whose segment mixes letters and digits must not be ignored (PI-25 third round) ---
-# The round-2 regex required a pure-digit final segment, so "STYLE-PR1", "WELCOME-A11Y-1" and
-# "E2E-4" matched no id at all and silently dropped out of both scripts, same failure mode as
-# a real duplicate: the task disappears from the board with no error.
+# --- repo 8: an id must actually be READ for each shape of the class (PI-25 fourth round) ---
+# Asserting "no ERROR" on a single, un-duplicated file per shape is a vacuous test: if the regex
+# stops reading that shape as an id entirely, there is still no ERROR (nothing to compare against),
+# so the assertion holds either way. The reviewer proved it: putting the round-2 (pure-digit-only)
+# regex back in doctor.sh left those old assertions green. The only way to prove the id is read is
+# to declare the SAME id, of that exact shape, in two different files and require the duplicate to
+# be caught — that fails shut if the shape stops being recognised.
 R8="$S/repo8"
 q git init -q -b main "$R8"
-decl "$R8/tasks/style-pr1.md" "STYLE-PR1" "alnum segment after the prefix"
-decl "$R8/tasks/welcome-a11y-1.md" "WELCOME-A11Y-1" "alnum middle segment"
-decl "$R8/tasks/e2e-4.md" "E2E-4" "digit inside the prefix itself"
+decl "$R8/tasks/style-pr1-a.md" "STYLE-PR1" "letters and digits in the same segment, copy A"
+decl "$R8/tasks/style-pr1-b.md" "STYLE-PR1" "letters and digits in the same segment, copy B"
+decl "$R8/tasks/qf-10b-a.md" "QF-10b" "a letter after the number, copy A"
+decl "$R8/tasks/qf-10b-b.md" "QF-10b" "a letter after the number, copy B"
+decl "$R8/tasks/t-1.2.3-a.md" "T-1.2.3" "more than one numeric segment, copy A"
+decl "$R8/tasks/t-1.2.3-b.md" "T-1.2.3" "more than one numeric segment, copy B"
 q git -C "$R8" add -A; q git -C "$R8" commit -qm board
 OUT=$(cd "$R8" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
-ok "alnum-segment ids are read (no unexpected duplicate, no error)" '! has "ERROR"'
-ok "alnum-segment ids: doctor stays green"                          '[[ $rc -eq 0 ]]'
+ok "letters+digits in one segment (STYLE-PR1) is read: duplicate caught" 'has "ERROR duplicate task id STYLE-PR1: tasks/style-pr1-a.md, tasks/style-pr1-b.md"'
+ok "letter after the number (QF-10b) is read: duplicate caught"         'has "ERROR duplicate task id QF-10b: tasks/qf-10b-a.md, tasks/qf-10b-b.md"'
+ok "more than one numeric segment (T-1.2.3) is read: duplicate caught" 'has "ERROR duplicate task id T-1.2.3: tasks/t-1.2.3-a.md, tasks/t-1.2.3-b.md"'
+ok "all three shapes: doctor exits 1"                                   '[[ $rc -eq 1 ]]'
 
 # --- repo 9: a letter suffix on the numeric segment must not be truncated away (PI-25 third round) ---
 # The round-2 regex stopped at the digit run, so "T-1.2.3a"/"T-1.2.3b" both extracted to "T-1.2.3"
