@@ -29,7 +29,7 @@ Parse the arguments: `Issue: {ID} — {title}` (required), `Label: Backend|Front
 TASK_FILE=$(ls ./tasks/{ID}-*.md 2>/dev/null | head -1); echo "$TASK_FILE"
 ```
 
-Read it. It is self-contained: goal, acceptance criteria (Given/When/Then), files, tests expected, TAD sections, risk, **budget** (turns; shared rules §7 — an expectation, you stop on stall, not on size), notes. If it is missing or has no `**TAD**:` line, stop and report a planner gap — do not compensate by reading the IPD. Then read the facts of `docs/SESSION_HANDOFF.md` (shared rules §3, ≤ 30 lines): they are the mistakes already paid for on this project.
+Read it. It is self-contained: goal, acceptance criteria (Given/When/Then), files, tests expected, TAD sections, risk, **budget** (turns; shared rules §7 — an expectation, you stop on stall, not on size), notes. If it is missing or has no `**TAD**:` line, stop and report a planner gap — do not compensate by reading the IPD. Then read the facts of `docs/SESSION_HANDOFF.md` (shared rules §3, the whole facts section, up to the cap of 100 one-line facts): they are the mistakes already paid for on this project.
 
 Locate the TAD: `TAD:` argument, else the project TAD `tech-analysis/PROJECT_TECH_ANALYSIS.md` if present, else `ls tech-analysis/*_TECH_ANALYSIS.md` (the one named in the task's Epic, or the newest). If the task also cites a **delta** (`tech-analysis/*_TECH_DELTA.md`), read the delta's sections first — they override the project TAD for this feature. Extract **only the sections the task cites**:
 
