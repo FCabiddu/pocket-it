@@ -9,3 +9,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-09 PI-2 PR #15 approved — merge: orchestrator
 - 2026-09-09 PI-3 PR #17 approved — merge: orchestrator
 - 2026-09-09 PI-1 PR #18 needs work — worktree.sh -B clobbers unpushed commits
+- 2026-09-09 PI-1 PR #18 approved round 2 — merge: orchestrator

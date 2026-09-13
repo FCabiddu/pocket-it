@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-30-separate-live-install
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/53
 
 ## Goal
 Gli hook, gli skill e gli agenti che ogni sessione usa vengono letti **direttamente dal checkout principale del repository**, lo stesso in cui gli agenti di pocket-it sviluppano: l'hook di sicurezza sui comandi è configurato con il percorso del file dentro quel checkout, e la cartella degli agenti punta allo stesso albero.
