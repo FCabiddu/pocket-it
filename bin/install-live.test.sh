@@ -19,8 +19,9 @@ export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER
 unset POCKET_IT_LIVE
 q(){ "$@" >/dev/null 2>&1; }
 
-GUARD_V1='#!/usr/bin/env bash
-echo guard-v1'
+# a guard with the real contract: exit 2 blocks a forbidden command, exit 0 allows the rest
+guard_src(){ printf '%s\n' '#!/usr/bin/env bash' "# $1" 'in=$(cat)' 'case "$in" in *killall*) exit 2;; esac' 'exit 0'; }
+GUARD_V1=$(guard_src guard-v1)
 O="$S/origin.git"; P="$S/publisher"; D="$S/dev"; L="$S/live"
 q git init -q --bare -b main "$O"
 q git init -q -b main "$P"
@@ -54,7 +55,7 @@ ok "AC1 local checkout as remote: nothing created" "[[ ! -e $S/live-from-dev && 
 
 # 4. AC2 on first install — the development checkout is dirty in every way, the published branch is not
 echo "skill DEV-UNPUSHED" > "$D/.claude/skills/s/SKILL.md"; q git -C "$D" commit -qm "unpushed dev commit" -- .claude/skills/s/SKILL.md
-printf '%s\n' '#!/usr/bin/env bash' 'echo guard-DEV-UNCOMMITTED' > "$D/.claude/hooks/guard.sh"
+guard_src guard-DEV-UNCOMMITTED > "$D/.claude/hooks/guard.sh"
 echo "untracked dev agent" > "$D/.claude/agents/untracked-dev.md"
 ok "setup: development checkout has an uncommitted hook, an untracked agent and an unpushed commit" "[[ -n \$(git -C $D diff --name-only -- .claude/hooks/guard.sh) && -n \$(git -C $D ls-files --others -- .claude/agents) && \$(git -C $D rev-list --count origin/main..main) -eq 1 ]]"
 PUBLISHED_V1=$(tree_of "$P")
@@ -106,6 +107,17 @@ ok "AC3 broken hook: installed copy stays at the last working commit" "[[ \$(tre
 run --dest "$S/live-broken"
 ok "AC3 broken hook on first install: exits 1 and creates nothing" "[[ $RC -eq 1 && ! -e $S/live-broken && -z \$(ls -d $S/live-broken.installing.* 2>/dev/null) ]]"
 
+# 9b. a published guard that parses but answers wrongly is refused before it can go live
+publish .claude/hooks/guard.sh "$(printf '%s\n' '#!/usr/bin/env bash' 'cat >/dev/null' 'exit 0')" "guard that lets everything through"
+run --dest "$L"
+ok "guard check: a published guard that does not block exits 1, says so, copy untouched" "[[ $RC -eq 1 && \$(tree_of $L) == $PUBLISHED_V2 ]] && grep -q 'guard-does-not-block' <<<\"\$OUT\""
+publish .claude/hooks/guard.sh "$(printf '%s\n' '#!/usr/bin/env bash' 'cat >/dev/null' 'exit 2')" "guard that blocks everything"
+run --dest "$L"
+ok "guard check: a published guard that blocks everything (lock-out) exits 1, says so, copy untouched" "[[ $RC -eq 1 && \$(tree_of $L) == $PUBLISHED_V2 ]] && grep -q 'guard-blocks-harmless-command' <<<\"\$OUT\""
+run --dest "$L" --rebuild
+ok "guard check: --rebuild never skips the checks on the new copy" "[[ $RC -eq 1 && \$(tree_of $L) == $PUBLISHED_V2 ]]"
+publish .claude/hooks/guard.sh "$GUARD_V1" "guard restored"
+
 # 10. AC3 — the published branch rewritten (not a fast-forward): refused, copy untouched
 q git -C "$P" reset -q --hard "$PUBLISHED_V1"
 publish .claude/agents/developer.md "agent REWRITTEN" rewritten; q git -C "$P" push -q --force origin main
@@ -113,6 +125,14 @@ run --dest "$L"
 ok "AC3 rewritten published branch exits 1" "[[ $RC -eq 1 ]]"
 ok "AC3 rewritten published branch: says not a fast-forward" "grep -q 'not a fast-forward' <<<\"\$OUT\""
 ok "AC3 rewritten published branch: copy untouched" "[[ \$(tree_of $L) == $PUBLISHED_V2 ]] && grep -qx 'agent v2' $L/.claude/agents/developer.md"
+
+# 10b. --rebuild replaces a drifted copy through the same swap and keeps the drifted one aside
+echo "hand edit" >> "$L/.claude/agents/developer.md"
+run --dest "$L" --rebuild
+ASIDE=$(ls -d "$L".drifted-* 2>/dev/null | head -1)
+ok "--rebuild of a drifted copy exits 0 and lands on the published main" "[[ $RC -eq 0 && \$(tree_of $L) == \$(tree_of $P) && -z \$(git -C $L status --porcelain) ]]"
+ok "--rebuild keeps the drifted copy aside, with its edit" "[[ -n \"$ASIDE\" ]] && grep -q 'hand edit' \"$ASIDE/.claude/agents/developer.md\""
+PUBLISHED_V2=$(tree_of "$L")
 
 # 11. AC3 — a commit made inside the installed copy: refused, not a fast-forward
 L2="$S/live2"; run --dest "$L2"
@@ -131,11 +151,39 @@ run --dest "$D"
 ok "development checkout with linked worktrees as destination: exits 1 and says so" "[[ $RC -eq 1 ]] && grep -q 'development checkout' <<<\"\$OUT\""
 run --dest "$S/dev-wt"
 ok "linked worktree as destination: exits 1 and says so" "[[ $RC -eq 1 ]] && grep -q 'linked worktree' <<<\"\$OUT\""
+run --dest "$D" --rebuild
+ok "--rebuild on a development checkout: exits 1, nothing moved" "[[ $RC -eq 1 && -d $D/.git && -z \$(ls -d $D.drifted-* 2>/dev/null) ]]"
 
 # 13. a symlink to the installed copy as destination updates the copy it points to
 L4="$S/live4"; run --dest "$L4"; ln -s "$L4" "$S/live4-link"
 publish .claude/agents/developer.md "agent v5" v5
 run --dest "$S/live4-link"
 ok "symlink as destination: exits 0 and the target copy is updated" "[[ $RC -eq 0 && -L $S/live4-link ]] && grep -qx 'agent v5' $L4/.claude/agents/developer.md"
+
+# 14. the hook never finds guard.sh missing while updates run: a probe calls the installed guard with a forbidden
+# command in a loop across repeated updates, and every single answer must be exit 2 (a missing file gives 127,
+# and 127 lets the command through). An update in place, or a remove-then-rename, turns this red.
+L5="$S/live5"; run --dest "$L5"
+STOP="$S/probe.stop"; BADS="$S/probe.bad"; COUNT="$S/probe.count"; : > "$BADS"; : > "$COUNT"
+( while [[ ! -e "$STOP" ]]; do
+    printf '%s' '{"tool_input":{"command":"killall node"}}' | bash "$L5/.claude/hooks/guard.sh" >/dev/null 2>&1
+    rc=$?; echo . >> "$COUNT"; [[ $rc -eq 2 ]] || echo "$rc" >> "$BADS"
+  done ) &
+PROBE=$!
+# the same failure seen more finely: a fork-free loop that only asks whether guard.sh is there to be read
+MISS="$S/probe.miss"; : > "$MISS"
+( n=0; while [[ ! -e "$STOP" ]]; do [[ -r "$L5/.claude/hooks/guard.sh" ]] || echo miss >> "$MISS"; n=$((n+1)); done; echo "$n" > "$S/probe.fast" ) &
+FAST=$!
+UPD_FAIL=0
+for i in $(seq 1 25); do
+  printf '%s\n' "$(guard_src "guard-round-$i")" "# filler $i $(head -c 20000 /dev/zero | tr '\0' x)" > "$P/.claude/hooks/guard.sh"
+  q git -C "$P" commit -qam "round $i"; q git -C "$P" push -q origin main
+  run --dest "$L5"; [[ $RC -eq 0 ]] || UPD_FAIL=1
+done
+touch "$STOP"; wait "$PROBE" "$FAST"
+ok "atomic swap: 25 updates all succeeded" "[[ $UPD_FAIL -eq 0 ]] && grep -q guard-round-25 $L5/.claude/hooks/guard.sh"
+ok "atomic swap: zero guard runs without exit 2 across $(wc -l < "$COUNT" | tr -d ' ') probes (got $(wc -l < "$BADS" | tr -d ' '))" "[[ \$(wc -l < $COUNT) -gt 100 && ! -s $BADS ]]"
+ok "atomic swap: guard.sh never absent across $(cat "$S/probe.fast") fork-free reads (missing $(wc -l < "$MISS" | tr -d ' '))" "[[ \$(cat $S/probe.fast) -gt 1000 && ! -s $MISS ]]"
+ok "atomic swap: no leftover next/old copies beside the installed one" "[[ -z \$(ls -d $L5.next.* 2>/dev/null) ]]"
 
 exit $fail
