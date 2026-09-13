@@ -27,6 +27,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A hook command must be fail-closed ('bash …/guard.sh || exit 2'): a missing guard file exits 127, and 127 does not block. Swapping a symlink with rename is not atomic for readers on macOS; exchange directories with renamex_np RENAME_SWAP (renameat2 RENAME_EXCHANGE on Linux). BSD grep -R does not follow a symlink given as an argument: resolve paths first.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
 - 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
 - 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
 - 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
@@ -66,4 +67,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-19 PR draft — compaction call is orchestrator's, not user's — no automated tests
 - 2026-09-12 PI-10 PR #36 conflict resolved — unione di fatti e log, 0 righe perse, MERGEABLE
 - 2026-09-12 PI-10 PR #36 approved round 3 — tutte e 4 le famiglie di push distruttivo chiuse, 58 casi, merge: orchestrator
-- 2026-09-12 PI-10 PR #36 fix pushed — F3 digit cluster + F4 base-branch deletion closed — 10 tests
