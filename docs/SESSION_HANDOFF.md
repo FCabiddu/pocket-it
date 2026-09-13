@@ -35,8 +35,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Guardie su git log --name-status: sempre -m --first-parent (altrimenti la D dentro un merge sparisce) e --no-renames (altrimenti una cancellazione con file simile esce come R e l'esito dipende da diff.renames)
 - A command printed for a human or agent to run (recovery, release, accept) must be runnable exactly as printed from the directory the user is in: the script's absolute path (never bin/x.sh, which exists only in the pocket-it checkout), every interpolated value shell-quoted (printf %q — git branch names may contain ( ) $ '), no step described in words ('fast-forward by hand') when a command exists, and a test that extracts it from the output and executes it from a directory without bin/. PI-29/PI-31 review round 2 found each of these missing.
 - doctor.sh: a script that PRINTS a shell command for the operator to run must have that exact command extracted and eval'd by its own test (not just grepped) — round 2 shipped a recovery command that never converged, an --accept-base that assumed pocket-it's own bin/ dir, and a locale test that passed under both fixed and broken code because this machine's git has no NLS translations; all three were only caught by round 3 executing the printed text for real.
+- A recovery command a pocket-it script prints never writes to the base branch on origin (refs/heads/<base>): it saves the lost commit on a new branch (git branch rescue-<sha12> <sha>, pushed only under that new name) and leaves restoring or accepting the base to a person (--accept-base). A merge that re-parents the dropped commit makes a deliberate rewrite (a removed secret) reachable again from the base, and guard.sh blocks it on main — PI-29 round 3.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
 - 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
 - 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
 - 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
@@ -76,9 +78,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
 - 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
 - 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
-- 2026-09-13 PI-30 PR #53 needs work — guard file absent during update fails open
-- 2026-09-13 PI-30 PR #53 draft — installed copy separate from dev checkout — 36 tests
-- 2026-09-13 PI-25 PR #50 conflict resolved — union of handoff/archive (0 lines lost), next-wave.test both blocks kept; PI-26 fixtures T-HI/T-LO -> T-HI-1/T-LO-1 (digit-less ids are not ids under PI-25) — testCommand 357 ok
-- 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
-- 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
-- 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class
