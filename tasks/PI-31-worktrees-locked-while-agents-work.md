@@ -1,6 +1,6 @@
 # PI-31 — I worktree degli agenti non sono bloccati mentre sono in uso
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
