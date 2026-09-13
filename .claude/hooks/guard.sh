@@ -82,7 +82,8 @@ print(c)' 2>/dev/null)
 # seen for what it is instead of collapsing to STR and slipping through. It is safe because
 # the classifier fires only when the *stripped* CMD contains both `git` and `push` as bare
 # words (a real push, never a mention buried in a commit message or an echo), and it acts
-# only on a segment whose git subcommand is literally `push`.
+# only on a segment whose git subcommand is literally `push`. (That gate is the MAIN SESSION's;
+# for an agent the gate is the quote-blind NORM text below, which no quoting can empty.)
 RAW=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
 try: print(json.load(sys.stdin).get("tool_input",{}).get("command",""))
 except Exception: pass' 2>/dev/null)

@@ -341,4 +341,117 @@ expect_case BLOCK "$TMPROOT/feat-repo" "git push --force \\${NL} origin main"
 expect_case BLOCK "$TMPROOT/feat-repo" "git push origin \\${NL} refs/heads/*:refs/heads/*"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push -u \\${NL} origin task/x"
 
+# ── PI-32. The caller is read from the input, not from the command: Claude Code adds `agent_id`
+# and `agent_type` when the hook runs inside a subagent and omits both in the main session. Every
+# case below builds the input with and without those keys. Mutation-provable: treating every
+# input as the main session (CALLER=main) turns every agent BLOCK row red.
+agent_case() {
+  local expect="$1" cwd="$2" fields="$3" cmd="$4" payload got
+  payload=$(python3 -c 'import json,sys
+d={"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}; d.update(json.loads(sys.argv[2])); print(json.dumps(d))' "$cmd" "$fields")
+  if (cd "$cwd" && printf '%s' "$payload" | bash "$HOOKDIR/guard.sh") >/dev/null 2>&1; then got=ALLOW; else got=BLOCK; fi
+  if [[ "$got" == "$expect" ]]; then echo "ok    $got  [cwd=$(basename "$cwd") $fields] $cmd"; else echo "FAIL  want $expect got $got  [cwd=$(basename "$cwd") $fields] $cmd"; fail=1; fi
+}
+DEV='{"agent_id":"a1b2c3d4","agent_type":"developer"}'
+REV='{"agent_id":"r9","agent_type":"reviewer"}'
+RETRO='{"agent_id":"t7","agent_type":"retro"}'
+PP=POCKET_IT_ORCHESTRATOR_PUSH=1
+PM=POCKET_IT_USER_MERGE=1
+# A task branch whose upstream is origin/main with push.default=upstream: a bare `git push`
+# from it lands on main although the command names no branch at all.
+git clone -q "$TMPROOT/main-repo" "$TMPROOT/upstream-repo"
+git -C "$TMPROOT/upstream-repo" checkout -q -b task/y --track origin/main
+git -C "$TMPROOT/upstream-repo" config push.default upstream
+
+# AC1 — a push to the base branch from an agent is denied even with the audit prefix.
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "$PP git push origin main"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "$PP git push origin HEAD:main"
+agent_case BLOCK "$TMPROOT/main-repo" "$DEV" "$PP git push"
+agent_case BLOCK "$TMPROOT/neutral"   "$DEV" "cd $TMPROOT/main-repo && $PP git push -u origin HEAD"
+agent_case BLOCK "$TMPROOT/main-repo" "$REV" "git add docs/SESSION_HANDOFF.md && git commit -qm log && $PP git push"
+agent_case BLOCK "$TMPROOT/feat-repo" "$RETRO" "$PP git push origin main"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push origin main"
+# AC1 — the message says the base branch is forbidden to agents and where diary lines go.
+msg=$(cd "$TMPROOT/feat-repo" && python3 -c 'import json,sys
+d={"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}; d.update(json.loads(sys.argv[2])); print(json.dumps(d))' "$PP git push origin main" "$DEV" | bash "$HOOKDIR/guard.sh" 2>&1 >/dev/null)
+if grep -q "Agents never push the base branch" <<<"$msg" && grep -q "handoff.sh" <<<"$msg" && grep -q "task branch" <<<"$msg"; then
+  echo "ok    MSG    agent push message names the ban and where diary lines go"
+else echo "FAIL  agent push message: $msg"; fail=1; fi
+
+# AC2 — the same pushes with the exact prefix and no agent keys pass as before.
+expect_case ALLOW "$TMPROOT/feat-repo" "$PP git push origin main"
+expect_case ALLOW "$TMPROOT/feat-repo" "$PP git push origin HEAD:main"
+expect_case ALLOW "$TMPROOT/main-repo" "$PP git push"
+expect_case ALLOW "$TMPROOT/neutral"   "cd $TMPROOT/main-repo && $PP git push -u origin HEAD"
+
+# AC3 — an agent's gh pr merge is denied with the prefix, except agent_type retro.
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "$PM gh pr merge 8 --squash"
+agent_case BLOCK "$TMPROOT/neutral" "$REV" "$PM gh pr merge 8 --squash --delete-branch"
+agent_case BLOCK "$TMPROOT/neutral" '{"agent_id":"x1"}' "$PM gh pr merge 8 --squash"
+agent_case BLOCK "$TMPROOT/neutral" '{"agent_id":"x1","agent_type":"Retro"}' "$PM gh pr merge 8 --squash"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "$PM gh \"pr\" merge 8"
+agent_case BLOCK "$TMPROOT/neutral" "$DEV" "gh api -X PUT repos/o/r/pulls/8/merge"
+agent_case ALLOW "$TMPROOT/neutral" "$RETRO" "$PM gh pr merge 8 --squash"
+agent_case BLOCK "$TMPROOT/neutral" "$RETRO" "gh pr merge 8 --squash"
+expect_case ALLOW "$TMPROOT/neutral" "$PM gh pr merge 8 --squash"
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr ready 12 && gh pr comment 12 --body ok"
+agent_case ALLOW "$TMPROOT/neutral" "$REV" "gh pr view 3 --json mergeable --jq .mergeable"
+
+# AC4 — everything that was allowed to an agent stays allowed, except the base branch.
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push -u origin task/pi-32-slug"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push -u origin HEAD"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push"
+agent_case ALLOW "$TMPROOT/main-repo" "$DEV" "cd $TMPROOT/feat-repo && git push -u origin HEAD 2>&1 | tail -3"
+agent_case ALLOW "$TMPROOT/neutral"   "$DEV" "git -C $TMPROOT/feat-repo push -u origin HEAD"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git add -A && git commit -q -m 'fix: tidy the parser' && git push -u origin HEAD"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push -u origin HEAD && gh pr create --draft --base main --title x --body-file b.md"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git fetch origin main && git rebase origin/main && git push --force-with-lease -u origin HEAD"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push origin +task/x:task/x"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git push -u origin feat/main-menu"
+agent_case ALLOW "$TMPROOT/main-repo" "$REV" "git log --oneline --grep push -5"
+agent_case ALLOW "$TMPROOT/main-repo" "$REV" "git pull --ff-only origin main && git status"
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git commit -F msg.txt && git push -u origin HEAD"
+
+# AC4 — for an agent, what can reach the base branch is denied in any spelling the main-session
+# guard leaves to the server: quoting, wrappers, variables, aliases, config, globs, resolution.
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push origin \"ma\"\"in\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "g\\it pu\\sh origin main"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "bash -c \"git push origin main\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "env -i git push origin HEAD:refs/heads/main"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "command /usr/bin/git push origin main"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push origin \"\$B\""
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push origin \$(printf ma; printf in)"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git -c alias.p=push p origin HEAD"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git -c push.default=upstream push"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "GIT_DIR=$TMPROOT/main-repo/.git git push -u origin HEAD"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push --all origin"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push --mirror origin"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push origin :"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push origin 'refs/heads/*:refs/heads/*'"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git push origin ''"
+agent_case BLOCK "$TMPROOT/main-repo" "$DEV" "git push -u origin HEAD"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "cd $MISSING && git push origin HEAD"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "cd \"\$WT\" && git push -u origin HEAD"
+agent_case BLOCK "$TMPROOT/upstream-repo" "$DEV" "git push"
+# The price, on purpose: text that spells a push to main next to a git word is denied for agents
+# (pass it through a file, as in the AC4 ALLOW row above); the main session still allows it.
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -F- <<'EOF'${NL}never git push origin main${NL}EOF"
+expect_case ALLOW "$TMPROOT/feat-repo" "git commit -F- <<'EOF'${NL}never git push origin main${NL}EOF"
+
+# AC5 — agent_id present but empty or of an unexpected type, or agent_type alone: an agent.
+for f in '{"agent_id":""}' '{"agent_id":null}' '{"agent_id":42}' '{"agent_id":["x"]}' '{"agent_type":"developer"}' '{"agent_id":"","agent_type":null}'; do
+  agent_case BLOCK "$TMPROOT/feat-repo" "$f" "$PP git push origin main"
+done
+agent_case ALLOW "$TMPROOT/feat-repo" '{"agent_id":null}' "git push -u origin HEAD"
+
+# AC7 — quote removal that goes out of step cannot hide a push from an agent. Each row is a
+# command bash runs as a push to main; the quote-aware reading alone lets the first three through
+# (the lexer misreads where the quotes pair). Mutation-provable: skipping the quote-blind reading
+# (agent_doubt returning '') turns them red.
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "printf \$'a\\'b' && git push origin main && echo 'c'"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "printf \$'a\\'b' && git push origin main && printf \$'c\\'d'"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "echo \"\$(echo \")\"; git push origin main; echo \"(\")\""
+agent_case BLOCK "$TMPROOT/main-repo" "$DEV" "printf \$'a\\'b' && git push -u origin HEAD && echo 'c'"
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git \$'\\x70ush' origin HEAD:\$'\\x6dain'"
+
 exit $fail
