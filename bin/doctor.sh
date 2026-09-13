@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 # pocket-it doctor — zero-token pre-flight for a target project.
 # Usage (from the project root): bash ~/.claude/agents/pocket-it/bin/doctor.sh [--wave N]
+#   bash <this-script's-own-path> --accept-base   — after reviewing an intentional base-branch
+#     rewrite (see the ERROR's own instructions), tell doctor to stop flagging it. Every command
+#     doctor prints (recovery, accept) is a self-contained shell one-liner with an absolute path to
+#     this script and every ref name shell-quoted: it runs as-is from any directory in any project.
 # Exit 0 = ready to launch agents; exit 1 = problems listed (fix before launching).
 set -uo pipefail
+DOCTOR_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)/$(basename "${BASH_SOURCE[0]}")"
+ACCEPT_BASE=0; [[ "${1:-}" == "--accept-base" ]] && ACCEPT_BASE=1
 WAVE="${2:-}"; [[ "${1:-}" == "--wave" ]] || WAVE=""
-python3 - "$WAVE" <<'PY'
-import json, os, re, sys, glob, subprocess
+python3 - "$WAVE" "$ACCEPT_BASE" "$DOCTOR_ABS" <<'PY'
+import json, os, re, sys, glob, subprocess, shlex
 wave = sys.argv[1]
+accept_base = sys.argv[2] == "1"
+doctor_abs = sys.argv[3]
 errs, warns = [], []
 def err(m): errs.append(m)
 def warn(m): warns.append(m)
@@ -34,6 +42,156 @@ for k in ("integration","e2e"):
 base = cfg.get("baseBranch","main")
 if sh(f"git rev-parse --verify --quiet {base}") == "" and sh(f"git rev-parse --verify --quiet origin/{base}") == "":
     err(f"baseBranch {base!r} does not exist locally or on origin")
+
+# 1b. base branch rewritten (force-push) or deleted on origin since the last doctor run (PI-29).
+# Server-side branch protection is not available on every plan; this is the fallback that at least
+# makes it visible, while it is still recoverable (git keeps the old commit around until gc runs).
+# The seen commit lives under the shared git-common-dir (never committed, shared by every worktree).
+# Classification never reads a git error message: git's text is localised on a build with NLS
+# support, so "does the ref exist" comes only from `ls-remote --exit-code`'s own exit status (2 = no
+# matching ref, git's documented, language-independent signal), never from stdout/stderr wording.
+# Every command printed below is a self-contained one-liner: an absolute, shell-quoted path to THIS
+# script (doctor_abs, resolved by the bash wrapper before python even starts) and shlex.quote() on
+# every ref name — it must run as-is from any cwd in any project, not just from inside pocket-it.
+# Invariant (PI-29 round 5): no command this script prints ever writes to origin, under any ref name
+# — not the base, not a rescue branch either. A rewrite a script sees as "accidental" may have been
+# done on purpose to remove something (a secret, e.g.); publishing the dropped history again, even
+# under a new name, would defeat that. Recovery saves the lost commit to a LOCAL branch only; whether
+# to publish it anywhere, and whether/how to restore the base, are decisions for a person.
+GIT_ENV = {**os.environ, "LC_ALL": "C", "LANGUAGE": "C"}  # belt and braces for any stderr text still shown to a human
+def _load_seen(path):
+    d = {}
+    if os.path.exists(path):
+        for line in open(path, errors="ignore"):
+            parts = line.split()
+            if len(parts) == 2: d[parts[0]] = parts[1]
+    return d
+def _save_seen(path, d):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        for k, v in sorted(d.items()): f.write(f"{k} {v}\n")
+def _classify_base(base, env):
+    # ('ok'|'deleted'|'unreachable', detail) — from ls-remote's exit code alone, never from text.
+    ls = subprocess.run(["git", "ls-remote", "--exit-code", "origin", f"refs/heads/{base}"],
+                         capture_output=True, text=True, env=env)
+    if ls.returncode == 0: return "ok", None
+    if ls.returncode == 2: return "deleted", None
+    stderr = ls.stderr.strip()
+    return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")
+
+common_dir = sh("git rev-parse --git-common-dir")
+has_origin = sh("git remote get-url origin") != ""
+seen_file = os.path.join(os.path.abspath(common_dir), "pocket-it", "base-seen") if common_dir else None
+qbase = shlex.quote(base)
+accept_cmd = f"bash {shlex.quote(doctor_abs)} --accept-base"
+
+if accept_base:
+    # a human reviewed an intentional rewrite (per the ERROR's own instructions) and tells doctor to
+    # stop flagging it. This only ever updates doctor's own bookkeeping file — never a git ref, a
+    # branch or a commit — so by construction it cannot discard any local work.
+    if not (seen_file and has_origin):
+        print("doctor --accept-base: no origin remote configured — nothing to accept"); sys.exit(1)
+    seen = _load_seen(seen_file)
+    prev = seen.get(base)
+    status, detail = _classify_base(base, GIT_ENV)
+    if status == "deleted":
+        if prev:
+            has_prev = subprocess.run(["git", "cat-file", "-e", prev + "^{commit}"],
+                                       capture_output=True, env=GIT_ENV).returncode == 0
+            if has_prev:
+                rescue_branch = f"rescue-{prev[:12]}"
+                print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
+                      f"save the lost commit locally before it can be lost: git branch {rescue_branch} {prev} — "
+                      f"whether to publish that branch anywhere, and how to restore {base!r}, is a decision for a "
+                      f"person, not this script; this command never pushes")
+            else:
+                print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
+                      f"commit {prev} is also gone from the local object database (pruned) — recovery is not "
+                      f"possible from this clone, check other clones or worktrees for it")
+        else:
+            print(f"doctor --accept-base: base branch {base!r} does not exist on origin — nothing to accept")
+        sys.exit(1)
+    if status == "unreachable":
+        print(f"doctor --accept-base: could not reach origin to verify base branch {base!r} ({detail}) — try again once reachable")
+        sys.exit(1)
+    fetch = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"],
+                            capture_output=True, text=True, env=GIT_ENV)
+    if fetch.returncode != 0:
+        stderr = fetch.stderr.strip()
+        print(f"doctor --accept-base: fetch of {base!r} failed right after ls-remote confirmed it exists — "
+              f"transient, try again ({stderr.splitlines()[-1] if stderr else 'no output'})")
+        sys.exit(1)
+    remote_sha = sh(f"git rev-parse refs/remotes/origin/{base}")
+    _save_seen(seen_file, {**seen, base: remote_sha})
+    print(f"doctor --accept-base: {base!r} accepted at {remote_sha} — future runs compare from here")
+    sys.exit(0)
+
+if common_dir and has_origin:
+    seen = _load_seen(seen_file)
+    prev = seen.get(base)
+    status, detail = _classify_base(base, GIT_ENV)
+    if status == "deleted":  # AC3
+        if prev:
+            has_prev = subprocess.run(["git", "cat-file", "-e", prev + "^{commit}"],
+                                       capture_output=True, env=GIT_ENV).returncode == 0
+            if has_prev:
+                rescue_branch = f"rescue-{prev[:12]}"
+                err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
+                    f"save it locally before it can be lost: git branch {rescue_branch} {prev} — "
+                    f"whether to publish that branch anywhere, and how to restore {base!r}, is a decision for a "
+                    f"person, not this script; this command never pushes — then re-run doctor.sh")
+            else:
+                err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
+                    f"commit {prev} is also gone from the local object database (pruned) — recovery is not "
+                    f"possible from this clone, check other clones or worktrees for it")
+        else:
+            err(f"base branch {base!r} does not exist on origin")
+    elif status == "unreachable":  # never a false ERROR
+        warn(f"could not verify base branch {base!r} integrity — origin unreachable ({detail}), skipped")
+    else:
+        # ref exists on the remote: a real fetch (not ls-remote) is required from here — it forces the
+        # remote-tracking ref to the live value even on a non-fast-forward (the leading '+') and pulls
+        # down the objects the `merge-base --is-ancestor` below needs.
+        fetch = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"],
+                                capture_output=True, text=True, env=GIT_ENV)
+        if fetch.returncode != 0:
+            stderr = fetch.stderr.strip()
+            warn(f"could not verify base branch {base!r} integrity — fetch failed ({stderr.splitlines()[-1] if stderr else 'no network'}), skipped")
+        else:
+            remote_sha = sh(f"git rev-parse refs/remotes/origin/{base}")
+            if not prev:
+                if remote_sha: _save_seen(seen_file, {**seen, base: remote_sha})  # AC4: first run, just record
+            else:
+                has_prev = subprocess.run(["git", "cat-file", "-e", prev + "^{commit}"], capture_output=True, env=GIT_ENV).returncode == 0
+                if not has_prev:
+                    warn(f"cannot verify base branch {base!r}: previously seen commit {prev} is missing from the local object database (shallow clone or pruned) — fetch full history to re-enable this check")
+                else:
+                    is_ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", prev, remote_sha], capture_output=True, env=GIT_ENV).returncode == 0
+                    if is_ancestor:
+                        if remote_sha != prev: _save_seen(seen_file, {**seen, base: remote_sha})  # AC1: advanced normally
+                    else:
+                        # The recovery this script can perform on its own never writes to origin, under
+                        # ANY name — not the base, not a side branch either. A script cannot tell an
+                        # intentional rewrite from an accidental one, and an intentional rewrite can
+                        # exist precisely to remove something (a secret, PI-29 round 5's own measured
+                        # case) — publishing the old history under a new name on origin would defeat
+                        # that on the spot, even though {base} itself is left untouched. So the printed
+                        # command only ever creates a LOCAL branch; publishing it anywhere, and
+                        # restoring {base}, are decisions for a person. has_prev (just checked above) is
+                        # already true here, so {prev} is guaranteed present locally.
+                        rescue_branch = f"rescue-{prev[:12]}"
+                        save_cmd = f"git fetch origin && git branch {rescue_branch} {prev}"
+                        err(
+                            f"base branch {base!r} was rewritten on origin: commit {prev} is no longer in its history — "
+                            f"see what changed: git log {prev}..refs/remotes/origin/{qbase} (added by the rewrite), "
+                            f"git log refs/remotes/origin/{qbase}..{prev} (dropped by it) — "
+                            f"the lost commit is still reachable locally: save it before it can be pruned away, "
+                            f"locally only, this never pushes: {save_cmd} — "
+                            f"restoring {base!r} to include it again, and whether to publish {rescue_branch} anywhere, "
+                            f"are decisions for a person, not this script: doctor keeps reporting this as an error "
+                            f"until {base!r} is restored, or, if the rewrite was intentional, then accept it with: {accept_cmd}"
+                        )
+                        # do not overwrite the seen commit here: keep reporting until it is fixed or explicitly accepted
 
 # 2. board
 tasks = {}
