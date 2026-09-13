@@ -261,10 +261,9 @@ for e in "$HOME/.claude/agents"/* "$HOME/.claude/skills"/* $EXTRA; do
   set -- "$@" "$e"
 done
 for f in "$@"; do
-  r=$(cd "$(dirname "$f")" 2>/dev/null && echo "$(pwd -P)/$(basename "$f")")
-  r=$( [ -d "$f" ] && (cd "$f" && pwd -P) || echo "$r")
+  r=$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$f")   # grep does not follow a linked argument everywhere
   case "$r" in "$DEV"|"$DEV"/*|"$LIVE_P"|"$LIVE_P"/*) continue;; esac
-  grep -RnIF --exclude-dir=.git --exclude-dir=node_modules -f "$PATS" "$f" 2>/dev/null
+  grep -rnIF --exclude-dir=.git --exclude-dir=node_modules -f "$PATS" "$r" 2>/dev/null
 done | sort -u
 SH
 echo "OK step 1: backup in $BK, agents case: $CASE"
