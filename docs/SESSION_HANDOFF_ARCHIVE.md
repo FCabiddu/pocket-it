@@ -92,3 +92,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
 - 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
 - 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
+- 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
