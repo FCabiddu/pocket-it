@@ -33,7 +33,14 @@ else echo "board: no tasks/ — nothing planned yet"; fi
 if command -v gh >/dev/null && gh repo view >/dev/null 2>&1; then
   gh pr list --state open --limit 15 --json number,title,isDraft,labels,headRefName --jq '.[] | "pr:    #\(.number) \(if .isDraft then "draft" else "ready" end) [\(.labels|map(.name)|join(","))] \(.title|.[0:60])"' 2>/dev/null
 fi
-wt=$(git worktree list | wc -l | tr -d ' '); [[ "$wt" -gt 1 ]] && echo "worktrees: $((wt-1)) ($(git worktree list | tail -n +2 | awk '{print $NF}' | tr -d '[]' | head -5 | paste -sd, -))"
+# one name per linked worktree from the porcelain listing: its branch (or "detached"), then " (locked)" beside it when locked —
+# the plain listing's last field is "locked"/"prunable" on such worktrees, not the branch
+wtnames=$(git worktree list --porcelain | awk '
+  function flush(){ if (n > 1) print (b != "" ? b : "detached") (l ? " (locked)" : ""); b=""; l=0 }
+  /^worktree /{ flush(); n++ } /^branch refs\/heads\//{ b=substr($0, 19) } /^locked( |$)/{ l=1 }
+  END{ flush() }')
+wt=$(git worktree list --porcelain | grep -c '^worktree ')
+[[ "$wt" -gt 1 ]] && echo "worktrees: $((wt-1)) ($(head -5 <<<"$wtnames" | paste -sd, -))"
 if [[ -f docs/SESSION_HANDOFF.md ]]; then
   echo "handoff facts:"; awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /{print "  "$0}' docs/SESSION_HANDOFF.md | head -8
   echo "handoff log (last 4):"; awk '/^## Log/{f=1;next} f && /^- /{print "  "$0}' docs/SESSION_HANDOFF.md | head -4

@@ -37,12 +37,18 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh: a script that PRINTS a shell command for the operator to run must have that exact command extracted and eval'd by its own test (not just grepped) — round 2 shipped a recovery command that never converged, an --accept-base that assumed pocket-it's own bin/ dir, and a locale test that passed under both fixed and broken code because this machine's git has no NLS translations; all three were only caught by round 3 executing the printed text for real.
 - A recovery command a pocket-it script prints never writes to the base branch on origin (refs/heads/<base>): it saves the lost commit on a new branch (git branch rescue-<sha12> <sha>, pushed only under that new name) and leaves restoring or accepting the base to a person (--accept-base). A merge that re-parents the dropped commit makes a deliberate rewrite (a removed secret) reachable again from the base, and guard.sh blocks it on main — PI-29 round 3.
 - doctor.sh recovery: never print a command that writes to refs/heads/<base> on origin — save the lost commit to a new rescue-<sha12> branch and push only that; restoring the base is a human decision, not the script's
+- worktree.sh creates agent worktrees locked ('pocket-it: agent worktree for <branch> since <date>'); cleanup-merged.sh judges such a worktree ONLY by a merged PR whose head contains its tip (never reflog/ancestry), releases the lock then removes it; any other lock reason is never released. To remove a locked worktree by hand: 'worktree.sh --unlock <repo> <branch>' first — 'git worktree remove --force' silently fails on a locked one.
+- Any script that asks gh must tell 'gh cannot answer' (missing, non-zero exit, unreadable output) from 'gh says no': reporting the unknown as 'not merged / no merged PR' leaves locks and worktrees kept forever with a false reason (cleanup-merged.sh merged_pr exits 2 for unknown). status.sh reads worktrees from --porcelain: the plain 'git worktree list' last field is 'locked'/'prunable', not the branch.
+- A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
 - 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
 - 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
 - 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
+- 2026-09-13 PI-31 PR #59 approved (delta 3) — every printed argument quoted, 2 mutations red — merge: orchestrator
+- 2026-09-13 PI-31 round 3 pushed on PR #59 — printed commands quoted, C-quoted lock reasons read — 56 tests
+- 2026-09-13 PI-31 PR #59 needs work (delta 2) — release hint breaks on shell-special branch — cause: example-not-class
 - 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
 - 2026-09-13 PI-12 PR #39 fix pushed round 4 — guardia con --no-renames, compact 1/N e rinomina vera come casi — nessun test (documento)
 - 2026-09-13 PI-12 PR #39 needs work round 3 delta — compact esce come R, serve --no-renames — cause: example-not-class
@@ -53,6 +59,9 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-29 round 2 fix pushed — locale-proof deletion check + --accept-base — 10 new tests
 - 2026-09-13 PI-29 PR #60 needs work — deleted-branch match breaks under locale
 - 2026-09-13 PI-29 PR draft — doctor.sh flags a rewritten/deleted base branch — 20 tests
+- 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
+- 2026-09-13 PI-31 PR #59 needs work — gh failure reported as not merged
+- 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
 - 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
 - 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
 - 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
