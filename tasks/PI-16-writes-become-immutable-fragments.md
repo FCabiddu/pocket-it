@@ -33,6 +33,8 @@ Da questo task `log`, `fact` e `retract` smettono di scrivere `docs/SESSION_HAND
 Un caso per criterio in `bin/handoff.test.sh`; i test di rotazione di PI-8 diventano test di **non-rotazione** (il vecchio comportamento di spostamento in archivio a 40 righe non si applica più al log composto, solo alla finestra di visualizzazione — §4.4 del TAD). AC1 va nel livello integrazione, repo git temporaneo con più rami (§11.2 del TAD): è la prova di non-contesa, criterio di comportamento di `git merge`, non di una funzione. Ogni criterio va provato per mutazione e i conteggi prima/dopo vanno nel corpo della PR (§11.3 del TAD). Integration/E2E oltre ad AC1: non servono.
 
 ## Notes
+
+- Dalla review di PI-14 (non bloccante): `handoff.sh __spec X` esce con 0, e il `case` bash è una seconda lista di sottocomandi che l'assert di sincronia `SPEC`/`HANDLERS` non controlla. I sottocomandi di scrittura aggiunti qui vanno dichiarati in `SPEC`, e l'elenco deve restare unico.
 - **Perché high:** questa PR non si approva senza mutazioni e conteggi nel corpo, e va assegnata a un modello capace di seguire l'intero scenario a quattro rami senza scorciatoie (raccomandazione del TAD: opus).
 - Restano **invariate**, chiamate di sola scrittura fuori da questo task: `reviewer.md:95-96`, `qa-engineer.md:94`, `deps/SKILL.md:17`, `implementing-common.md:101,132,133`.
 - I lettori fuori dal repo (istruzioni globali della sessione principale, prompt di lancio con la regola ponte) li aggiorna l'orchestratore dopo l'installazione, quando `handoff.sh where` esce con 0. Non sono un AC di questo task (nota esplicita nel §12 del TAD).
