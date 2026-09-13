@@ -26,8 +26,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A hook command must be fail-closed ('bash …/guard.sh || exit 2'): a missing guard file exits 127, and 127 does not block. Swapping a symlink with rename is not atomic for readers on macOS; exchange directories with renamex_np RENAME_SWAP (renameat2 RENAME_EXCHANGE on Linux). BSD grep -R does not follow a symlink given as an argument: resolve paths first.
 - guard.sh word rules (merge, push, kill-by-pattern, APP_STATUS, sleep) read CMD or NORM, both built from DROPPED: a textual-option value (-m/--message, --body/--title/--notes, quoted heredoc read by -F - or --body-file -) becomes TEXT only by ALLOWLIST — the value is one '...' or one "..." with no $ backtick backslash !, AND the line is one simple command with no eval/source/exec/./sh -c. Never extend it by listing forms of code to exclude (round 2 did, zsh ${(e)...} and ; eval "$_" went through). A new word rule reads CMD or NORM, never RAW.
 - guard.sh: testo per la guardia significa dato per la shell che lo esegue davvero, cioè la $SHELL dell'utente (zsh su macOS), non bash. Un ${(e)…} o ${x@P} nel valore, oppure un eval "$_" / | sh più avanti nella riga, rende di nuovo codice un valore che il lexer considera testo: in quei casi non si sostituisce.
+- guard.sh TEXT: un valore letterale non è dato se il comando stesso lo esegue (GIT_EDITOR=sh, core.editor, GH_EDITOR con -e/--edit/--editor): la sostituzione vale solo con git/gh come prima parola, senza opzioni globali di git e senza flag di editor. Da agente il testo con push/merge si passa con Write + --body-file / git commit -F: un heredoc o un printf nella riga del comando viene letto.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-32 PR #54 needs work — literal TEXT run by GIT_EDITOR=sh
 - 2026-09-13 PI-32 round 3 pushed on PR #54 — TEXT replacement by allowlist (literal value, single simple command), both zsh bypasses blocked — testCommand 588 ok
 - 2026-09-13 PI-32 PR #54 needs work — TEXT hides pushes zsh re-evaluates
 - 2026-09-13 PI-32 review fixes pushed on PR #54 — inert-prefix test isolated, word rules skip textual-option values, escaped quote fix — 313 guard rows, 6 mutations red
@@ -67,4 +69,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-10 PR #36 conflict resolved — unione di fatti e log, 0 righe perse, MERGEABLE
 - 2026-09-12 PI-10 PR #36 approved round 3 — tutte e 4 le famiglie di push distruttivo chiuse, 58 casi, merge: orchestrator
 - 2026-09-12 PI-10 PR #36 fix pushed — F3 digit cluster + F4 base-branch deletion closed — 10 tests
-- 2026-09-12 PI-11 PR #35 conflict resolved — union of handoff log lines, 0 lost, MERGEABLE
