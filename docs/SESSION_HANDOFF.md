@@ -16,6 +16,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh push guard is NOT a security boundary: it stops a COOPERATIVE agent pushing to the base branch by MISTAKE in a normal shell form; deliberate evasions (eval, bash -c, env -i, wrappers, quoted/escaped git, on-the-fly aliases, push-affecting config, send-pack) are left to server-side branch protection, and the threat model is at the top of guard.sh. The classifier tokenises the RAW command quote-aware (never a regex split on raw text), with heredoc bodies removed, an unquoted newline and shell keywords (if/then/do/…) as boundaries and redirections stripped. Any git push in a command it cannot parse is DENIED whatever its target (task branches too), unless the exact prefix sits on that push; a backslash-newline is joined before newlines split commands. The audit prefix authorizes only by exact value on the push's own command word.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
 - 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
 - 2026-09-13 PI-13 review round 4 pushed — unparseable commands deny every push, continuations joined — 179 guard cases
 - 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
@@ -55,4 +56,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-11 PI-6 PR #24 draft - next-wave.sh total-order sort key for mixed alphanumeric ids - 6 tests
 - 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged
 - 2026-09-10 PI-5 PR #21 draft — raised handoff fact cap 30 to 100 — 17 tests
-- 2026-09-09 PI-4 PR #19 approved — merge: orchestrator
