@@ -16,7 +16,7 @@ The user has provided: {{ARGUMENTS}}
 
 ## Step 0 — Shared rules, config, TAD
 
-Read `~/.claude/agents/pocket-it/.claude/agents/shared/implementing-common.md` once (board helpers, read discipline) and the facts of `docs/SESSION_HANDOFF.md` (shared rules §3): a PR that violates a fact already learned on this project is a finding, and a finding you make twice on the same theme is something to write down with `handoff.sh fact` so the next developer reads it before coding. Load `.pocket-it.json`. Parse arguments: `PRs: 12, 13` and/or `Tasks: T-1.2.3, …`, optional `Mode: full|code-quality-only|delta` (default full; **delta** = re-review after a NEEDS WORK: read only the commits since your last review comment — `git log --oneline <last-reviewed-sha>..origin/<branch>` — check each listed finding is resolved, look for regressions in the touched files only, run `verify.sh`, swap the labels; never re-read the whole PR), `Draft: yes` (the user asked for draft PRs, or config `automerge` is false: review only, the user merges), `TAD:`, `BestPractices:`. Without `Draft: yes`, an approved PR is merged by the orchestrator by default — say so in every approval.
+Read `~/.claude/agents/pocket-it/.claude/agents/shared/implementing-common.md` once (board helpers, read discipline, and its §9 "Rules from real incidents" — in particular "Database terms — real, shared, disposable" and "Resume report format", both cited by name below rather than redefined here) and the facts of `docs/SESSION_HANDOFF.md` (shared rules §3): a PR that violates a fact already learned on this project is a finding, and a finding you make twice on the same theme is something to write down with `handoff.sh fact` so the next developer reads it before coding. Load `.pocket-it.json`. Parse arguments: `PRs: 12, 13` and/or `Tasks: T-1.2.3, …`, optional `Mode: full|code-quality-only|delta|overlay` (default full; **delta** = re-review after a NEEDS WORK: read only the commits since your last review comment — `git log --oneline <last-reviewed-sha>..origin/<branch>` — check each listed finding is resolved, look for regressions in the touched files only, run `verify.sh`, swap the labels; never re-read the whole PR; **overlay** = wave-wide, launched only by `run-wave` — see Step 3b, `PRs:` then carries branches, not numbers), `Draft: yes` (the user asked for draft PRs, or config `automerge` is false: review only, the user merges), `TAD:`, `BestPractices:`. Without `Draft: yes`, an approved PR is merged by the orchestrator by default — say so in every approval.
 
 **Before anything else, on every NEEDS WORK — not just delta — name the cause and where its fix belongs**, using this taxonomy: `example-not-class` (your own earlier finding, or the task, described one or two cases of a class instead of the whole set — a guard closed for two command shapes, open for a third), `base-moved` (a shared value changed on main since you last read this PR, and tests green on the branch went stale), `verification-reintroduced` (a check written to prove something absent still contained it), `first-round` (this is the PR's first review, there is no prior round to explain), or `other: {one line}`. Say this even when the gap on a repeat round was your own. This is what tells the orchestrator where to place the real fix — carry it into **both** the PR comment (Step 5) and the Step 6 report line, since the orchestrator never reads the PR comment.
 
@@ -72,7 +72,47 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 
 **Local verification, only when reading cannot settle a claim** (a runtime behaviour, a test count): throwaway worktree `git worktree add /tmp/{repo}-{branch} {branch} --detach`, symlink `node_modules` from the main checkout if the lockfile is unchanged, run the **scoped** tests only (`vitest related --run <files>` / `test:affected`, compact reporter), then `git worktree remove`. Never the full suite, never DB/browser suites, never in the main checkout.
 
+**Exception, declared here because the rule you are reading lives in this file:** once every PR in a wave is APPROVED or parked, `run-wave` launches a **separate `Mode: overlay` call to you** (never folded into a per-PR review) that builds one throwaway tree with all of that wave's approved PRs merged together and runs the full suite there, before the first merge — Step 3b below. It exists because review runs in groups of at most 3, so two PRs of the same wave sitting in different groups never otherwise share a tree before they share the base — the one case a green PR and a green PR can still combine into a red tree with git reporting no conflict at all. That single wave-wide pass is the only place the full suite runs; it does not license running it anywhere else in this file.
+
 **Tests count only if you saw them run.** An APPROVED cites test names as evidence for acceptance criteria only when `verify.sh` (or your own scoped run in the throwaway worktree) executed them green in this review. A PR body's "suite green" is a claim, not evidence — on one project two of three audited PRs were merged with red tests the body called green. When the PR changes a shared value read elsewhere — a design token, a CSS variable, a constant, a schema — `git grep -l` the name across `src/` and `tests/`, and run every test file that reads it, not just the runner's "related" set: the regression lives where the value is consumed, not where it is defined.
+
+## Step 3b — `Mode: overlay` (wave-wide; `run-wave` launches this, never you on your own initiative)
+
+`PRs:` carries the branch of every APPROVED PR in the wave — parked PRs never enter — already in merge order, not PR numbers. `run-wave` calls you this way once every PR in the wave has settled to APPROVED or parked, and again from scratch whenever a PR gets new commits after the tree last went green (a `Mode: delta` re-review landing after the previous overlay pass, for instance). Skip this whole step and reply `GREEN` immediately if `PRs:` has at most one branch — nothing to overlap.
+
+```bash
+ORIG="$(pwd)"
+BASE={the wave's base branch}
+git fetch origin
+WT="$ORIG/.claude/worktrees/wave-overlay-$(date +%s)"
+git worktree add "$WT" "origin/$BASE" --detach
+for b in {PRs, in order}; do
+  if ! (cd "$WT" && git merge --no-edit "origin/$b"); then
+    UNRESOLVED=""
+    for f in $(cd "$WT" && git diff --name-only --diff-filter=U); do
+      case "$f" in
+        docs/SESSION_HANDOFF.md|docs/SESSION_HANDOFF_ARCHIVE.md)
+          (cd "$WT" && { git show ":1:$f" > "$f.b" 2>/dev/null || : > "$f.b"; } \
+            && git show ":2:$f" > "$f.o" && git show ":3:$f" > "$f.t" \
+            && git merge-file --union "$f.o" "$f.b" "$f.t" && mv "$f.o" "$f" && rm "$f.b" "$f.t" && git add "$f") \
+            || UNRESOLVED="$UNRESOLVED $f" ;;
+        *) UNRESOLVED="$UNRESOLVED $f" ;;
+      esac
+    done
+    if [ -n "$UNRESOLVED" ]; then echo "RED at PR $b — unresolved conflict in$UNRESOLVED"; (cd "$WT" && git merge --abort); git worktree remove "$WT" --force; exit 1; fi
+    (cd "$WT" && git commit --no-edit)
+  fi
+  if ! (cd "$WT" && git merge-base --is-ancestor "origin/$b" HEAD); then echo "BLOCKED at PR $b — not merged into the overlay tree, no test ran"; (cd "$WT" && git merge --abort 2>/dev/null); git worktree remove "$WT" --force; exit 1; fi
+  (cd "$WT" && {the project's whole unit and component suite — testCommand only if it runs every test, never an affected selector — never integration against a database or browser E2E})
+  if [ $? -ne 0 ]; then echo "RED at PR $b — {the failing lines}"; git worktree remove "$WT" --force; exit 1; fi
+done
+echo GREEN
+git worktree remove "$WT" --force
+```
+
+`$WT` is built **absolute** (`$ORIG/…`), not relative: the loop's own cwd never moves off `$ORIG`, only each `(cd "$WT" && …)` subshell does, and a relative `$WT` would resolve against whatever the previous subshell already changed into rather than against `$ORIG` — the double-nesting that a first version of this step got wrong, caught by running it against a real conflict before writing it down (the rule two paragraphs below this one, applied to itself: verified end to end — merge, union-resolve, both green and red outcomes — before this text was final). Every command that touches the tree is `(cd "$WT" && …)` on its own line, never a bare `cd "$WT"` followed by a run of commands assumed to still be there. A conflict on `docs/SESSION_HANDOFF.md` or its archive is resolved with the union strategy above (both sides' log lines kept, no marker survives) because every developer appends a line there and a real conflict there is certain, not a defect; the union result is **not a correct handoff file** (measured: the log goes over its cap and lines already rotated to the archive come back duplicated in the log) — acceptable only because this tree is detached, never pushed and removed at the end of this step. Never use it anywhere else: not in Step 1's conflict resolution on a PR branch, not in any merge that is pushed, never as `merge=union` in `.gitattributes`. A pushed conflict on the handoff is resolved by section (facts, log, archive), with the log kept at its cap. A conflict on any other path is unresolvable here and stops the pass at that PR, tests never run against a tree that still holds conflict markers. Tests run **after each merge**, not once at the end, so with three or more PRs the first one whose merge turns the tree red is named exactly — never guessed from "entered second".
+
+Report (≤ 6 lines): `GREEN` (all PRs merged clean, tests green throughout) or `RED at PR {branch} — {conflict path | failing test lines}` or `BLOCKED at PR {branch} — not merged into the overlay tree` plus the git error lines printed above it, plus which branches merged clean before it. `run-wave` acts on this; you do not relaunch a developer or merge anything yourself here.
 
 ## Step 4 — Criteria (binary, evidence in the diff, no style nits)
 
@@ -87,6 +127,10 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 **Acceptance criteria (full mode):** each criterion has evidence in the diff; absent or contradicted = not met.
 
 Record each failing criterion as `file:line — rule — what to change`. **When the finding is about a class of unsafe forms — a bypass, an injection shape, a forbidden pattern with more than one spelling — enumerate the whole class you found, not one or two instances of it**: a guard rejected for two command shapes and reopened by a third is a finding that named examples instead of the specification, and it is why the same PR comes back a third time. List every shape you can identify now, in the finding itself.
+
+**Any correction you propose inside a finding is executed before it goes in the comment, per `implementing-common.md` §9 "Database terms — real, shared, disposable"** — a regex, a filter, a rewritten guard, a rename: run it once against the real file it acts on (the board, the source, the fixtures) or a disposable copy of the data if the correction is a database query or migration, never against a shared database, during review included. Its real output, not an invented case, stands behind the proposal. On one project a reviewer proposed a regular expression untested against the real board; the developer adopted it, and the next round it silently discarded real ids the regex had never been run against.
+
+**A finding about a class of anything — not only unsafe forms — names the class's dimensions next to its examples, not the examples alone.** If a finding lists sample ids, breakpoints or positions, add the axis they vary on (which edge, which side of a boundary, which viewport) and how many values that axis takes: on one project, three ids given as examples were really three positions of the same shape, one round was spent fixing only the one kept, and the axis stayed uncovered until the round after.
 
 ## Step 5 — Decision
 

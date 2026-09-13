@@ -98,3 +98,30 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
 - 2026-09-12 PI-23 PR #49 needs work (delta) — mask offset and clipper class incomplete — cause: example-not-class
 - 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
+- 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
+- 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
+- 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)
+- 2026-09-13 PI-23 PR #49 needs work (delta 4) — verification scope misses element and descendants — cause: procedure validated on own fixture, not on the compass techniques citing it
+- 2026-09-13 PI-23 PR #49 approved (delta 5) — scope page-wide, :120 three proofs, 4 cases re-measured — merge: orchestrator
+- 2026-09-13 PI-24 review round 3 pushed — pixel-position check replaces measureText, no-tolerance rule, animations disabled in screenshots, missing-node_modules message — findings from PR #48 delta review
+- 2026-09-13 PI-24 review round 3 pushed (dup-safe) — pixel-position replaces measureText, no-tolerance rule, animations disabled — 3 findings closed
+- 2026-09-13 PI-24 PR #48 needs work — striscia fuori dal riquadro manca ritagli interni
+- 2026-09-13 PI-24 review round 4 pushed — qa-engineer cites compass Glyph-clipping verification instead of local method — polygon+mask cases now caught
+- 2026-09-13 PI-24 PR #48 needs work — esclusioni per asse senza forma eseguibile — cause: base-moved
+- 2026-09-13 PI-24 review round 5 pushed — exclusions moved into compass Glyph-clipping verification, round-3 Notes finding closed — 6 cases reproduced
+- 2026-09-13 PI-24 PR #48 needs work — esclusioni chiudono lati non voluti — cause: example-not-class
+- 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6
+- 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
+- 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
+- 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
+- 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
+- 2026-09-13 PI-31 PR #59 needs work — gh failure reported as not merged
+- 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
+- 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
+- 2026-09-13 PI-12 PR #39 fix pushed round 2 — frammento per invocazione, congelamento, retract, AC per PI-14…18 — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 2 delta — where scrive, guardia frammenti solo M — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 3 — segnale where fuori repo, guardia MRTD con -m --first-parent — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 3 delta — compact esce come R, serve --no-renames — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 4 — guardia con --no-renames, compact 1/N e rinomina vera come casi — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
+- 2026-09-13 PI-31 PR #59 needs work (delta 2) — release hint breaks on shell-special branch — cause: example-not-class
