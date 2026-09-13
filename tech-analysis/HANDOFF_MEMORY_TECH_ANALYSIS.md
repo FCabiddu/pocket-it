@@ -3,7 +3,7 @@
 | Campo | Valore |
 |---|---|
 | Sistema | Sottosistema memoria di pocket-it (`docs/SESSION_HANDOFF.md`, `bin/handoff.sh`, `bin/status.sh`, punti di lettura e scrittura degli agenti) |
-| Versione | 2.1 |
+| Versione | 2.2 |
 | Data | 2026-09-13 |
 | Scope | MVP tooling — `scope: simple`, `pipeline: false`, teamSize 1 |
 | Fonte | `tasks/PI-12-handoff-without-contention.md`, review di PR #39 (7 punti) |
@@ -58,7 +58,7 @@ graph TD
 | `docs/SESSION_HANDOFF_ARCHIVE.md` | Sorgente congelata | log ruotato da PI-8; stesso trattamento | markdown |
 | `docs/handoff/archive/{AAAA-MM}-{stamp}-{rand}.md` | Dato | mesi chiusi compattati (PI-18), sezioni per frammento d'origine | markdown |
 | `bin/status.sh` | Lettore | fatti e ultime righe tramite il compositore | bash |
-| `bin/doctor.sh` | Guardia | righe tolte da una sorgente congelata; frammenti alterati (`M`/`R`/`T`/`D` non coperta) | bash |
+| `bin/doctor.sh` | Guardia | righe tolte da una sorgente congelata; frammenti alterati (`M`/`T`/`D` non coperta, con `--no-renames` una rinomina è `D`) | bash |
 
 ### 2.4 Decisioni
 
@@ -337,20 +337,28 @@ Restano invariate le chiamate di sola scrittura in `reviewer.md:95-96`, `qa-engi
 **File:** `bin/doctor.sh`, `bin/doctor.test.sh`, `bin/handoff.test.sh`.
 - **AC1:** Given un ramo creato prima del cambio che aggiunge righe (log con rotazione e fatto) al vecchio file con lo script vecchio, e `main` che dopo il cambio ha frammenti nuovi, When si fonde il ramo su `main`, Then 0 conflitti, e `facts` e `recent --all` mostrano le righe del ramo.
 - **AC2:** Given il punto di congelamento, cioè il primo commit che aggiunge un file sotto `docs/handoff/` (`git log --diff-filter=A --reverse --format=%H -- docs/handoff | head -1`), e un `HEAD` in cui il multinsieme delle righe `- ` di `SESSION_HANDOFF.md` ∪ `SESSION_HANDOFF_ARCHIVE.md` non contiene più quello del punto di congelamento, When `doctor.sh`, Then esce con errore e nomina la riga mancante. Given uno spostamento dal log all'archivio, fatto dalla rotazione di un ramo pre-cambio, Then nessun errore.
-- **AC3 (ogni modo di alterare un frammento già scritto):** la guardia legge `git log -m --first-parent --name-status --diff-filter=MRTD -- docs/handoff`. Senza `-m --first-parent` una cancellazione fatta dentro un commit di merge non compare: misurato, il `log` di default mostra `M`, `R`, `T` e perde la `D` del merge, mentre con `-m --first-parent` compaiono tutte e quattro. Un caso di test per ciascuno:
+- **AC3 (ogni modo di alterare un frammento già scritto):** la guardia legge `git log -m --first-parent --no-renames --name-status --diff-filter=MTD -- docs/handoff`.
+  - `-m --first-parent` serve perché una cancellazione fatta dentro un merge sfugge al `log` di default (misurato).
+  - `--no-renames` serve perché ogni spostamento, anche verso l'archivio, deve arrivare nella forma unica `D` + `A`. Misurato: senza l'opzione, un `compact` di un frammento esce `R085` e una rinomina vera `R100`; il `compact` di due frammenti esce invece `D D A`. Con l'opzione, tutti e tre i casi escono come `D` + `A`, qualunque sia la somiglianza e qualunque `diff.renames` configurato.
+  - Quindi `R` non compare mai. L'unica eccezione vale per la sola `D`, cioè per ogni forma in cui git può riportare uno spostamento.
+
+  Casi:
   - Given un commit che, sotto `docs/handoff/{AAAA-MM}/`, **modifica** (`M`) un frammento, When `doctor.sh`, Then errore con il percorso.
-  - Given un commit che **rinomina** (`R`) un frammento (il rename rompe anche l'identità per nome di §4.3), Then errore con il percorso d'origine.
   - Given un commit che **cambia tipo** (`T`) a un frammento, per esempio sostituendolo con un symlink, Then errore con il percorso.
-  - Given un commit, anche di merge, che **cancella** (`D`) un frammento, Then errore con il percorso, **tranne** quando il suo `{basename}` compare in HEAD come sezione `### {basename}` di un file `docs/handoff/archive/*.md` con lo stesso multinsieme di righe `- `.
-  - Given solo aggiunte, merge con squash, un frammento ricomparso accanto alla propria sezione d'archivio e cancellazioni coperte da una sezione, Then nessun errore.
-  - Mutazione: un `git rm` di un frammento senza sezione dà errore; con `--diff-filter=M` al posto di `MRTD`, o senza `-m --first-parent` sul caso del merge, l'errore sparisce.
+  - Given un commit, anche di merge o di squash, che **cancella** (`D`) un frammento, Then errore con il percorso, **tranne** quando il suo `{basename}` compare in HEAD come sezione `### {basename}` di un file `docs/handoff/archive/*.md` con lo stesso multinsieme di righe `- `.
+  - Given un **`compact` di un solo frammento** (senza `--no-renames` git lo riporterebbe come `R` con una percentuale qualsiasi), Then nessun errore.
+  - Given un **`compact` di più frammenti** in un archivio, Then nessun errore.
+  - Given una **rinomina vera fuori dall'archivio** (`git mv {AAAA-MM}/r.md {AAAA-MM}/r2.md`, oggi `R100`), Then errore sul percorso d'origine. È una `D` senza sezione: il rename rompe l'identità per nome di §4.3.
+  - Given uno **spostamento dentro `archive/` senza sezione** (`git mv {AAAA-MM}/a.md archive/a.md`), Then errore: il file spostato non ha una sezione `### a.md`.
+  - Given solo aggiunte, merge con squash e un frammento ricomparso accanto alla propria sezione d'archivio, Then nessun errore.
+  - Mutazione: senza `--no-renames` il `compact` di un frammento dà un errore falso (`R`) oppure, se `R` viene ignorata, la rinomina vera passa; un `git rm` di un frammento senza sezione dà errore; con `--diff-filter=M` al posto di `MTD`, o senza `-m --first-parent` sul caso del merge, l'errore sparisce.
 
 ### PI-18 — Compattazione dei mesi chiusi
 **File:** `bin/handoff.sh`, `bin/handoff.test.sh`, `.claude/agents/retro.md`.
 - **AC1:** Given frammenti di un mese chiuso, alcuni presenti sul ramo base e altri solo su un ramo aperto, When `handoff.sh compact --before AAAA-MM` sul ramo del retro, Then vengono piegati solo i frammenti del ramo base, e i file del ramo aperto non sono toccati (dopo il merge restano visibili).
 - **AC2:** Given la memoria prima e dopo `compact`, When si confrontano `recent --all` e `facts`, Then il multinsieme del log e l'insieme dei fatti sono uguali.
 - **AC3:** Given due `compact` concorrenti su due rami con insiemi sovrapposti, When si fondono, Then 0 conflitti e nessuna riga duplicata nella vista, grazie all'identità per nome di §4.3.
-- **AC4:** Given la vista dopo `compact`, When `doctor.sh`, Then nessun errore: ogni `D` prodotta da `compact` è coperta da una sezione `### {basename}` con lo stesso multinsieme (regola di PI-17 AC3). Given un `compact` mutato che scrive la sezione con una riga in meno, Then `doctor.sh` dà errore sul frammento cancellato.
+- **AC4:** Given un `compact` di un frammento e uno di più frammenti, When `doctor.sh`, Then nessun errore. Ogni frammento piegato arriva alla guardia come `D` (con `--no-renames`, anche quando git lo vedrebbe come `R` di qualunque percentuale), ed è coperto da una sezione `### {basename}` con lo stesso multinsieme (regola di PI-17 AC3). Given un `compact` mutato che scrive la sezione con una riga in meno, Then `doctor.sh` dà errore sul frammento piegato.
 
 ---
 
@@ -398,3 +406,4 @@ Restano invariate le chiamate di sola scrittura in `reviewer.md:95-96`, `qa-engi
 | 1.2 | 2026-09-12 | Sequenza PI-14…PI-18, fonti |
 | 2.0 | 2026-09-13 | Review PR #39, 7 punti. (1) Un frammento per invocazione invece che per ramo e `_base.md`: conflitto `_base.md` misurato in review, add/add dopo squash misurato qui, 0 conflitti con quattro rami. (2) `retract` e tetto sui fatti visibili. (3) Log mai deduplicato, verifica a multinsieme, identità per nome delle copie dichiarate. (4) Vecchio file congelato invece che migrato, letture pure. (5) Misura di `union` in ADR-1(a). (6) Elenco completo di lettori e testi da `git grep` in PI-15/PI-16, più i lettori esterni. (7) AC Given/When/Then per PI-14…PI-18, ordine «prima i lettori, poi gli scrittori», regola ponte con `where` |
 | 2.1 | 2026-09-13 | Review delta, 2 punti. (1) Il segnale della regola ponte si legge fuori da qualunque repo: lo script vecchio esce con 1 senza scrivere (misurato); PI-16 AC7 prova che nessun file viene creato o modificato, con lo script vecchio e con quello nuovo; `where` non richiede un repo. (2) La guardia di PI-17 AC3 copre l'intera classe `M`/`R`/`T`/`D` e usa `-m --first-parent`, senza il quale una cancellazione dentro un merge sfugge (misurato); PI-18 AC4 allineato. Conteggio di PI-16: 16 righe |
+| 2.2 | 2026-09-13 | Review delta, 1 punto. La guardia di PI-17 AC3 usa `--no-renames`: ogni spostamento, `compact` compreso, arriva come `D` + `A`, e l'eccezione per l'archivio vale per tutte le forme (misurato: senza l'opzione `compact` di 1 frammento `R085`, rinomina vera `R100`, `compact` di 2 `D D A`). Casi: `compact` di 1 e di più frammenti, rinomina vera fuori archivio, spostamento in `archive/` senza sezione. PI-18 AC4 allineato |
