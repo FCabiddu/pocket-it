@@ -36,7 +36,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
 
 ## Log (più recente in alto, ultime 40 righe)
-- 2026-09-13 PI-31 round 3 pushed on PR #59 — printed commands quoted, C-quoted lock reasons read — 47 tests
+- 2026-09-13 PI-31 round 3 pushed on PR #59 — printed commands quoted, C-quoted lock reasons read — 56 tests
 - 2026-09-13 PI-31 PR #59 needs work (delta 2) — release hint breaks on shell-special branch — cause: example-not-class
 - 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
 - 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
