@@ -549,6 +549,12 @@ agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m 'git push origin mai
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \"git push origin main!!\""
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \"git push origin \\\\main\""
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m git' push origin main'"
+# From the round-2 review: the same class through a shell or a pipe, and bash-5 subscripts.
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "gh pr create --title \"git push origin main\" --body x; bash -c \"\$_\""   # (P2)
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \"git push origin main\" && git log -1 --format=%s | sh"   # (P2)
+agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m \"\${a[\\\$(git push origin main)]}\""   # (P1)
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "gh pr create --title \"git push origin main\" --body x"   # (T)
+agent_case ALLOW "$TMPROOT/feat-repo" "$DEV" "git commit -m \"x: git push origin main\""   # (T)
 # The price, accepted: the same literal text in a compound command is read whole.
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -qm \"guard: deny a push to main from agents\" && git push -u origin HEAD"
 agent_case BLOCK "$TMPROOT/feat-repo" "$DEV" "git commit -m $(HD 'fix: git push origin main is denied')"
