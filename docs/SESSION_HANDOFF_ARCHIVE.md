@@ -100,3 +100,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
 - 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
 - 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
+- 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)

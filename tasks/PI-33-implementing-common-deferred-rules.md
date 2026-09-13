@@ -1,6 +1,6 @@
 # PI-33 — Cinque regole per chi implementa, rinviate finché il file era occupato
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix

@@ -40,6 +40,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-33 PR #57 approved round 7 delta — tre frasi alla lettera, 14 casi rimisurati — merge: orchestrator
 - 2026-09-13 PI-33 round 7 fix pushed on #57 — run's own hosting path excluded from outside-this-run
 - 2026-09-13 PI-33 PR #57 needs work round 6 delta — server che ospita il DB conta come lettore esterno — cause: example-not-class
 - 2026-09-13 PI-33 round 6 fix pushed on #57 — one criterion for shared/disposable, real restored for proof rows
@@ -79,4 +80,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-24 review round 3 pushed — pixel-position check replaces measureText, no-tolerance rule, animations disabled in screenshots, missing-node_modules message — findings from PR #48 delta review
 - 2026-09-13 PI-23 PR #49 approved (delta 5) — scope page-wide, :120 three proofs, 4 cases re-measured — merge: orchestrator
 - 2026-09-13 PI-23 PR #49 needs work (delta 4) — verification scope misses element and descendants — cause: procedure validated on own fixture, not on the compass techniques citing it
-- 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)
