@@ -53,6 +53,11 @@ if sh(f"git rev-parse --verify --quiet {base}") == "" and sh(f"git rev-parse --v
 # Every command printed below is a self-contained one-liner: an absolute, shell-quoted path to THIS
 # script (doctor_abs, resolved by the bash wrapper before python even starts) and shlex.quote() on
 # every ref name — it must run as-is from any cwd in any project, not just from inside pocket-it.
+# Invariant (PI-29 round 5): no command this script prints ever writes to origin, under any ref name
+# — not the base, not a rescue branch either. A rewrite a script sees as "accidental" may have been
+# done on purpose to remove something (a secret, e.g.); publishing the dropped history again, even
+# under a new name, would defeat that. Recovery saves the lost commit to a LOCAL branch only; whether
+# to publish it anywhere, and whether/how to restore the base, are decisions for a person.
 GIT_ENV = {**os.environ, "LC_ALL": "C", "LANGUAGE": "C"}  # belt and braces for any stderr text still shown to a human
 def _load_seen(path):
     d = {}
@@ -96,9 +101,9 @@ if accept_base:
             if has_prev:
                 rescue_branch = f"rescue-{prev[:12]}"
                 print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
-                      f"save the lost commit before it can be lost: git branch {rescue_branch} {prev} && "
-                      f"git push origin {rescue_branch} — whether and how to restore {base!r} is a decision "
-                      f"for a person, not this script")
+                      f"save the lost commit locally before it can be lost: git branch {rescue_branch} {prev} — "
+                      f"whether to publish that branch anywhere, and how to restore {base!r}, is a decision for a "
+                      f"person, not this script; this command never pushes")
             else:
                 print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
                       f"commit {prev} is also gone from the local object database (pruned) — recovery is not "
@@ -132,9 +137,9 @@ if common_dir and has_origin:
             if has_prev:
                 rescue_branch = f"rescue-{prev[:12]}"
                 err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
-                    f"save it before it can be lost: git branch {rescue_branch} {prev} && "
-                    f"git push origin {rescue_branch} — whether and how to restore {base!r} is a decision "
-                    f"for a person, not this script — then re-run doctor.sh")
+                    f"save it locally before it can be lost: git branch {rescue_branch} {prev} — "
+                    f"whether to publish that branch anywhere, and how to restore {base!r}, is a decision for a "
+                    f"person, not this script; this command never pushes — then re-run doctor.sh")
             else:
                 err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
                     f"commit {prev} is also gone from the local object database (pruned) — recovery is not "
@@ -165,29 +170,26 @@ if common_dir and has_origin:
                     if is_ancestor:
                         if remote_sha != prev: _save_seen(seen_file, {**seen, base: remote_sha})  # AC1: advanced normally
                     else:
-                        # The recovery this script can perform on its own is limited to what never
-                        # writes to the base branch: saving the lost commit under a new ref. Whether
-                        # {base} itself should be restored to include it is a decision for a person —
-                        # a script cannot tell an intentional rewrite from an accidental one, and a
-                        # merge commit pushed straight onto {base} would reinstate history someone may
-                        # have deliberately removed (PI-29 round 3: this is exactly the mistake the
-                        # printed command used to make). has_prev (just checked above) is already true
-                        # here, so {prev} is guaranteed present locally.
+                        # The recovery this script can perform on its own never writes to origin, under
+                        # ANY name — not the base, not a side branch either. A script cannot tell an
+                        # intentional rewrite from an accidental one, and an intentional rewrite can
+                        # exist precisely to remove something (a secret, PI-29 round 5's own measured
+                        # case) — publishing the old history under a new name on origin would defeat
+                        # that on the spot, even though {base} itself is left untouched. So the printed
+                        # command only ever creates a LOCAL branch; publishing it anywhere, and
+                        # restoring {base}, are decisions for a person. has_prev (just checked above) is
+                        # already true here, so {prev} is guaranteed present locally.
                         rescue_branch = f"rescue-{prev[:12]}"
-                        save_cmd = (
-                            f"git fetch origin && "
-                            f"git branch {rescue_branch} {prev} && "
-                            f"git push origin {rescue_branch}"
-                        )
+                        save_cmd = f"git fetch origin && git branch {rescue_branch} {prev}"
                         err(
                             f"base branch {base!r} was rewritten on origin: commit {prev} is no longer in its history — "
                             f"see what changed: git log {prev}..refs/remotes/origin/{qbase} (added by the rewrite), "
                             f"git log refs/remotes/origin/{qbase}..{prev} (dropped by it) — "
-                            f"the lost commit is still reachable locally: save it before it can be pruned away: "
-                            f"{save_cmd} — "
-                            f"restoring {base!r} to include it again is a decision for a person, not this script: "
-                            f"doctor keeps reporting this as an error until {base!r} is restored, or, if the "
-                            f"rewrite was intentional, then accept it with: {accept_cmd}"
+                            f"the lost commit is still reachable locally: save it before it can be pruned away, "
+                            f"locally only, this never pushes: {save_cmd} — "
+                            f"restoring {base!r} to include it again, and whether to publish {rescue_branch} anywhere, "
+                            f"are decisions for a person, not this script: doctor keeps reporting this as an error "
+                            f"until {base!r} is restored, or, if the rewrite was intentional, then accept it with: {accept_cmd}"
                         )
                         # do not overwrite the seen commit here: keep reporting until it is fixed or explicitly accepted
 
