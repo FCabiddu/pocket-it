@@ -6,7 +6,6 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 <!-- max 100 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->
 - bin/worktree.sh: mai 'git worktree add --track -B <branch>' su un branch locale esistente — resetta il branch su origin e perde i commit non pushati (WIP di un agente killato). Preferire il branch locale se refs/heads/<branch> esiste.
 - guard.sh: il blocco push-su-main non copre 'git push > file' (il target della redirezione conta come posizionale), 'git -c k=v push' e 'env X=1 git push' — fail-open noti, da chiudere in un prossimo task sul hook.
-- handoff.sh: CAP is a single variable (currently 100); a stale 'max N righe' comment from an older handoff file is auto-normalised on every subcommand run, so no project file contradicts the enforced cap.
 - next-wave.sh (pre-#24): the id regex ^#\s*([A-Za-z]+-[\w.]+) truncated any id with a second embedded hyphen (T-BUG-1 -> tid T-BUG); same-prefix ids collided in the in-memory dict and the later one silently overwrote the earlier — no exception, no warning, task just vanished from the board. Fixed in #24 alongside the mixed-id sort-key TypeError; reproduced independently in review (T-BUG-1 + T-BUG-10 -> '1 total' instead of 2).
 - guard.sh force-push detection: matching only the whole tokens -f/--force misses git's clustered short flags (-uf, -fu, -qf) and the +refspec form (+main, +HEAD:main), both of which git accepts as force pushes. Any new force check must cover all three shapes.
 - A new bin/*.test.sh or .claude/hooks/*.test.sh must be added to testCommand in .pocket-it.json in the same PR, or it runs once and never again — the repo has no runner that discovers tests by convention.
@@ -40,8 +39,13 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
 - Two-way category definitions in a shared doc (e.g. shared/disposable database) must be one criterion and its exact complement, with the unit named (the database, not the server): PI-33 rounds 1-3 each shipped two independent criteria ('existed before' vs 'created and dropped') that left a case in neither (created, not dropped) and an example crossing units (createdb on a pre-existing server) in both. Check every concrete case against the text alone before closing.
 - A category defined as 'every other' must be walked with its defining criterion and complement only, never with the other category's gloss or the check examples; and when a definition widens (disposable now includes fakes), grep every use that relied on the old subset (a disposable DB as proof must say real).
+- handoff.sh (post PI-14): only log/fact write and normalise the stale 'max N righe' cap comment, on their own write — facts/show/recent/grep are pure reads (ADR-2) and never touch the file, so a stale comment survives them.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-14 PR #63 approved (delta 3) — merge: orchestrator
+- 2026-09-13 PI-14 PR #63 needs work (delta 2) — argomenti in più accettati con exit 0 — cause: example-not-class
+- 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
+- 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
 - 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
 - 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
 - 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
@@ -78,7 +82,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
 - 2026-09-13 PI-31 PR #59 needs work — gh failure reported as not merged
 - 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
-- 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
-- 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
-- 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
-- 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6
