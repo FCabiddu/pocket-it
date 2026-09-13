@@ -34,8 +34,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Numerazione dei task: verificare 'ls tasks/' prima di assegnare un id — due task con lo stesso id si mascherano a vicenda in next-wave.sh (PI-12 aveva proposto PI-13, già occupato)
 - Guardie su git log --name-status: sempre -m --first-parent (altrimenti la D dentro un merge sparisce) e --no-renames (altrimenti una cancellazione con file simile esce come R e l'esito dipende da diff.renames)
 - Two-way category definitions in a shared doc (e.g. shared/disposable database) must be one criterion and its exact complement, with the unit named (the database, not the server): PI-33 rounds 1-3 each shipped two independent criteria ('existed before' vs 'created and dropped') that left a case in neither (created, not dropped) and an example crossing units (createdb on a pre-existing server) in both. Check every concrete case against the text alone before closing.
+- A category defined as 'every other' must be walked with its defining criterion and complement only, never with the other category's gloss or the check examples; and when a definition widens (disposable now includes fakes), grep every use that relied on the old subset (a disposable DB as proof must say real).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-33 PR #57 needs work round 5 delta — shared senza 'lasciato', disposable non più ⊂ real — cause: other: tabella percorsa con la glossa
 - 2026-09-13 PI-33 round 5 fix pushed on #57 — shared defined strictly, disposable as complement
 - 2026-09-13 PI-33 PR #57 needs work round 4 — in-memory/fake DB senza categoria — cause: example-not-class
 - 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
@@ -75,4 +77,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
 - 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
 - 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
-- 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
