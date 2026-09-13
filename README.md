@@ -200,6 +200,7 @@ STEP
 bash -eu <<'STEP'
 . "$HOME/.claude/pocket-it-switch-backup/env"
 NEWDEV="/ABS/PATH/OUTSIDE/DOT-CLAUDE/FOR/THE/DEVELOPMENT/CHECKOUT"   # <- replace
+[ "$(cat "$BK/agents.case" 2>/dev/null)" = inside ] || { echo "STOP: step 1 did not report agents case inside — step 1b does not apply"; exit 1; }
 [ ! -e "$NEWDEV" ] || { echo "STOP: $NEWDEV exists"; exit 1; }
 WTS=$(git -C "$DEV" worktree list --porcelain | sed -n 's/^worktree //p' | tail -n +2)
 mv "$DEV" "$NEWDEV"
@@ -208,6 +209,8 @@ rm -rf "$BK"
 echo "OK step 1b: moved to $NEWDEV — start again from step 0 with DEV=$NEWDEV"
 STEP
 ```
+
+To undo step 1b (before step 2, or after **Rollback**), with the same two paths: `mv "$NEWDEV" "$DEV" && git -C "$DEV" worktree repair "$DEV"/.claude/worktrees/*/`.
 
 **Step 2 — install the copy** with the published version of the installer, never the checkout's working file.
 
@@ -298,7 +301,8 @@ chk "settings.json has a guard.sh hook" '[ -n "$GUARDS" ]'
 chk "no hook command names the development checkout" '! python3 -c "import json,os;print(json.dumps(json.load(open(os.path.expanduser(\"~/.claude/settings.json\"))).get(\"hooks\",{})))" | grep -qF "$DEV/"'
 while IFS= read -r c; do
   [ -n "$c" ] || continue
-  chk "guard hook runs from the installed copy: $c" 'case "$c" in *"$LIVE/.claude/hooks/guard.sh"*|*"$LIVE_P/.claude/hooks/guard.sh"*) true;; *) false;; esac'
+  g=$(python3 -c 'import os,shlex,sys; print(" ".join(os.path.realpath(os.path.expanduser(t)) for t in shlex.split(sys.argv[1]) if t.endswith("guard.sh")))' "$c")
+  chk "guard hook resolves into the installed copy: $g" 'case "$g" in "$LIVE_P"/.claude/hooks/guard.sh) true;; *) false;; esac'
   printf '%s' '{"tool_name":"Bash","tool_input":{"command":"killall node"}}' | bash -c "$c" >/dev/null 2>&1; rc=$?
   chk "guard hook blocks a forbidden command (exit 2, got $rc)" '[ "$rc" -eq 2 ]'
   printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | bash -c "$c" >/dev/null 2>&1; rc=$?
