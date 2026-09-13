@@ -1,6 +1,6 @@
 # PI-32 — La guardia non sa se un comando arriva dall'orchestratore o da un agente
 
-**Status**: Todo
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: .claude/hooks/guard.sh, .claude/hooks/guard.test.sh
 **TAD**: none — convenzioni dell'hook
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-32-guard-knows-caller
 **PR**: 
 
 ## Goal
