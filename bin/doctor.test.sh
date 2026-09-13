@@ -2,8 +2,13 @@
 # Self-test for doctor.sh's legacy nested-board check (PI-3): EPIC.md / STORY-n.m.md summaries that nobody
 # updated once every child task turned Done, on scratch git repos. Covers AC1-AC4 of PI-3.
 cd "$(dirname "$0")"
-SCRIPT="$PWD/doctor.sh"
-GUARD="$(cd .. && pwd)/.claude/hooks/guard.sh"  # PI-29 round 4: proves doctor's printed commands pass the real guard
+# PI-29 round 6: doctor.sh resolves its OWN path with `pwd -P` (physical, symlinks resolved) before
+# printing it in a command (DOCTOR_ABS). A test comparing that printed text against a path built from
+# a plain `pwd` (logical, keeps a symlink component such as macOS's /tmp -> /private/tmp) mismatches
+# whenever the checkout is reached through a symlink — every path used in a text comparison below is
+# therefore resolved with `pwd -P` too, not just the one `has` assertion that first caught it.
+SCRIPT="$(pwd -P)/doctor.sh"
+GUARD="$(cd .. && pwd -P)/.claude/hooks/guard.sh"  # PI-29 round 4: proves doctor's printed commands pass the real guard
 guard_rc(){ # guard_rc <cwd> <command> — exit code of guard.sh given <command> as a PreToolUse Bash payload
   local cwd="$1" cmd="$2"
   ( cd "$cwd" && python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.argv[1]}}))' "$cmd" | bash "$GUARD" >/dev/null 2>&1 )
