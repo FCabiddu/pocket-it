@@ -12,7 +12,7 @@
 **Wave**: 1
 **Files**: `bin/retro-due.sh` (nuovo), `bin/retro-due.test.sh` (nuovo), `.pocket-it.json` (`testCommand`), `.claude/skills/run-wave/SKILL.md`, `.claude/skills/quickfix/SKILL.md`, `.claude/agents/retro.md`
 **TAD**: none — follow existing conventions (`bin/next-wave.sh`, `bin/doctor.sh`: gli script decidono, il modello lancia)
-**Contract**: output di `bin/retro-due.sh` (vedi AC1), letto da skill e hook
+**Contract**: output di `bin/retro-due.sh` (vedi AC1), letto da skill e hook; lo scope passato al retro dal trigger automatico è `Signals:` seguito dalle righe di segnale verbatim, `{scope}` della riga di segno in quel caso è `signals-{date}` (un token, mai il testo dei segnali) — round 2 review, vedi Notes
 **Branch**: task/pi-35-retro-due
 **PR**: https://github.com/FCabiddu/pocket-it/pull/66
 
@@ -35,3 +35,4 @@ Un test per ciascuno fra AC1, AC2 (un positivo e un negativo per tipo), AC3 e AC
 - PI-14…PI-18 stanno cambiando la memoria in frammenti. Leggi tramite il compositore quando c'è (AC4), così lo script non si rompe con il passaggio ai frammenti.
 - L'hook di fine turno che blocca finché un retro dovuto non è partito sta fuori da questo repo, nella configurazione privata dell'utente. Lo aggancia l'orchestratore dopo il merge. Questo task fornisce solo lo script con il suo contratto di uscita (0 / 10 / 2).
 - Nessun riferimento a progetti: il repo è pubblico.
+- Round 2 (5 finding): `retro-mark` va riconosciuto solo nella forma esatta ancorata `^- <data> retro-mark <data> <scope>$`; `BUDGET`/`STALL`/`needs work` vanno ancorati alla forma reale del log (`- <data> BUDGET/STALL …`, `<ID> PR #<n> … needs work` senza `—` di mezzo) — `quickfix/SKILL.md` ora scrive `needs-work` (trattino) nella sua riga di chiusura proprio per non collidere con questo; `cause:` finisce al primo `—`; ogni errore di lettura/argomento dà uscita 2, mai `nothing`/exit 1; `run-wave`/`quickfix` non rilanciano un retro se un `retro/*` è già aperto; `retro.md` scrive il segno anche senza PR propria (tranne se resta in draft) e dichiara l'input `Signals:` con `{scope}` = `signals-{date}`.

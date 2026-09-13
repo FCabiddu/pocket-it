@@ -9,6 +9,13 @@
 # AC4: read-only — git status --porcelain is byte-identical before and after, including from a project
 #      root with no docs/ directory at all.
 # AC5/AC6: run-wave/SKILL.md, quickfix/SKILL.md and retro.md carry the wiring this script is read by.
+# Round 2 (review findings 1-5): F1 the mark is recognised only in its exact anchored shape, never a
+# mention of the word in prose/a log line/a needs-work line; F2 BUDGET/STALL/needs-work are anchored to
+# their real log shape, so a skill's own closing log line never doubles as a review round; F3 a cause
+# value stops at the first em-dash, so "cause: X — fix at: A" and "cause: X — fix at: B" compare equal;
+# F4 every input error (bad args, an unreadable source, a malformed main file, a composer that fails)
+# exits 2, never 0/1; F5 run-wave/quickfix never launch a second retro while one is already open, and
+# retro.md declares the Signals: input, its {scope} value, and writes the mark even without a PR.
 set -uo pipefail
 cd "$(dirname "$0")"
 SCRIPT="$PWD/retro-due.sh"
@@ -45,6 +52,38 @@ writearchive(){
 }
 
 run(){ (cd "$1" && bash "$SCRIPT"); }
+
+# mkscript MODE — a private bin/ dir holding our own copy of retro-due.sh plus a crafted sibling
+# handoff.sh, so a test can control composer behaviour without touching the real bin/handoff.sh (PI-14).
+# MODE composer-fail: declares composer support (facts|show|recent|grep) but every call fails.
+# MODE no-composer: log/fact/show only, like a pre-PI-14 install — proves the AC4 fallback path directly,
+# now that the real sibling handoff.sh always has a composer and would otherwise never exercise it.
+mkscript(){
+  local mode="$1" d
+  d=$(mktemp -d "${TMPDIR:-/tmp}/retro-due-bin.XXXXXX"); d=$(cd "$d" && pwd -P)
+  cp "$SCRIPT" "$d/retro-due.sh"
+  case "$mode" in
+    composer-fail)
+      cat > "$d/handoff.sh" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-show}" in
+  facts|show|recent|grep) echo "boom" >&2; exit 1;;
+  *) exit 0;;
+esac
+EOF
+      ;;
+    no-composer)
+      cat > "$d/handoff.sh" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-show}" in
+  log|fact|show) exit 0;;
+  *) echo "usage: handoff.sh log|fact|show" >&2; exit 2;;
+esac
+EOF
+      ;;
+  esac
+  printf '%s' "$d"
+}
 
 # --- AC1: no file at all -> nothing, exit 0 ---
 S1=$(mkrepo)
@@ -188,6 +227,89 @@ after10=$(cd "$S10" && git status --porcelain)
 ok "AC4 — git status unchanged with a real log present" '[[ "$before10" == "$after10" ]]'
 rm -rf "$S10"
 
+# --- F1 (round 2): the mark is recognised only in its exact anchored shape, never a mention of the word
+# in a log line's own prose, a needs-work line, or a PR-title-shaped line ---
+S11=$(mkrepo)
+writelog "$S11" \
+  "- 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests" \
+  "- 2026-09-05 PI-99 PR #99 needs work — mentions retro-mark in passing — cause: example-not-class" \
+  "- 2026-09-01 PI-50 PR #50 needs work — an older, unrelated signal — cause: base-moved" \
+  "- 2026-08-20 QF-9 PR #12 merged — retro-mark: flow-errors"
+out11=$(run "$S11")
+ok "F1 negative — retro-mark mentioned in a log line's own prose is not a mark (older signal survives)" 'grep -q "PI-50" <<<"$out11"'
+ok "F1 negative — retro-mark mentioned inside a needs-work line is not a mark, and the line itself still signals" 'grep -qE "^PI-99 — needs-work-cause —" <<<"$out11"'
+ok "F1 negative — a PR-title-shaped mention ('retro-mark: {scope}') is not a mark either" '! grep -q "QF-9" <<<"$out11"'
+ok "F1 — nothing before any of these prose mentions is hidden" '[[ "$out11" == "RETRO DUE: 2 segnali"* ]]'
+rm -rf "$S11"
+
+# --- F2 (round 2): BUDGET/STALL/needs-work anchored to their real log shape ---
+S12=$(mkrepo)
+writelog "$S12" "- 2026-09-01 PI-40 PR #70 draft — script reads BUDGET and STALL lines"
+out12=$(run "$S12")
+ok "F2 negative — BUDGET/STALL named in an unrelated line's own prose is not a signal" '[[ "$out12" == "retro-due: nothing" ]]'
+rm -rf "$S12"
+
+S13=$(mkrepo)
+writelog "$S13" \
+  "- 2026-09-06 QF-9 PR #12 needs-work — round 3 title" \
+  "- 2026-09-05 QF-9 PR #12 needs work round 3 — real reviewer round — cause: example-not-class" \
+  "- 2026-09-04 QF-9 PR #12 needs-work — round 2 title" \
+  "- 2026-09-03 QF-9 PR #12 needs work round 2 — real reviewer round — cause: example-not-class" \
+  "- 2026-09-02 QF-9 PR #12 needs-work — round 1 title" \
+  "- 2026-09-01 QF-9 PR #12 needs work — real reviewer round — cause: first-round"
+out13=$(run "$S13")
+ok "F2 negative — a skill's own hyphenated 'needs-work' closing line never counts as a review round" \
+   'grep -qE "^QF-9 — repeat-needs-work —.*round 3.*example-not-class" <<<"$out13"'
+ok "F2 — exactly 3 signals (2 needs-work-cause + 1 repeat), not inflated by the 3 closing lines" \
+   '[[ "$out13" == "RETRO DUE: 3 segnali"* ]]'
+rm -rf "$S13"
+
+# --- F3 (round 2): a cause value stops at the first em-dash, so "cause: X — fix at: A" and
+# "cause: X — fix at: B" are recognised as the same cause ---
+S14=$(mkrepo)
+writelog "$S14" \
+  "- 2026-09-02 PI-9 PR #9 needs work — reason — cause: example-not-class — fix at: developer prompt" \
+  "- 2026-09-01 PI-8 PR #8 needs work — reason — cause: example-not-class — fix at: task file"
+out14=$(run "$S14")
+ok "F3 — same cause recognised across different 'fix at' suffixes" 'grep -qE "^PI-9 — same-cause —" <<<"$out14"'
+rm -rf "$S14"
+
+# --- F4 (round 2): every input error is exit 2, never a silent "nothing"/exit 0 or a bare crash/exit 1 ---
+S15=$(mkrepo)
+out15=$(cd "$S15" && bash "$SCRIPT" --bogus 2>&1); rc15=$?
+ok "F4a — a bogus argument is an input error, not nothing" '[[ "$rc15" -eq 2 ]]'
+rm -rf "$S15"
+
+S16=$(mkrepo)
+mkdir -p "$S16/docs/SESSION_HANDOFF.md"   # a directory where a file is expected
+out16=$(cd "$S16" && bash "$SCRIPT" 2>&1); rc16=$?
+ok "F4b — an unreadable (directory) handoff file is an input error, not nothing" '[[ "$rc16" -eq 2 ]]'
+rm -rf "$S16"
+
+S17=$(mkrepo)
+mkdir -p "$S17/docs"
+printf '# Session handoff\n\n## Fatti che non scadono\n- a fact, no Log section at all\n' > "$S17/docs/SESSION_HANDOFF.md"
+out17=$(cd "$S17" && bash "$SCRIPT" 2>&1); rc17=$?
+ok "F4c — a handoff file with no '## Log' section is an input error, not nothing" '[[ "$rc17" -eq 2 ]]'
+rm -rf "$S17"
+
+S18=$(mkrepo)
+writelog "$S18" "- 2026-09-01 BUDGET PI-70 ~210 turns vs 200 — progressing: 1 commit, 1 test green — bigger scope"
+BINF=$(mkscript composer-fail)
+out18=$(cd "$S18" && bash "$BINF/retro-due.sh" 2>&1); rc18=$?
+ok "F4d — a declared composer that fails is an input error, not a silent fallback" '[[ "$rc18" -eq 2 ]]'
+rm -rf "$S18" "$BINF"
+
+# AC4 fallback, exercised directly: the real sibling handoff.sh always has a composer now (PI-14 merged),
+# so without this fixture the fallback path in read_log_fallback() would never run in this suite again.
+S19=$(mkrepo)
+writelog "$S19" "- 2026-09-01 BUDGET PI-71 ~210 turns vs 200 — progressing: 1 commit, 1 test green — bigger scope"
+BINN=$(mkscript no-composer)
+out19=$(cd "$S19" && bash "$BINN/retro-due.sh"); rc19=$?
+ok "AC4 fallback — still exercised directly when the sibling handoff.sh has no composer" \
+   '[[ "$rc19" -eq 10 ]] && grep -q "PI-71" <<<"$out19"'
+rm -rf "$S19" "$BINN"
+
 # --- AC5/AC6: the wiring this script is read by ---
 ok "AC5 — run-wave/SKILL.md calls retro-due.sh after review" 'grep -q "bin/retro-due.sh" ../.claude/skills/run-wave/SKILL.md'
 ok "AC5 — run-wave/SKILL.md launches retro on exit 10, in background, unprompted" \
@@ -196,7 +318,18 @@ ok "AC5 — quickfix/SKILL.md calls retro-due.sh after review" 'grep -q "bin/ret
 ok "AC5 — quickfix/SKILL.md launches retro on exit 10, in background, unprompted" \
    "grep -q 'Exit 10' ../.claude/skills/quickfix/SKILL.md && grep -qE 'subagent_type: .?retro.?' ../.claude/skills/quickfix/SKILL.md && grep -q 'never asking, never waiting' ../.claude/skills/quickfix/SKILL.md"
 ok "AC6 — retro.md writes the retro-mark line with handoff.sh log" 'grep -q "handoff.sh log \"retro-mark" ../.claude/agents/retro.md'
-ok "AC6 — retro.md writes it after its PR(s) are merged" 'grep -qi "after every PR above is merged" ../.claude/agents/retro.md'
+ok "AC6 — retro.md writes it as the last thing it does" 'grep -qi "the last thing you do" ../.claude/agents/retro.md'
+
+# --- F5 (round 2): run-wave/quickfix never launch a second retro while one is already open (a); retro.md
+# declares the Signals: input and its {scope} value (b); retro.md writes the mark even without a PR (c) ---
+ok "F5a — run-wave/SKILL.md checks for an already-open retro/ branch before launching" \
+   "grep -q 'gh pr list --state open --json headRefName' ../.claude/skills/run-wave/SKILL.md && grep -q \"'\\^retro/'\" ../.claude/skills/run-wave/SKILL.md"
+ok "F5a — quickfix/SKILL.md checks for an already-open retro/ branch before launching" \
+   "grep -q 'gh pr list --state open --json headRefName' ../.claude/skills/quickfix/SKILL.md && grep -q \"'\\^retro/'\" ../.claude/skills/quickfix/SKILL.md"
+ok "F5b — retro.md declares the Signals: input" 'grep -q "Signals:" ../.claude/agents/retro.md'
+ok "F5b — retro.md defines {scope} for a Signals: run" 'grep -q "signals-{date}" ../.claude/agents/retro.md'
+ok "F5c — retro.md writes the mark even when no PR was opened" 'grep -qi "found no pattern worth a PR at all" ../.claude/agents/retro.md'
+ok "F5c — retro.md still excludes the draft-not-merged case" 'grep -qi "stayed in draft" ../.claude/agents/retro.md'
 
 [[ "$fail" -eq 0 ]] && echo "retro-due.test.sh: all ok" || echo "retro-due.test.sh: FAILURES"
 exit "$fail"
