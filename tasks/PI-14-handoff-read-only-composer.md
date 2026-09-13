@@ -1,6 +1,6 @@
 # PI-14 — Compositore in sola lettura per la memoria della pipeline
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
@@ -14,7 +14,7 @@
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§2.1, §2.4 ADR-2, §4.1–§4.4, §5.1–§5.3, §8.1, §11.1–§11.3, §12 PI-14)
 **Contract**: none
 **Branch**: task/pi-14-handoff-read-only-composer
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/63
 
 ## Goal
 `handoff.sh` guadagna un compositore puro per i comandi di lettura: `facts`, `show`, `recent N` / `recent --all` e `grep REGEX`. Oggi queste letture leggono solo `docs/SESSION_HANDOFF.md` (e il suo archivio) con `awk`; da questo task leggono attraverso il compositore, che unisce le sorgenti congelate (`docs/SESSION_HANDOFF.md`, `docs/SESSION_HANDOFF_ARCHIVE.md`, se presenti) con eventuali frammenti sotto `docs/handoff/**` nel formato descritto al §4.2 del TAD, applicando l'ordinamento, la deduplicazione e i ritiri del §4.3. **Additivo**: `log` e `fact` restano quelli di oggi e continuano a scrivere solo il vecchio file — questo task non tocca le scritture, solo le letture. Non esistono ancora frammenti scritti dalla pipeline reale (arriveranno con PI-16): questo task implementa il compositore e lo prova con frammenti di test costruiti a mano, così il meccanismo è pronto prima che qualcosa lo popoli.
