@@ -146,6 +146,11 @@ As a check, not a rule of its own: an in-memory SQLite database your test runner
 - **A migration or a backfill is never applied to a shared database before review and merge.** Prove it on a real disposable one; state the exact command and the target database under the PR's **Manual setup steps**, and add `after merge: apply {migration} to {database}` to your 8-line return — whoever merges cannot read the diff for it.
 - **No write to a shared database, ever — insert, delete, truncate, a rolled-back transaction, none of it: not to try something out and not during review.** A transaction you intend to undo is still a write attempted on data other people depend on right now; use a disposable database instead.
 
+### Classes of cases and guards
+
+- **Test a class by construction, never by sample.** When the behaviour is defined by a declaration — a list of aliases, an argument grammar per subcommand, the id shapes a regex accepts, the categories a definition partitions, the commands a script prints — the test iterates that same declaration or executes the real output (every printed command, run as printed, on names holding `( ) $ ' " ; | &` and spaces), so a new entry is covered the moment it is declared. When the task or a finding gives only examples, name the class's dimensions yourself, put the table of cases in the report, and cover all of it: the rounds that closed only the examples shown came back, 16 times in two days.
+- **Every guard or check states its threat model at its top** — the comment heading the code, or the opening sentence of the doc section: what it protects against and what it deliberately leaves to another layer (server-side protection, a person). A bypass outside that model is noted under "not covered", not chased; one inside it is a defect. A guard without a stated model grows a new bypass every round: one reframed in its second round closed in four, one never framed was cancelled after three.
+
 ### Resume report format
 
 One line per finding, in the report: `closed — {commit}` or `open — {why}`. Never omit a finding that stayed open.
