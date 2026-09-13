@@ -40,8 +40,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - worktree.sh creates agent worktrees locked ('pocket-it: agent worktree for <branch> since <date>'); cleanup-merged.sh judges such a worktree ONLY by a merged PR whose head contains its tip (never reflog/ancestry), releases the lock then removes it; any other lock reason is never released. To remove a locked worktree by hand: 'worktree.sh --unlock <repo> <branch>' first — 'git worktree remove --force' silently fails on a locked one.
 - Any script that asks gh must tell 'gh cannot answer' (missing, non-zero exit, unreadable output) from 'gh says no': reporting the unknown as 'not merged / no merged PR' leaves locks and worktrees kept forever with a false reason (cleanup-merged.sh merged_pr exits 2 for unknown). status.sh reads worktrees from --porcelain: the plain 'git worktree list' last field is 'locked'/'prunable', not the branch.
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
+- A recovery command a script prints must not publish to origin, under any ref name, history the base branch no longer contains: a rewrite may be the removal of a secret, and a pushed rescue-<sha> branch makes every new clone fetch it again (PI-29 round 4, measured). The printed command saves locally only (git branch rescue-<sha12> <sha>); pushing it anywhere is a person's decision, like restoring the base. Tests compare the whole git ls-remote origin before/after, not just refs/heads/<base>.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-29 PR #60 needs work (delta 4) — rescue push republishes removed secret — cause: example-not-class
 - 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
 - 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
 - 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
@@ -81,10 +83,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
 - 2026-09-12 PI-23 PR #49 needs work (delta) — mask offset and clipper class incomplete — cause: example-not-class
 - 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
-- 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
-- 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
-- 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
-- 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
-- 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
-- 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
-- 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
