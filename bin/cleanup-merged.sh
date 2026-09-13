@@ -14,7 +14,13 @@
 # reflog shows no commit made on it since `branch: Created from …` is work not started or not yet committed and is
 # kept, and so is a branch whose reflog cannot tell (none, pruned, or inherited through `branch -c`/`-m`). A branch created from its own remote branch (a checkout of work
 # already pushed) is removed only on a merged PR.
-# Only clean worktrees are removed; dirty ones (or ones whose `git status` fails) and locked ones are kept. Detached-HEAD worktrees under /tmp
+# Locked worktrees (PI-31) — a second protection, independent of everything above: worktree.sh creates an agent's worktree
+# locked ("pocket-it: agent worktree for <branch> since <date>"), and such a worktree is never judged by its reflog or by
+# ancestry. It is released and removed only when it is clean and a merged PR's head contains its tip; otherwise it is kept
+# and the report line says it is locked, by what, and why it stays. A locked worktree missing on disk has its lock released
+# and its entry pruned (its branch is deleted only on that same merged-PR condition). A lock with any other reason was
+# placed by someone else and is never released.
+# Only clean worktrees are removed; dirty ones (or ones whose `git status` fails) are kept. Detached-HEAD worktrees under /tmp
 # older than 24 h (reviewer scratch, e.g. verify.sh leftovers) are removed too. The corresponding local branch is then
 # deleted and `git worktree prune` runs. One line per action, a summary with the freed size at the end.
 # Exit 0 always (2 on usage error). Safe to run repeatedly.
@@ -24,23 +30,42 @@ for a in "$@"; do case "$a" in --dry-run) DRY=1;; --all) ALL=1;; *) echo "usage:
 git rev-parse --git-common-dir >/dev/null 2>&1 || { echo "usage: run cleanup-merged.sh inside a git repository" >&2; exit 2; }
 
 abs(){ (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)   # worktree.sh sits beside this script: the --unlock hint is a runnable command
 CUR=$(abs "$(git rev-parse --show-toplevel)")
 
-# Parse `git worktree list --porcelain` (bash 3.2 friendly: one "path|sha|branch|flags" string per entry).
-entries=(); path=""; sha=""; branch=""; flags=""
-flush(){ [[ -n "$path" ]] && entries+=("$path|$sha|$branch|$flags"); path=""; sha=""; branch=""; flags=""; return 0; }
+# git prints a lock reason C-quoted ("…", \" \\ \n \t \ooo) when it holds a quote, a backslash or a non-ASCII byte: read it back
+cunquote(){ local s="$1" o="" i c
+  [[ ${#s} -ge 2 && "$s" == \"*\" ]] || { printf '%s' "$s"; return 0; }
+  s="${s:1:${#s}-2}"
+  for (( i=0; i<${#s}; i++ )); do
+    c="${s:i:1}"
+    if [[ "$c" == '\' ]]; then
+      i=$((i+1)); c="${s:i:1}"
+      case "$c" in
+        n) c=$'\n';; t) c=$'\t';;
+        [0-7]) printf -v c "\\${s:i:3}"; i=$((i+2));;
+      esac
+    fi
+    o="$o$c"
+  done
+  printf '%s' "$o"; }
+# Parse `git worktree list --porcelain` (bash 3.2 friendly: one "path US sha US branch US flags US lock reason" string per
+# entry, US = the unit separator \x1f, which no branch name can hold — "|", ";", "$" and the like are valid in branch names).
+SEP=$'\x1f'
+entries=(); path=""; sha=""; branch=""; flags=""; lockr=""
+flush(){ [[ -n "$path" ]] && entries+=("$path$SEP$sha$SEP$branch$SEP$flags$SEP$lockr"); path=""; sha=""; branch=""; flags=""; lockr=""; return 0; }
 while IFS= read -r line; do
   case "$line" in
     "worktree "*) flush; path="${line#worktree }";;
     "HEAD "*)     sha="${line#HEAD }";;
     "branch "*)   branch="${line#branch refs/heads/}";;
     detached)     flags="$flags detached";;
-    locked*)      flags="$flags locked";;
+    locked|"locked "*) flags="$flags locked"; lockr="${line#locked}"; lockr=$(cunquote "${lockr# }");;
     prunable*)    flags="$flags prunable";;
   esac
 done < <(git worktree list --porcelain)
 flush
-MAIN="${entries[0]%%|*}"   # the first entry is always the main checkout
+MAIN="${entries[0]%%"$SEP"*}"   # the first entry is always the main checkout
 g(){ git -C "$MAIN" "$@"; }
 
 g remote get-url origin >/dev/null 2>&1 && g fetch --prune -q origin 2>/dev/null
@@ -71,8 +96,28 @@ history(){ # $1 tip sha, $2 branch → reads the branch's reflog oldest first; p
   elif [[ -z "$start" ]]; then echo unknown   # no reflog, pruned past the creation, or copied/renamed: cannot tell, so keep
   elif [[ "$start" == "origin/$2" || "$start" == "refs/remotes/origin/$2" ]]; then echo "remote $start"
   else echo "fresh $start"; fi; }
+merged_pr(){ # $1 sha, $2 branch → three answers, never a "no" that is really an "I don't know":
+  #   exit 0 "PR #n merged"                  a merged PR's head contains the tip
+  #   exit 1 "commits not in merged PR #n"   merged PRs exist, none contains the tip
+  #   exit 1 ""                              gh answered: no merged PR for the branch
+  #   exit 2 "gh not available" | "gh pr list failed (exit N)" | "gh pr list output unreadable"   cannot tell
+  local out rc n oid found="" line
+  command -v gh >/dev/null 2>&1 || { echo "gh not available"; return 2; }
+  out=$(cd "$MAIN" && gh pr list --state merged --head "$2" --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null); rc=$?
+  (( rc == 0 )) || { echo "gh pr list failed (exit $rc)"; return 2; }
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    [[ "$line" =~ ^[0-9]+\ [0-9a-f]{40}$ ]] || { echo "gh pr list output unreadable"; return 2; }
+  done <<<"$out"
+  while read -r n oid; do
+    [[ -z "$n" ]] && continue
+    is_anc "$1" "$oid" && { echo "PR #$n merged"; return 0; }
+    found="$n"
+  done <<<"$out"
+  [[ -n "$found" ]] && echo "commits not in merged PR #$found"
+  return 1; }
 decide(){ # $1 sha, $2 branch → prints the reason; exit 0 = remove, 1 = keep
-  local k m n oid found=""
+  local k m r rc
   k=$(history "$1" "$2")
   case "$k" in
     unknown) echo "reflog cannot tell whether it has commits of its own"; return 1;;
@@ -81,14 +126,12 @@ decide(){ # $1 sha, $2 branch → prints the reason; exit 0 = remove, 1 = keep
   esac
   # Squash-merged PRs leave no ancestry: ask gh even if the remote branch still exists, and remove only if the PR's
   # head contains the local tip — commits made after the merge are work the PR never carried.
-  if command -v gh >/dev/null 2>&1; then
-    while read -r n oid; do
-      [[ -z "$n" || "$n" == null ]] && continue
-      [[ -n "$oid" ]] && is_anc "$1" "$oid" && { echo "PR #$n merged"; return 0; }
-      found="$n"
-    done < <(cd "$MAIN" && gh pr list --state merged --head "$2" --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null)
-  fi
-  [[ -n "$found" ]] && { echo "commits not in merged PR #$found"; return 1; }
+  r=$(merged_pr "$1" "$2"); rc=$?
+  (( rc == 0 )) && { echo "$r"; return 0; }
+  if (( rc == 2 )); then
+    [[ "$k" == remote* ]] && echo "created from ${k#remote }, merged PRs unknown: $r" || echo "not merged into a base, merged PRs unknown: $r"
+    return 1; fi
+  [[ -n "$r" ]] && { echo "$r"; return 1; }
   [[ "$k" == remote* ]] && { echo "created from ${k#remote }, no merged PR contains it"; return 1; }
   echo "not merged"; return 1; }
 protected(){ case "$1" in epic/*|main|master|fix-*) return 0;; esac; return 1; }
@@ -102,21 +145,51 @@ drop_branch(){ # $1 branch
   [[ -z "$1" ]] && return 0
   if (( DRY )); then echo "would delete branch $1"; deleted=$((deleted+1)); return 0; fi
   if g branch -D "$1" >/dev/null 2>&1; then echo "deleted branch $1"; deleted=$((deleted+1)); else echo "kept branch $1 (delete failed)"; fi; }
-remove(){ # $1 path, $2 reason, $3 branch to delete afterwards ("" for none)
-  local p="$1" why="$2" b="$3" k; k=$(kb "$p"); before=$((before+${k:-0}))
-  if (( DRY )); then echo "would remove worktree $p ($why)"; removed=$((removed+1)); drop_branch "$b"; return 0; fi
+remove(){ # $1 path, $2 reason, $3 branch to delete afterwards ("" for none), $4 lock reason to release first ("" for none)
+  local p="$1" why="$2" b="$3" lr="${4:-}" k; k=$(kb "$p"); before=$((before+${k:-0}))
+  if (( DRY )); then [[ -n "$lr" ]] && echo "would unlock worktree $p"; echo "would remove worktree $p ($why)"; removed=$((removed+1)); drop_branch "$b"; return 0; fi
+  if [[ -n "$lr" ]]; then
+    g worktree unlock "$p" >/dev/null 2>&1 || { keep "$p" "locked: $lr; unlock failed"; k=$(kb "$p"); after=$((after+${k:-0})); return 0; }
+    echo "unlocked worktree $p"
+  fi
   if g worktree remove --force "$p" >/dev/null 2>&1; then
     echo "removed worktree $p ($why)"; removed=$((removed+1))
     [[ -d "$p" ]] && { k=$(kb "$p"); after=$((after+${k:-0})); }
     drop_branch "$b"
-  else keep "$p" "git worktree remove failed"; k=$(kb "$p"); after=$((after+${k:-0})); fi; }
+  else
+    [[ -n "$lr" ]] && g worktree lock --reason "$lr" "$p" >/dev/null 2>&1   # not removed: it stays protected as it was
+    keep "$p" "git worktree remove failed"; k=$(kb "$p"); after=$((after+${k:-0})); fi; }
+locked_entry(){ # $1 path, $2 sha, $3 branch, $4 lock reason → the only way out of a lock is a merged PR containing the tip
+  local p="$1" sha="$2" b="$3" lr="$4" shown st why rc rel
+  shown="locked: ${lr:-no reason given}"
+  case "$lr" in "pocket-it: "*) ;; *) keep "$p" "$shown; not a pocket-it lock, never released — its owner runs: git -C $(printf '%q' "$MAIN") worktree unlock $(printf '%q' "$p")"; return 0;; esac
+  if [[ ! -d "$p" ]]; then   # deleted from disk: the lock protects nothing any more, only the branch is left to judge
+    if (( DRY )); then echo "would unlock and prune worktree $p (missing on disk)"
+    elif g worktree unlock "$p" >/dev/null 2>&1; then g worktree prune >/dev/null 2>&1; echo "unlocked and pruned worktree $p (missing on disk)"
+    else keep "$p" "$shown; missing on disk, unlock failed"; return 0; fi
+    removed=$((removed+1))
+    [[ -z "$b" ]] && return 0
+    protected "$b" && (( ! ALL )) && { echo "kept branch $b (protected)"; return 0; }
+    why=$(merged_pr "$sha" "$b"); rc=$?
+    (( rc == 0 )) && { drop_branch "$b"; return 0; }
+    (( rc == 2 )) && why="merged PRs unknown: $why"
+    echo "kept branch $b (${why:-no merged PR contains its tip})"; return 0; fi
+  [[ -z "$b" ]] && { keep "$p" "$shown; no branch"; return 0; }
+  rel="release if abandoned or merged without a PR: bash $(printf '%q' "$SELF_DIR/worktree.sh") --unlock $(printf '%q' "$MAIN") $(printf '%q' "$b")"
+  protected "$b" && (( ! ALL )) && { keep "$p" "$shown; protected branch $b (--all to judge it); $rel"; return 0; }
+  st=$(git -C "$p" status --porcelain 2>/dev/null) || { keep "$p" "$shown; git status failed"; return 0; }
+  [[ -n "$st" ]] && { keep "$p" "$shown; dirty"; return 0; }
+  why=$(merged_pr "$sha" "$b"); rc=$?
+  (( rc == 0 )) && { remove "$p" "$why, lock released" "$b" "$lr"; return 0; }
+  (( rc == 2 )) && { keep "$p" "$shown; merged PRs unknown: $why; $rel"; return 0; }
+  keep "$p" "$shown; ${why:-no merged PR contains its tip}; $rel"; }
 
 i=0
 for e in "${entries[@]}"; do
   i=$((i+1)); (( i == 1 )) && continue
-  IFS='|' read -r p sha branch flags <<<"$e"
+  IFS="$SEP" read -r p sha branch flags lockr <<<"$e"
   [[ "$(abs "$p")" == "$CUR" ]] && { keep "$p" "current worktree"; continue; }
-  case " $flags " in *" locked "*) keep "$p" "locked"; continue;; esac
+  case " $flags " in *" locked "*) locked_entry "$p" "$sha" "$branch" "$lockr"; continue;; esac
   case " $flags " in *" prunable "*)
     echo "pruned worktree $p (missing on disk)"; removed=$((removed+1)); (( DRY )) || g worktree prune >/dev/null 2>&1
     [[ -n "$branch" ]] && ( protected "$branch" && (( ! ALL )) ) && continue

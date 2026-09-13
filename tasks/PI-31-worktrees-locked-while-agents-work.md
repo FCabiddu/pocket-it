@@ -1,6 +1,6 @@
 # PI-31 — I worktree degli agenti non sono bloccati mentre sono in uso
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/worktree.sh, bin/worktree.test.sh, bin/cleanup-merged.sh, bin/cleanup-merged.test.sh
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-31-worktree-lock
+**PR**: https://github.com/FCabiddu/pocket-it/pull/59
 
 ## Goal
 Lo script di pulizia ha cancellato il worktree di un agente che stava lavorando, perché ha scambiato un branch senza commit propri per un branch già mergiato. PI-22 corregge quel criterio.
