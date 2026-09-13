@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # pocket-it doctor — zero-token pre-flight for a target project.
 # Usage (from the project root): bash ~/.claude/agents/pocket-it/bin/doctor.sh [--wave N]
+#   bash ~/.claude/agents/pocket-it/bin/doctor.sh --accept-base   — after reviewing an intentional
+#     base-branch rewrite (see the ERROR's own instructions), tell doctor to stop flagging it
 # Exit 0 = ready to launch agents; exit 1 = problems listed (fix before launching).
 set -uo pipefail
+ACCEPT_BASE=0; [[ "${1:-}" == "--accept-base" ]] && ACCEPT_BASE=1
 WAVE="${2:-}"; [[ "${1:-}" == "--wave" ]] || WAVE=""
-python3 - "$WAVE" <<'PY'
+python3 - "$WAVE" "$ACCEPT_BASE" <<'PY'
 import json, os, re, sys, glob, subprocess
 wave = sys.argv[1]
+accept_base = sys.argv[2] == "1"
 errs, warns = [], []
 def err(m): errs.append(m)
 def warn(m): warns.append(m)
@@ -39,6 +43,10 @@ if sh(f"git rev-parse --verify --quiet {base}") == "" and sh(f"git rev-parse --v
 # Server-side branch protection is not available on every plan; this is the fallback that at least
 # makes it visible, while it is still recoverable (git keeps the old commit around until gc runs).
 # The seen commit lives under the shared git-common-dir (never committed, shared by every worktree).
+# Classification never reads a git error message (round 2): git's text is localised on a build with
+# NLS support, so "does the ref exist" comes only from `ls-remote --exit-code`'s own exit status (2 =
+# no matching ref, git's documented, language-independent signal), never from stdout/stderr wording.
+GIT_ENV = {**os.environ, "LC_ALL": "C", "LANGUAGE": "C"}  # belt and braces for any stderr text still shown to a human
 def _load_seen(path):
     d = {}
     if os.path.exists(path):
@@ -52,40 +60,70 @@ def _save_seen(path, d):
         for k, v in sorted(d.items()): f.write(f"{k} {v}\n")
 common_dir = sh("git rev-parse --git-common-dir")
 has_origin = sh("git remote get-url origin") != ""
+seen_file = os.path.join(os.path.abspath(common_dir), "pocket-it", "base-seen") if common_dir else None
+
+if accept_base:
+    # a human reviewed an intentional rewrite (per the ERROR's own instructions) and tells doctor to
+    # stop flagging it. This only ever updates doctor's own bookkeeping file — never a git ref, a
+    # branch or a commit — so by construction it cannot discard any local work.
+    if not (seen_file and has_origin):
+        print("doctor --accept-base: no origin remote configured — nothing to accept"); sys.exit(1)
+    fetch = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"],
+                            capture_output=True, text=True, env=GIT_ENV)
+    if fetch.returncode != 0:
+        print(f"doctor --accept-base: could not fetch {base!r} from origin — try again once reachable"); sys.exit(1)
+    remote_sha = sh(f"git rev-parse refs/remotes/origin/{base}")
+    _save_seen(seen_file, {**_load_seen(seen_file), base: remote_sha})
+    print(f"doctor --accept-base: {base!r} accepted at {remote_sha} — future runs compare from here")
+    sys.exit(0)
+
 if common_dir and has_origin:
-    seen_file = os.path.join(os.path.abspath(common_dir), "pocket-it", "base-seen")
     seen = _load_seen(seen_file)
     prev = seen.get(base)
-    # a real fetch (not ls-remote) is required: it forces the remote-tracking ref to the live
-    # value even on a non-fast-forward (the leading '+') and pulls down the objects a later
-    # `merge-base --is-ancestor` needs — a lighter ls-remote-only check cannot run that comparison
-    # locally when the branch has moved on since the last fetch.
-    fetch = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"],
-                            capture_output=True, text=True)
-    if fetch.returncode != 0:
-        stderr = fetch.stderr.strip()
-        if re.search(r"couldn.t find remote ref", stderr, re.I):  # git's exact wording for "no such ref on the remote" — narrow on purpose, a missing/unreachable remote repository says something else and must warn, not err
-            if prev:
-                err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — recover with: git push origin {prev}:refs/heads/{base}")
-            else:
-                err(f"base branch {base!r} does not exist on origin")
+    ls = subprocess.run(["git", "ls-remote", "--exit-code", "origin", f"refs/heads/{base}"],
+                         capture_output=True, text=True, env=GIT_ENV)
+    if ls.returncode == 2:  # AC3: git's own "no matching ref" signal, independent of message language
+        if prev:
+            err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — recover with: git push origin {prev}:refs/heads/{base} — then re-run doctor.sh")
         else:
-            warn(f"could not verify base branch {base!r} integrity — origin unreachable ({stderr.splitlines()[-1] if stderr else 'no network'}), skipped")
+            err(f"base branch {base!r} does not exist on origin")
+    elif ls.returncode != 0:  # unreachable origin, bad auth, etc — never a false ERROR
+        stderr = ls.stderr.strip()
+        warn(f"could not verify base branch {base!r} integrity — origin unreachable ({stderr.splitlines()[-1] if stderr else 'no network'}), skipped")
     else:
-        remote_sha = sh(f"git rev-parse refs/remotes/origin/{base}")
-        if not prev:
-            if remote_sha: _save_seen(seen_file, {**seen, base: remote_sha})  # AC4: first run, just record
+        # ref exists on the remote: a real fetch (not ls-remote) is required from here — it forces the
+        # remote-tracking ref to the live value even on a non-fast-forward (the leading '+') and pulls
+        # down the objects the `merge-base --is-ancestor` below needs.
+        fetch = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"],
+                                capture_output=True, text=True, env=GIT_ENV)
+        if fetch.returncode != 0:
+            stderr = fetch.stderr.strip()
+            warn(f"could not verify base branch {base!r} integrity — fetch failed ({stderr.splitlines()[-1] if stderr else 'no network'}), skipped")
         else:
-            has_prev = subprocess.run(["git", "cat-file", "-e", prev + "^{commit}"], capture_output=True).returncode == 0
-            if not has_prev:
-                warn(f"cannot verify base branch {base!r}: previously seen commit {prev} is missing from the local object database (shallow clone or pruned) — fetch full history to re-enable this check")
+            remote_sha = sh(f"git rev-parse refs/remotes/origin/{base}")
+            if not prev:
+                if remote_sha: _save_seen(seen_file, {**seen, base: remote_sha})  # AC4: first run, just record
             else:
-                is_ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", prev, remote_sha], capture_output=True).returncode == 0
-                if is_ancestor:
-                    if remote_sha != prev: _save_seen(seen_file, {**seen, base: remote_sha})  # AC1: advanced normally
+                has_prev = subprocess.run(["git", "cat-file", "-e", prev + "^{commit}"], capture_output=True, env=GIT_ENV).returncode == 0
+                if not has_prev:
+                    warn(f"cannot verify base branch {base!r}: previously seen commit {prev} is missing from the local object database (shallow clone or pruned) — fetch full history to re-enable this check")
                 else:
-                    err(f"base branch {base!r} was rewritten on origin: commit {prev} is no longer in its history — recover with: git push --force origin {prev}:refs/heads/{base} (then fast-forward {base} back onto it)")
-                    # do not overwrite the seen commit: keep reporting until the branch is actually restored
+                    is_ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", prev, remote_sha], capture_output=True, env=GIT_ENV).returncode == 0
+                    if is_ancestor:
+                        if remote_sha != prev: _save_seen(seen_file, {**seen, base: remote_sha})  # AC1: advanced normally
+                    else:
+                        err(
+                            f"base branch {base!r} was rewritten on origin: commit {prev} is no longer in its history — "
+                            f"see what changed: git log {prev}..refs/remotes/origin/{base} (added by the rewrite), "
+                            f"git log refs/remotes/origin/{base}..{prev} (dropped by it) — "
+                            f"if it was accidental, recover without discarding anything pushed since: "
+                            f"git push origin {prev}:refs/heads/{base}-recovered-{prev[:12]} (a new ref, {base} itself untouched), "
+                            f"then fast-forward {base} back onto it by hand — "
+                            f"if it was intentional: first check that git log refs/remotes/origin/{base}..{prev} prints "
+                            f"nothing (else those commits only exist in the old history — stop, rescue them first with "
+                            f"git branch rescue-{prev[:12]} {prev}), then accept it with: bash bin/doctor.sh --accept-base"
+                        )
+                        # do not overwrite the seen commit here: keep reporting until it is fixed or explicitly accepted
 
 # 2. board
 tasks = {}

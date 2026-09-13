@@ -216,31 +216,65 @@ q git init -q -b main "$SCRATCH10"; q git -C "$SCRATCH10" remote add origin "$BA
 printf 'other\n' > "$SCRATCH10/g.txt"; q git -C "$SCRATCH10" add -A; q git -C "$SCRATCH10" commit -qm orphan
 q git -C "$SCRATCH10" push -q --force origin main
 
-# AC2: rewritten base — an ERROR naming the lost commit and how to get it back
+# AC2: rewritten base — an ERROR that says how to inspect it, how to recover without discarding
+# anything pushed since, and how to accept it if the rewrite was intentional (PI-29 round 2)
 OUT=$(cd "$WORK10" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
-ok "AC2 rewritten base: ERROR names the lost commit"   "has \"ERROR base branch 'main' was rewritten on origin: commit $SHA2 is no longer in its history\""
-ok "AC2 rewritten base: recovery command names it"     "has \"git push --force origin $SHA2:refs/heads/main\""
+ok "AC2 rewritten base: ERROR names the lost commit"        "has \"ERROR base branch 'main' was rewritten on origin: commit $SHA2 is no longer in its history\""
+ok "AC2 rewritten base: says how to see what changed"       "has \"git log $SHA2..refs/remotes/origin/main\" && has \"git log refs/remotes/origin/main..$SHA2\""
+ok "AC2 rewritten base: recovery command is additive, not --force onto main" "has \"git push origin $SHA2:refs/heads/main-recovered-\" && ! has \"push --force origin $SHA2:refs/heads/main\""
+ok "AC2 rewritten base: says how to accept an intentional rewrite"          'has "bash bin/doctor.sh --accept-base"'
 ok "AC2 rewritten base: doctor exits 1"                '[[ $rc -eq 1 ]]'
 ok "AC2 rewritten base: seen commit NOT advanced (keeps reporting until fixed)" 'seen_has "$WORK10" "main $SHA2"'
 
-# mutation for AC2: with the rewrite check commented out, the same scenario must go green —
-# proves the assertion above is load-bearing, not vacuous
+# the suggested recovery command, executed for real, must not discard a single local commit: it only
+# ever pushes a NEW ref (main-recovered-<sha>) and never touches main or any local branch/reflog.
+# Run it from WORK10, the clone that actually has $SHA2 as an object (SCRATCH10, the one that did the
+# bad force-push, never fetched it — same as a real operator recovering from their own clone).
+RECOVER_REF=$(grep -oE 'main-recovered-[0-9a-f]+' <<<"$OUT" | head -1)
+LOCAL_BRANCHES_BEFORE=$(git -C "$WORK10" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
+q git -C "$WORK10" push -q origin "$SHA2:refs/heads/$RECOVER_REF"
+LOCAL_BRANCHES_AFTER=$(git -C "$WORK10" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
+ok "recovery command: local branches unchanged (nothing discarded)" '[[ "$LOCAL_BRANCHES_BEFORE" == "$LOCAL_BRANCHES_AFTER" ]]'
+ok "recovery command: main on origin still untouched (still the rewritten tip)" '[[ "$(git -C "$WORK10" ls-remote origin refs/heads/main | cut -f1)" != "$SHA2" ]]'
+ok "recovery command: the new ref carries the lost commit, published, nothing lost" '[[ "$(git -C "$WORK10" ls-remote origin "refs/heads/$RECOVER_REF" | cut -f1)" == "$SHA2" ]]'
+
+# mutation for AC2: with the rewrite check replaced by a no-op, the same scenario must go green —
+# proves the assertions above are load-bearing, not vacuous
 MUT=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
-sed '/err(f"base branch {base!r} was rewritten/s/.*/                    pass  # MUTATED for PI-29 AC2 proof/' "$SCRIPT" > "$MUT"
+sed '/^                        err($/,/^                        )$/c\
+                        pass  # MUTATED for PI-29 AC2 proof' "$SCRIPT" > "$MUT"
 OUTMUT=$(cd "$WORK10" && bash "$MUT"); rcmut=$?
 rm -f "$MUT"
 ok "AC2 mutation: removing the check makes it green (proves the test is not vacuous)" '[[ $rcmut -eq 0 ]] && ! grep -q "was rewritten on origin" <<<"$OUTMUT"'
 
-# delete the branch on origin entirely
+# AC2 round 2, finding 1: classification must never rely on git's own (localisable) error text —
+# run under a non-English locale and confirm the rewrite is still an ERROR, not degraded to a warn
+OUT_IT=$(cd "$WORK10" && LC_ALL=it_IT.UTF-8 LANGUAGE=it bash "$SCRIPT")
+ok "locale it_IT: rewrite still reported as ERROR"     'grep -q "ERROR base branch .main. was rewritten" <<<"$OUT_IT"'
+OUT_DE=$(cd "$WORK10" && LC_ALL=de_DE.UTF-8 LANGUAGE=de bash "$SCRIPT")
+ok "locale de_DE: rewrite still reported as ERROR"     'grep -q "ERROR base branch .main. was rewritten" <<<"$OUT_DE"'
+
+# --accept-base: a human decision, never a git operation — updates only doctor's own bookkeeping
+BEFORE_HEAD=$(git -C "$WORK10" rev-parse HEAD); BEFORE_BRANCHES=$(git -C "$WORK10" for-each-ref --format='%(refname)' refs/heads | sort)
+OUT_ACCEPT=$(cd "$WORK10" && bash "$SCRIPT" --accept-base); rc_accept=$?
+ok "--accept-base: exits 0 and confirms the new baseline"  '[[ $rc_accept -eq 0 ]] && grep -q "accepted at" <<<"$OUT_ACCEPT"'
+ok "--accept-base: touches no local ref or commit (HEAD/branches unchanged)" \
+  '[[ "$(git -C "$WORK10" rev-parse HEAD)" == "$BEFORE_HEAD" ]] && [[ "$(git -C "$WORK10" for-each-ref --format="%(refname)" refs/heads | sort)" == "$BEFORE_BRANCHES" ]]'
+ok "--accept-base: doctor is quiet on the very next run (rewrite no longer flagged)" \
+  '! grep -q "was rewritten on origin" <<<"$(cd "$WORK10" && bash "$SCRIPT")"'
+
+# delete the branch on origin entirely (fresh SCRATCH10 command since main now differs from repo10's SHA2 baseline)
 q git -C "$SCRATCH10" push -q origin --delete main
 
-# AC3: deleted base — an ERROR naming the last known-good commit to recover from
+# AC3: deleted base — an ERROR naming the last known-good commit to recover from (unaffected by locale:
+# classified from `ls-remote --exit-code`'s exit status, never from stderr text)
 OUT=$(cd "$WORK10" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
-ok "AC3 deleted base: ERROR reported"                  "has \"ERROR base branch 'main' no longer exists on origin (last seen at $SHA2)\""
-ok "AC3 deleted base: recovery command names the commit" "has \"git push origin $SHA2:refs/heads/main\""
+ok "AC3 deleted base: ERROR reported"                  'has "ERROR base branch '"'"'main'"'"' no longer exists on origin"'
 ok "AC3 deleted base: doctor exits 1"                  '[[ $rc -eq 1 ]]'
+OUT_IT3=$(cd "$WORK10" && LC_ALL=it_IT.UTF-8 LANGUAGE=it bash "$SCRIPT")
+ok "locale it_IT: deleted base still an ERROR (not degraded to warn)" 'grep -q "ERROR base branch .main. no longer exists" <<<"$OUT_IT3"'
 
 # --- repo 11: the seen commit is shared across worktrees of the same repo (AC5) ---
 BARE11="$S/repo11-origin.git"; SEED11="$S/repo11-seed"
