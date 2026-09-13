@@ -78,7 +78,7 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 
 ## Step 3b — `Mode: overlay` (wave-wide; `run-wave` launches this, never you on your own initiative)
 
-`PRs:` carries every APPROVED (or parked-and-skipped) PR's branch in the wave, already in merge order — not PR numbers. `run-wave` calls you this way once every PR in the wave has settled to APPROVED or parked, and again from scratch whenever a PR gets new commits after the tree last went green (a `Mode: delta` re-review landing after the previous overlay pass, for instance). Skip this whole step and reply `GREEN` immediately if `PRs:` has at most one branch — nothing to overlap.
+`PRs:` carries the branch of every APPROVED PR in the wave — parked PRs never enter — already in merge order, not PR numbers. `run-wave` calls you this way once every PR in the wave has settled to APPROVED or parked, and again from scratch whenever a PR gets new commits after the tree last went green (a `Mode: delta` re-review landing after the previous overlay pass, for instance). Skip this whole step and reply `GREEN` immediately if `PRs:` has at most one branch — nothing to overlap.
 
 ```bash
 ORIG="$(pwd)"
@@ -92,14 +92,17 @@ for b in {PRs, in order}; do
     for f in $(cd "$WT" && git diff --name-only --diff-filter=U); do
       case "$f" in
         docs/SESSION_HANDOFF.md|docs/SESSION_HANDOFF_ARCHIVE.md)
-          (cd "$WT" && git show ":2:$f" > "$f.o" && git show ":1:$f" > "$f.b" && git show ":3:$f" > "$f.t" \
-            && git merge-file --union "$f.o" "$f.b" "$f.t" && mv "$f.o" "$f" && rm "$f.b" "$f.t" && git add "$f") ;;
+          (cd "$WT" && { git show ":1:$f" > "$f.b" 2>/dev/null || : > "$f.b"; } \
+            && git show ":2:$f" > "$f.o" && git show ":3:$f" > "$f.t" \
+            && git merge-file --union "$f.o" "$f.b" "$f.t" && mv "$f.o" "$f" && rm "$f.b" "$f.t" && git add "$f") \
+            || UNRESOLVED="$UNRESOLVED $f" ;;
         *) UNRESOLVED="$UNRESOLVED $f" ;;
       esac
     done
     if [ -n "$UNRESOLVED" ]; then echo "RED at PR $b — unresolved conflict in$UNRESOLVED"; (cd "$WT" && git merge --abort); git worktree remove "$WT" --force; exit 1; fi
     (cd "$WT" && git commit --no-edit)
   fi
+  if ! (cd "$WT" && git merge-base --is-ancestor "origin/$b" HEAD); then echo "RED at PR $b — not merged into the overlay tree"; (cd "$WT" && git merge --abort 2>/dev/null); git worktree remove "$WT" --force; exit 1; fi
   (cd "$WT" && {the project's whole unit and component suite — testCommand only if it runs every test, never an affected selector — never integration against a database or browser E2E})
   if [ $? -ne 0 ]; then echo "RED at PR $b — {the failing lines}"; git worktree remove "$WT" --force; exit 1; fi
 done
@@ -107,7 +110,7 @@ echo GREEN
 git worktree remove "$WT" --force
 ```
 
-`$WT` is built **absolute** (`$ORIG/…`), not relative: the loop's own cwd never moves off `$ORIG`, only each `(cd "$WT" && …)` subshell does, and a relative `$WT` would resolve against whatever the previous subshell already changed into rather than against `$ORIG` — the double-nesting that a first version of this step got wrong, caught by running it against a real conflict before writing it down (the rule two paragraphs below this one, applied to itself: verified end to end — merge, union-resolve, both green and red outcomes — before this text was final). Every command that touches the tree is `(cd "$WT" && …)` on its own line, never a bare `cd "$WT"` followed by a run of commands assumed to still be there. A conflict on `docs/SESSION_HANDOFF.md` or its archive is resolved with the union strategy above (both sides' log lines kept, no marker survives) because every developer appends a line there and a real conflict there is certain, not a defect; a conflict on any other path is unresolvable here and stops the pass at that PR, tests never run against a tree that still holds conflict markers. Tests run **after each merge**, not once at the end, so with three or more PRs the first one whose merge turns the tree red is named exactly — never guessed from "entered second".
+`$WT` is built **absolute** (`$ORIG/…`), not relative: the loop's own cwd never moves off `$ORIG`, only each `(cd "$WT" && …)` subshell does, and a relative `$WT` would resolve against whatever the previous subshell already changed into rather than against `$ORIG` — the double-nesting that a first version of this step got wrong, caught by running it against a real conflict before writing it down (the rule two paragraphs below this one, applied to itself: verified end to end — merge, union-resolve, both green and red outcomes — before this text was final). Every command that touches the tree is `(cd "$WT" && …)` on its own line, never a bare `cd "$WT"` followed by a run of commands assumed to still be there. A conflict on `docs/SESSION_HANDOFF.md` or its archive is resolved with the union strategy above (both sides' log lines kept, no marker survives) because every developer appends a line there and a real conflict there is certain, not a defect; the union result is **not a correct handoff file** (measured: the log goes over its cap and lines already rotated to the archive come back duplicated in the log) — acceptable only because this tree is detached, never pushed and removed at the end of this step. Never use it anywhere else: not in Step 1's conflict resolution on a PR branch, not in any merge that is pushed, never as `merge=union` in `.gitattributes`. A pushed conflict on the handoff is resolved by section (facts, log, archive), with the log kept at its cap. A conflict on any other path is unresolvable here and stops the pass at that PR, tests never run against a tree that still holds conflict markers. Tests run **after each merge**, not once at the end, so with three or more PRs the first one whose merge turns the tree red is named exactly — never guessed from "entered second".
 
 Report (≤ 6 lines): `GREEN` (all PRs merged clean, tests green throughout) or `RED at PR {branch} — {conflict path | failing test lines}`, plus which branches merged clean before it. `run-wave` acts on this; you do not relaunch a developer or merge anything yourself here.
 
@@ -125,7 +128,7 @@ Report (≤ 6 lines): `GREEN` (all PRs merged clean, tests green throughout) or 
 
 Record each failing criterion as `file:line — rule — what to change`. **When the finding is about a class of unsafe forms — a bypass, an injection shape, a forbidden pattern with more than one spelling — enumerate the whole class you found, not one or two instances of it**: a guard rejected for two command shapes and reopened by a third is a finding that named examples instead of the specification, and it is why the same PR comes back a third time. List every shape you can identify now, in the finding itself.
 
-**Any correction you propose inside a finding is executed before it goes in the comment, per `implementing-common.md` §9 "Database terms — real, shared, disposable"** — a regex, a filter, a rewritten guard, a rename: run it once against the real file it acts on (the board, the source, the fixtures) or a disposable copy of the data if the correction is a database query or migration, never against a shared database and never during review. Its real output, not an invented case, stands behind the proposal. On one project a reviewer proposed a regular expression untested against the real board; the developer adopted it, and the next round it silently discarded real ids the regex had never been run against.
+**Any correction you propose inside a finding is executed before it goes in the comment, per `implementing-common.md` §9 "Database terms — real, shared, disposable"** — a regex, a filter, a rewritten guard, a rename: run it once against the real file it acts on (the board, the source, the fixtures) or a disposable copy of the data if the correction is a database query or migration, never against a shared database, during review included. Its real output, not an invented case, stands behind the proposal. On one project a reviewer proposed a regular expression untested against the real board; the developer adopted it, and the next round it silently discarded real ids the regex had never been run against.
 
 **A finding about a class of anything — not only unsafe forms — names the class's dimensions next to its examples, not the examples alone.** If a finding lists sample ids, breakpoints or positions, add the axis they vary on (which edge, which side of a boundary, which viewport) and how many values that axis takes: on one project, three ids given as examples were really three positions of the same shape, one round was spent fixing only the one kept, and the axis stayed uncovered until the round after.
 
