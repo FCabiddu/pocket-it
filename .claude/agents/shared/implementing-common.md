@@ -53,11 +53,11 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 | Layer | Default | Who | When |
 |---|---|---|---|
 | Unit + component | `required` | developer, in the same PR as the code | every task that adds or changes behaviour |
-| Integration (real DB / real API) | `on-demand` | qa-engineer, as its own QA task | only when the planner justified it: money, auth, data integrity, a contract several clients depend on, or a bug that unit tests could not have caught |
+| Integration (a disposable DB, §9 / real API) | `on-demand` | qa-engineer, as its own QA task | only when the planner justified it: money, auth, data integrity, a contract several clients depend on, or a bug that unit tests could not have caught |
 | E2E (browser) | `on-demand` | qa-engineer, as its own QA task | only the 1–3 journeys the product cannot ship broken (checkout, login, the core flow) — never one per screen |
 | Accessibility | `required` (floor) | developer (axe on the component), qa if E2E exists | every frontend task |
 
-"Done well" for unit tests means: one behaviour per test named as scenario + outcome; happy path, the edge cases the acceptance criteria imply, and the error paths; behaviour, not implementation; deterministic, independent, factories over inline literals; coverage of the code you wrote, not of the repo. A task whose "Tests expected" section is empty and that changes behaviour is a planner defect — write the tests anyway and say so. A test that asserts an absence — no error, no match, no duplicate — needs a positive case proven to fail alongside it: an untouched, unread input produces the same "no error, no match" result, so without that positive case the test cannot tell a clean input from one it never looked at.
+"Done well" for unit tests means: one behaviour per test named as scenario + outcome; happy path, the edge cases the acceptance criteria imply, and the error paths; behaviour, not implementation; deterministic, independent, factories over inline literals; coverage of the code you wrote, not of the repo. A task whose "Tests expected" section is empty and that changes behaviour is a planner defect — write the tests anyway and say so. A test that asserts an absence (no error, no match, no duplicate) has a sibling test whose input does contain the thing and asserts it is found; run that sibling once with the reading step broken (wrong path, empty input) and see it go red before trusting the absence test — an input never read passes the absence test the same way a clean one does.
 
 `tests.integration` / `tests.e2e` values: `off` (never, even if asked by a task — report instead), `on-demand` (default), `on` (the planner adds a QA task per story). Unit tests cannot be turned off.
 
@@ -67,7 +67,7 @@ Use `set_status "In Progress"` before code, `set_status Done` after checks pass,
 git diff --name-only $(git merge-base "origin/$BASE" HEAD) HEAD; git status --porcelain --untracked-files=all
 ```
 
-Full suite at most once, as the gate before the PR, and not at all if hosted CI runs it. Integration (live DB) and browser E2E only if the change touches their surface. Type-check is project-wide by nature; run it after a batch of edits, not after every edit — three consecutive failing type-check rounds on the same error means stop, re-read the error, and change approach.
+Full suite at most once, as the gate before the PR, and not at all if hosted CI runs it. Integration (a disposable DB, §9) and browser E2E only if the change touches their surface. Type-check is project-wide by nature; run it after a batch of edits, not after every edit — three consecutive failing type-check rounds on the same error means stop, re-read the error, and change approach.
 
 ## 5. Shared machine and worktrees
 
@@ -136,7 +136,16 @@ Also stop, with the branch pushed, when the task needs a decision only the user 
 
 ## 9. Rules from real incidents
 
-- **A check that verifies an absence describes it by effect, never by repeating the content it checked for.** A report or a verification command that echoes back the very secret, private name or forbidden string it proves removed defeats the removal it just verified.
-- **A migration or a backfill is never applied to a project's real database before review and merge.** Prove it on a copy; once the PR is merged, whoever merges it applies it to the real database, not the task's author beforehand.
-- **No write to a shared database, ever — not to try something out, not during review, rolled back or not.** A transaction you intend to undo is still a write attempted on data other people depend on right now; use a copy or a disposable local database instead.
-- **When you resume a branch marked `ALREADY EXISTS`, the scope is every open finding from every review round, read from the PR comments — whatever the resume prompt says the scope is.** Report each finding closed, one by one; a resume prompt that claims "no other change" has already made a prior round's finding vanish unactioned, costing an extra review round to catch it.
+### Database terms — real, shared, disposable
+
+**Real** describes the engine: an actual database running real queries (Postgres, MySQL, SQLite on disk) — never a mock, a stub or an in-memory fake. It says nothing about who else can see it. **Shared** describes reach: any database instance the project's configuration or secrets point at (`.env*`, a hosted dev/staging/prod instance), or one you did not create in this run — another session, another agent, the running application or an actual user may depend on it right now. **Disposable** is real-and-not-shared: created inside this run (a container, a local file, a `createdb` restored from a dump) and dropped when done. Every `real DB` / `live DB` mention elsewhere in this file means *real-and-disposable* — a genuine engine created for the run, isolated per rollback/truncate, never the shared one; that is also what `qa-engineer.md`'s integration tests run against. **Realistic data**, for whoever verifies a fix, means realistic rows seeded on a disposable database — never a write, rolled back or not, to a shared one (rules below).
+
+- **A check that a string is absent never writes that string into anything committed or published** — report, commit message, PR title/body/comment, handoff, or test fixture. Put the pattern in a file outside the repo and run `git grep -c -f <that file>`; write only the effect in the report ("0 occurrences of the removed name across the tree"). Repeating the string anywhere committed republishes what the check proves removed.
+- **A migration or a backfill is never applied to a shared database before review and merge.** Prove it on a disposable one; state the exact command and the target database under the PR's **Manual setup steps**, and add `after merge: apply {migration} to {database}` to your 8-line return — whoever merges cannot read the diff for it.
+- **No write to a shared database, ever — insert, delete, truncate, a rolled-back transaction, none of it: not to try something out and not during review.** A transaction you intend to undo is still a write attempted on data other people depend on right now; use a disposable database instead.
+
+### Resume report format
+
+One line per finding, in the report: `closed — {commit}` or `open — {why}`. Never omit a finding that stayed open.
+
+- **Resuming a branch marked `ALREADY EXISTS`: the scope is every finding in every NEEDS WORK comment on the PR (`gh pr view $PR --comments`), plus whatever the resume prompt adds — a prompt can add scope, never remove it.** Check each finding against the current branch head, not against a commit message; report it in the Resume report format above.

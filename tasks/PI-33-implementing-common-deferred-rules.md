@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-33-implementing-common-rules
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/57
 
 ## Goal
 Tre regole per gli agenti che implementano sono emerse da incidenti reali e sono state rinviate perché `shared/implementing-common.md` era in modifica da PI-22, ora mergiata. Vanno scritte lì perché è il file che developer e qa-engineer leggono all'avvio.
