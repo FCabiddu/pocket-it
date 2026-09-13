@@ -307,12 +307,38 @@ expect_case ALLOW "$TMPROOT/feat-repo" "git commit -m \"line1${NL}line2 ; git pu
 # Mutation-provable: printing an empty verdict on ValueError turns the BLOCK rows red.
 expect_case BLOCK "$TMPROOT/feat-repo" "git commit -m \$'it\\'s' && git push origin main"
 expect_case BLOCK "$TMPROOT/feat-repo" "git commit -F- <<'MSG-END'${NL}it's a note${NL}MSG-END${NL}git push origin main"
-expect_case ALLOW "$TMPROOT/feat-repo" "printf \$'a\\'b' && git push -u origin HEAD"
+expect_case BLOCK "$TMPROOT/feat-repo" "printf \$'a\\'b' && git push -u origin HEAD"
 expect_case ALLOW "$TMPROOT/feat-repo" "git commit -F- <<'MSG-END'${NL}it's a note${NL}MSG-END${NL}git push -u origin HEAD"
 
 # F4 — a push under a shell keyword is still a push.
 expect_case BLOCK "$TMPROOT/main-repo" "if git push origin main; then echo hi; fi"
 expect_case BLOCK "$TMPROOT/feat-repo" "for r in a; do git push origin main; done"
 expect_case ALLOW "$TMPROOT/feat-repo" "if git push -u origin HEAD; then echo ok; fi"
+
+# ── PI-13 round 4. (F1) A command the lexer cannot parse has not been classified: every push in
+# it is denied, whatever it targets, unless the exact prefix sits on that push. Mutation-provable:
+# restoring the old explicit-main-only fallback turns the rows that do not spell main red.
+UNP="git commit -m \$'it\\'s'"
+expect_case BLOCK "$TMPROOT/main-repo" "$UNP && git push"
+expect_case BLOCK "$TMPROOT/main-repo" "$UNP && git push -u origin HEAD"
+expect_case BLOCK "$TMPROOT/main-repo" "$UNP${NL}git push 2>&1 | tail -3"
+expect_case BLOCK "$TMPROOT/feat-repo" "$UNP && git push origin HEAD:main"
+expect_case BLOCK "$TMPROOT/feat-repo" "$UNP && git push --all origin"
+expect_case BLOCK "$TMPROOT/feat-repo" "$UNP && git push origin refs/heads/*:refs/heads/*"
+expect_case BLOCK "$TMPROOT/feat-repo" "$UNP && git push origin :"
+expect_case BLOCK "$TMPROOT/feat-repo" "$UNP && git push origin task/x:heads/main"
+expect_case BLOCK "$TMPROOT/feat-repo" "$UNP && POCKET_IT_ORCHESTRATOR_PUSH=1 true && git push origin main"
+expect_case BLOCK "$TMPROOT/main-repo" "$UNP && POCKET_IT_ORCHESTRATOR_PUSH=1 git push --force origin main"
+expect_case ALLOW "$TMPROOT/main-repo" "$UNP && POCKET_IT_ORCHESTRATOR_PUSH=1 git push origin main"
+expect_case ALLOW "$TMPROOT/feat-repo" "$UNP && git status"
+
+# (F2) A backslash-newline continues the line; it is joined before the newline becomes a
+# separator. Mutation-provable: dropping the join turns the BLOCK rows red.
+expect_case BLOCK "$TMPROOT/feat-repo" "git push \\${NL} origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push -u \\${NL} origin HEAD:main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push \\${NL} --all origin"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --force \\${NL} origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push origin \\${NL} refs/heads/*:refs/heads/*"
+expect_case ALLOW "$TMPROOT/feat-repo" "git push -u \\${NL} origin task/x"
 
 exit $fail

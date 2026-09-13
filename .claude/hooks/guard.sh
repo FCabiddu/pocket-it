@@ -15,7 +15,8 @@
 # value, only on the push's own command word), force/delete/--mirror/--prune/--all, glob
 # refspecs, every refspec in a multi-refspec push, redirections (`2>&1 | tail`, `&>/dev/null`),
 # commands on separate lines, a push under a shell keyword (`if … ; then`, `while`, `for … do`),
-# and — when the command cannot be parsed at all — a coarse DENY of any push spelled to main.
+# backslash-newline continuations, and — when the command cannot be parsed at all — a DENY of
+# every push in it, whatever its target, unless the exact audit prefix sits on that push.
 # It DELIBERATELY DOES NOT chase forms an agent would only reach on purpose; these are left to
 # server-side branch protection, not worked around here:
 #   - a string or stdin run as a shell: `bash -c "…"`, `sh -c`, `eval`, `source`, a heredoc
@@ -129,6 +130,9 @@ def segments(raw):
     # redirections are stripped per segment. A ValueError (a command bash accepts but shlex
     # rejects) propagates to the caller, which DENIES rather than allowing blindly.
     raw = re.sub(HEREDOC_RE, ' HEREDOC ', raw, flags=re.S)
+    # A backslash-newline is a line continuation, not a separator: join it BEFORE the newline
+    # becomes a boundary, or `git push \⏎ origin main` splits into a bare push and a stray line.
+    raw = re.sub(r'\\\r?\n', ' ', raw)
     lex = shlex.shlex(raw, posix=True, punctuation_chars=';&|()<>\n')
     lex.whitespace = ' \t\r'
     lex.whitespace_split = True
@@ -279,12 +283,39 @@ def analyze(tokens, authorized, c_path, tracked_cd):
 try:
     segs = segments(cmd)
 except ValueError:
-    # The command holds a git push (the gate fired) but the lexer cannot parse it — anything
-    # bash accepts and shlex rejects (ANSI-C `$'…'`, an exotic heredoc, unbalanced quotes).
-    # The task's whole point is that an unclassifiable command must be DENIED, not waved
-    # through. Hand back to the shell, which applies a coarse explicit-main check on the
-    # stripped command as the fallback deny.
-    print('LEXER_ERROR'); sys.exit(0)
+    # The command holds `git` and `push` (the gate fired) but the lexer cannot parse it —
+    # anything bash accepts and shlex rejects (ANSI-C `$'…'`, unbalanced quotes). Such a command
+    # has NOT been classified, so nothing about its target can be trusted: ANY `git push` in it is
+    # denied — implicit, HEAD:main, --all, a glob or `:` alike, and a push to a task branch too —
+    # unless the exact audit prefix sits on that push itself (and even then never a force/delete).
+    # A coarse pass finds the pushes: heredocs and quoted strings removed, continuations joined,
+    # cut on separators, then the same assignment/keyword/global-option walk as below.
+    coarse = re.sub(HEREDOC_RE, ' ', cmd, flags=re.S)
+    coarse = re.sub(r'\\\r?\n', ' ', coarse)
+    coarse = re.sub(r'"(?:[^"\\]|\\.)*"', ' STR ', coarse)
+    coarse = re.sub(r"'[^']*'", ' STR ', coarse)
+    for piece in re.split(r'[;&|()\n]+', coarse):
+        toks = piece.split()
+        i, authorized = 0, False
+        while i < len(toks) and (toks[i] == 'env' or toks[i] in BOUNDARY_KEYWORDS
+                                 or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', toks[i])):
+            if toks[i] == 'POCKET_IT_ORCHESTRATOR_PUSH=1':
+                authorized = True
+            i += 1
+        if i >= len(toks) or toks[i] != 'git':
+            continue
+        i += 1
+        while i < len(toks) and toks[i].startswith('-'):
+            i += 2 if toks[i] in GIT_VALUE_OPTS else 1
+        if i >= len(toks) or toks[i] != 'push':
+            continue
+        rest = toks[i + 1:]
+        if not authorized:
+            print('BLOCK_UNPARSED'); sys.exit(0)
+        if (is_force(rest) or has_delete_flag(rest) or has_mirror_or_prune(rest)
+                or any(t.startswith('+') or t.startswith(':') for t in rest)):
+            print('BLOCK_FORCE'); sys.exit(0)
+    print(''); sys.exit(0)
 
 result = ''
 tracked_cd = None
@@ -330,13 +361,7 @@ PYEOF
     BLOCK_FORCE)    block "git push to main/master" "Never rewrite main." ;;
     BLOCK_IMPLICIT) block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
     BLOCK_EXPLICIT) block "git push to main/master" "Push a task branch and open a draft PR." ;;
-    LEXER_ERROR)
-      # Fallback deny: the command could not be parsed, so classification is impossible. Block
-      # any push whose destination is spelled main/master in the stripped command; a legitimate
-      # push to a task branch (or the orchestrator's own well-formed push) parses cleanly and
-      # never reaches here, so this cannot block ordinary work.
-      grep -qE 'git[[:space:]]+push([[:space:]]+-[-a-zA-Z]+)*([[:space:]]+\S+)*[[:space:]]+(\+?(refs/heads/|heads/)?(main|master))([[:space:]]|:|$)' <<<"$CMD" && block "git push to main/master" "Command could not be parsed; a push to main/master is refused. Push a task branch and open a draft PR."
-      ;;
+    BLOCK_UNPARSED) block "git push in a command the guard cannot parse" "Nothing about its target can be verified, so any push is refused — even one to a task branch. Rewrite the command without ANSI-C \$'…' quoting or unbalanced quotes, or run the push as its own command." ;;
   esac
 fi
 # Never kill by pattern on a shared machine.
