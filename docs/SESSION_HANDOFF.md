@@ -6,7 +6,6 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 <!-- max 100 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->
 - bin/worktree.sh: mai 'git worktree add --track -B <branch>' su un branch locale esistente — resetta il branch su origin e perde i commit non pushati (WIP di un agente killato). Preferire il branch locale se refs/heads/<branch> esiste.
 - guard.sh: il blocco push-su-main non copre 'git push > file' (il target della redirezione conta come posizionale), 'git -c k=v push' e 'env X=1 git push' — fail-open noti, da chiudere in un prossimo task sul hook.
-- handoff.sh: CAP is a single variable (currently 100); a stale 'max N righe' comment from an older handoff file is auto-normalised on every subcommand run, so no project file contradicts the enforced cap.
 - next-wave.sh (pre-#24): the id regex ^#\s*([A-Za-z]+-[\w.]+) truncated any id with a second embedded hyphen (T-BUG-1 -> tid T-BUG); same-prefix ids collided in the in-memory dict and the later one silently overwrote the earlier — no exception, no warning, task just vanished from the board. Fixed in #24 alongside the mixed-id sort-key TypeError; reproduced independently in review (T-BUG-1 + T-BUG-10 -> '1 total' instead of 2).
 - guard.sh force-push detection: matching only the whole tokens -f/--force misses git's clustered short flags (-uf, -fu, -qf) and the +refspec form (+main, +HEAD:main), both of which git accepts as force pushes. Any new force check must cover all three shapes.
 - A new bin/*.test.sh or .claude/hooks/*.test.sh must be added to testCommand in .pocket-it.json in the same PR, or it runs once and never again — the repo has no runner that discovers tests by convention.
@@ -40,8 +39,31 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
 - Two-way category definitions in a shared doc (e.g. shared/disposable database) must be one criterion and its exact complement, with the unit named (the database, not the server): PI-33 rounds 1-3 each shipped two independent criteria ('existed before' vs 'created and dropped') that left a case in neither (created, not dropped) and an example crossing units (createdb on a pre-existing server) in both. Check every concrete case against the text alone before closing.
 - A category defined as 'every other' must be walked with its defining criterion and complement only, never with the other category's gloss or the check examples; and when a definition widens (disposable now includes fakes), grep every use that relied on the old subset (a disposable DB as proof must say real).
+- handoff.sh (post PI-14): only log/fact write and normalise the stale 'max N righe' cap comment, on their own write — facts/show/recent/grep are pure reads (ADR-2) and never touch the file, so a stale comment survives them.
+- A command printed for a human or agent to run (recovery, release, accept) must be runnable exactly as printed from the directory the user is in: the script's absolute path (never bin/x.sh, which exists only in the pocket-it checkout), every interpolated value shell-quoted (printf %q — git branch names may contain ( ) $ '), no step described in words ('fast-forward by hand') when a command exists, and a test that extracts it from the output and executes it from a directory without bin/. PI-29/PI-31 review round 2 found each of these missing.
+- doctor.sh: a script that PRINTS a shell command for the operator to run must have that exact command extracted and eval'd by its own test (not just grepped) — round 2 shipped a recovery command that never converged, an --accept-base that assumed pocket-it's own bin/ dir, and a locale test that passed under both fixed and broken code because this machine's git has no NLS translations; all three were only caught by round 3 executing the printed text for real.
+- A recovery command a script prints must not publish to origin, under any ref name, history the base branch no longer contains: a rewrite may be the removal of a secret, and a pushed rescue-<sha> branch makes every new clone fetch it again (PI-29 round 4, measured). The printed command saves locally only (git branch rescue-<sha12> <sha>); pushing it anywhere is a person's decision, like restoring the base. Tests compare the whole git ls-remote origin before/after, not just refs/heads/<base>.
+- A test that compares a path printed by a script with its own $PWD must resolve it first (pwd -P): the script resolves symlinks, so the test is green under .claude/worktrees and red under macOS /tmp -> /private/tmp, which is where verify.sh builds its worktree (PI-29 round 5: doctor.test.sh 'absolute script path' red only in verify.sh). Reviewers and developers run verify.sh, not only the suite from .claude/worktrees.
+- Estimate: a task that defines or guards a class of cases (a hook guard, a category definition, a shared verification procedure, the commands a script prints) is M, never S, and ships its case table in the ACs — PI-12, PI-23, PI-24, PI-28, PI-29 and PI-33, all sized S or M without a table, took 4 to 7 review rounds each (retro 2026-09-13).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
+- 2026-09-13 PI-29 PR #60 approved (delta 6) — pwd -P paths, suite green via symlink and verify.sh — merge: orchestrator
+- 2026-09-13 PI-29 round 6 fix pushed — test paths resolved with pwd -P, symlink-proof — 88 tests green from a symlinked dir too
+- 2026-09-13 PI-29 PR #60 needs work (delta 5) — test path not resolved, verify RED — cause: other: test path logical vs pwd -P, earlier rounds measured only outside /tmp
+- 2026-09-13 PI-29 round 5 fix pushed — no printed command ever pushes; save is local-only, publishing left to a person — 88 tests green
+- 2026-09-13 PI-29 PR #60 needs work (delta 4) — rescue push republishes removed secret — cause: example-not-class
+- 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
+- 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
+- 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
+- 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
+- 2026-09-13 PI-29 round 2 fix pushed — locale-proof deletion check + --accept-base — 10 new tests
+- 2026-09-13 PI-29 PR #60 needs work — deleted-branch match breaks under locale
+- 2026-09-13 PI-29 PR draft — doctor.sh flags a rewritten/deleted base branch — 20 tests
+- 2026-09-13 PI-14 PR #63 approved (delta 3) — merge: orchestrator
+- 2026-09-13 PI-14 PR #63 needs work (delta 2) — argomenti in più accettati con exit 0 — cause: example-not-class
+- 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
+- 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
 - 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
 - 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
 - 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
@@ -65,20 +87,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-33 round 2 fix pushed on #57 — database terms + resume-report-format sections, 6 findings closed
 - 2026-09-13 PI-33 PR #57 needs work — database condiviso non definito, regole vaghe — cause: first-round
 - 2026-09-13 PI-33 PR #57 draft — six deferred rules in implementing-common.md, origin/$BASE diff fix — no automated tests, prose
-- 2026-09-13 PI-31 PR #59 approved (delta 3) — every printed argument quoted, 2 mutations red — merge: orchestrator
-- 2026-09-13 PI-31 round 3 pushed on PR #59 — printed commands quoted, C-quoted lock reasons read — 56 tests
-- 2026-09-13 PI-31 PR #59 needs work (delta 2) — release hint breaks on shell-special branch — cause: example-not-class
-- 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
-- 2026-09-13 PI-12 PR #39 fix pushed round 4 — guardia con --no-renames, compact 1/N e rinomina vera come casi — nessun test (documento)
-- 2026-09-13 PI-12 PR #39 needs work round 3 delta — compact esce come R, serve --no-renames — cause: example-not-class
-- 2026-09-13 PI-12 PR #39 fix pushed round 3 — segnale where fuori repo, guardia MRTD con -m --first-parent — nessun test (documento)
-- 2026-09-13 PI-12 PR #39 needs work round 2 delta — where scrive, guardia frammenti solo M — cause: example-not-class
-- 2026-09-13 PI-12 PR #39 fix pushed round 2 — frammento per invocazione, congelamento, retract, AC per PI-14…18 — nessun test (documento)
-- 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
-- 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
-- 2026-09-13 PI-31 PR #59 needs work — gh failure reported as not merged
-- 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
-- 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
-- 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
-- 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
-- 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6

@@ -110,3 +110,20 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-24 PR #48 needs work — esclusioni per asse senza forma eseguibile — cause: base-moved
 - 2026-09-13 PI-24 review round 5 pushed — exclusions moved into compass Glyph-clipping verification, round-3 Notes finding closed — 6 cases reproduced
 - 2026-09-13 PI-24 PR #48 needs work — esclusioni chiudono lati non voluti — cause: example-not-class
+- 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6
+- 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
+- 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
+- 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
+- 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
+- 2026-09-13 PI-31 PR #59 needs work — gh failure reported as not merged
+- 2026-09-13 PI-31 round 2 pushed on PR #59 — gh unknown ≠ not merged, --unlock hint, status.sh names — 21 tests
+- 2026-09-13 PI-12 PR #39 needs work — contesa spostata su _base.md — cause: first-round
+- 2026-09-13 PI-12 PR #39 fix pushed round 2 — frammento per invocazione, congelamento, retract, AC per PI-14…18 — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 2 delta — where scrive, guardia frammenti solo M — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 3 — segnale where fuori repo, guardia MRTD con -m --first-parent — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 needs work round 3 delta — compact esce come R, serve --no-renames — cause: example-not-class
+- 2026-09-13 PI-12 PR #39 fix pushed round 4 — guardia con --no-renames, compact 1/N e rinomina vera come casi — nessun test (documento)
+- 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
+- 2026-09-13 PI-31 PR #59 needs work (delta 2) — release hint breaks on shell-special branch — cause: example-not-class
+- 2026-09-13 PI-31 round 3 pushed on PR #59 — printed commands quoted, C-quoted lock reasons read — 56 tests
+- 2026-09-13 PI-31 PR #59 approved (delta 3) — every printed argument quoted, 2 mutations red — merge: orchestrator
