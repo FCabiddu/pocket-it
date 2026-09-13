@@ -91,3 +91,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
 - 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
 - 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
+- 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
