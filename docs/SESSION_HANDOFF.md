@@ -26,8 +26,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Hooks, skills and agents must be read from the installed copy (~/.claude/pocket-it-live, written only by bin/install-live.sh from the published main), never from the development checkout; after every merge into main run: bash ~/.claude/pocket-it-live/bin/install-live.sh — until the README switch is applied, the development checkout is still what every session runs.
 - A hook command that runs a guard file fails open whenever that file is absent or half-written (exit 127 is non-blocking): hook commands are written 'bash …/guard.sh || exit 2' (guard.sh exits only 0 or 2), and nothing updates the copy the hook reads in place — build beside, then exchange. A symlink rename is not atomic for readers on macOS (measured); renamex_np RENAME_SWAP of directories is.
 - A hook command must be fail-closed ('bash …/guard.sh || exit 2'): a missing guard file exits 127, and 127 does not block. Swapping a symlink with rename is not atomic for readers on macOS; exchange directories with renamex_np RENAME_SWAP (renameat2 RENAME_EXCHANGE on Linux). BSD grep -R does not follow a symlink given as an argument: resolve paths first.
+- A verification procedure written into a shared agent doc must be executed, as literally written, against every technique in the same doc that cites it (and against a decorative non-text neighbour), not only against the author's fixture: PI-23 rounds 3-4 each shipped a method that the doc's own techniques contradicted (a metrics fallback with a false negative; a step scope 'ancestors' that misses the #1 line-mask markup).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-23 PR #49 needs work (delta 4) — verification scope misses element and descendants — cause: procedure validated on own fixture, not on the compass techniques citing it
 - 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)
 - 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
 - 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
@@ -67,4 +69,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-19 fix pushed — segnali OR, vincolo assoluto, entry point privato tolto
 - 2026-09-12 PI-19 PR #42 needs work — segnali elencati ma non decidono nulla
 - 2026-09-12 PI-19 PR draft — compaction call is orchestrator's, not user's — no automated tests
-- 2026-09-12 PI-10 PR #36 conflict resolved — unione di fatti e log, 0 righe perse, MERGEABLE

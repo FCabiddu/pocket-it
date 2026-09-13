@@ -47,3 +47,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
 - 2026-09-12 PI-10 PR #36 fix pushed — F3 digit cluster + F4 base-branch deletion closed — 10 tests
 - 2026-09-12 PI-10 PR #36 approved round 3 — tutte e 4 le famiglie di push distruttivo chiuse, 58 casi, merge: orchestrator
+- 2026-09-12 PI-10 PR #36 conflict resolved — unione di fatti e log, 0 righe perse, MERGEABLE
