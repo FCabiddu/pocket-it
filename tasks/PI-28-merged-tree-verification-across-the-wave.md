@@ -1,6 +1,6 @@
 # PI-28 — Le PR di una stessa wave non vengono mai testate sovrapposte
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: .claude/skills/run-wave/SKILL.md, .claude/agents/reviewer.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-28-overlay-tests-reviewer-rules
+**PR**: https://github.com/FCabiddu/pocket-it/pull/58
 
 ## Goal
 In un progetto reale, in una sola giornata, **tre volte** due PR verdi sul proprio branch hanno dato rosso appena mergiate insieme, **senza che git segnalasse alcun conflitto**: un helper di test condiviso diventato asincrono in una PR e chiamato come sincrono nell'altra; asserzioni su stringhe in una lingua dopo il cambio della lingua predefinita in un'altra. Uno dei test non diventava nemmeno rosso, passava a vuoto su un DOM vuoto.
@@ -31,11 +31,12 @@ In una sola giornata due PR hanno richiesto quattro e cinque giri, e le cause de
 - **Un finding su una classe nomina le dimensioni della classe, non solo gli esempi.** Un reviewer ha dato tre esempi di id che erano in realtà tre posizioni diverse della stessa forma; il developer ne ha tenuto uno, e una posizione è rimasta scoperta per un altro giro.
 
 ## Acceptance criteria
-- [ ] AC1 — Data una wave con più PR destinate alla stessa base, quando le review sono finite e prima del primo merge, allora `run-wave` prescrive un passaggio che costruisce l'albero con **tutte** le PR approvate sovrapposte e ci lancia i test, indipendentemente da come erano divise nei gruppi di review.
-- [ ] AC2 — Dato quel passaggio, quando lo si legge, allora dice chi lo esegue, cosa succede se l'albero sovrapposto è rosso, e che la correzione va nella PR che entra per seconda.
-- [ ] AC3 — Dato `reviewer.md`, quando descrive la regola «mai la suite completa», allora dichiara esplicitamente l'eccezione per l'albero sovrapposto e perché.
-- [ ] AC5 — Dato `reviewer.md`, quando descrive come scrivere un finding, allora prescrive di eseguire sui dati reali ogni correzione proposta, e di nominare le dimensioni di una classe accanto agli esempi.
-- [ ] AC4 — Data una wave con una sola PR, quando si arriva al merge, allora il passaggio non si applica e non costa nulla.
+- [x] AC1 — Data una wave con più PR destinate alla stessa base, quando le review sono finite e prima del primo merge, allora `run-wave` prescrive un passaggio che costruisce l'albero con **tutte** le PR approvate sovrapposte e ci lancia i test, indipendentemente da come erano divise nei gruppi di review.
+- [x] AC2 — Dato quel passaggio, quando lo si legge, allora dice chi lo esegue, cosa succede se l'albero sovrapposto è rosso, e che la correzione va nella PR che entra per seconda.
+- [x] AC3 — Dato `reviewer.md`, quando descrive la regola «mai la suite completa», allora dichiara esplicitamente l'eccezione per l'albero sovrapposto e perché.
+- [x] AC5 — Dato `reviewer.md`, quando descrive come scrivere un finding, allora prescrive di eseguire sui dati reali ogni correzione proposta, e di nominare le dimensioni di una classe accanto agli esempi.
+- [x] AC4 — Data una wave con una sola PR, quando si arriva al merge, allora il passaggio non si applica e non costa nulla.
+- [x] AC6 — Dato un prompt di ripresa di un developer dopo un giro di review, quando lo si legge, allora non restringe mai lo scope sotto i finding aperti di tutti i giri fatti finora — mai una frase tipo «nessun'altra modifica» — e chiede al developer di dichiarare nel report quale finding è chiuso e quale resta aperto.
 
 ## Tests expected
 Nessun test automatico: sono file di prosa. Verifica rileggendo i due file per intero e controllando che il nuovo passaggio non contraddica i gruppi di review da tre né la regola sulla suite. Integration/E2E: non servono.

@@ -6,7 +6,6 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 <!-- max 100 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->
 - bin/worktree.sh: mai 'git worktree add --track -B <branch>' su un branch locale esistente — resetta il branch su origin e perde i commit non pushati (WIP di un agente killato). Preferire il branch locale se refs/heads/<branch> esiste.
 - guard.sh: il blocco push-su-main non copre 'git push > file' (il target della redirezione conta come posizionale), 'git -c k=v push' e 'env X=1 git push' — fail-open noti, da chiudere in un prossimo task sul hook.
-- handoff.sh: CAP is a single variable (currently 100); a stale 'max N righe' comment from an older handoff file is auto-normalised on every subcommand run, so no project file contradicts the enforced cap.
 - next-wave.sh (pre-#24): the id regex ^#\s*([A-Za-z]+-[\w.]+) truncated any id with a second embedded hyphen (T-BUG-1 -> tid T-BUG); same-prefix ids collided in the in-memory dict and the later one silently overwrote the earlier — no exception, no warning, task just vanished from the board. Fixed in #24 alongside the mixed-id sort-key TypeError; reproduced independently in review (T-BUG-1 + T-BUG-10 -> '1 total' instead of 2).
 - guard.sh force-push detection: matching only the whole tokens -f/--force misses git's clustered short flags (-uf, -fu, -qf) and the +refspec form (+main, +HEAD:main), both of which git accepts as force pushes. Any new force check must cover all three shapes.
 - A new bin/*.test.sh or .claude/hooks/*.test.sh must be added to testCommand in .pocket-it.json in the same PR, or it runs once and never again — the repo has no runner that discovers tests by convention.
@@ -33,14 +32,41 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - clip-path basic shapes (inset/polygon) resolve against the border-box by default, while overflow clips at the padding edge: a reset that swaps an overflow clip for a clip-path on the same side must say padding-box, or a bordered element shows content under its (transparent) border only in the reset shot — PI-24 round 6 measured a false red 291/1024 on a clean bordered scroller. Clean fixtures for any exclusion must include a border on the excused side.
 - Numerazione dei task: verificare 'ls tasks/' prima di assegnare un id — due task con lo stesso id si mascherano a vicenda in next-wave.sh (PI-12 aveva proposto PI-13, già occupato)
 - Guardie su git log --name-status: sempre -m --first-parent (altrimenti la D dentro un merge sparisce) e --no-renames (altrimenti una cancellazione con file simile esce come R e l'esito dipende da diff.renames)
+- A worktree path built as a relative $WT and cd'd into once, then reused inside per-command (cd "$WT" && …) subshells, double-nests and fails silently into whatever error path follows — build $WT absolute ($ORIG/…) instead.
+- git merge-file --union / merge=union on docs/SESSION_HANDOFF*.md produces a wrong file (measured: log over its cap, rotated lines duplicated in log and archive): use it only in a detached throwaway tree that is never pushed; a pushed handoff conflict is resolved by section. A union branch in a script must also handle add/add (no stage 1: git show :1: fails) and check that the merge really landed (merge-base --is-ancestor), or a failed resolution runs the tests without that PR and reports green.
 - worktree.sh creates agent worktrees locked ('pocket-it: agent worktree for <branch> since <date>'); cleanup-merged.sh judges such a worktree ONLY by a merged PR whose head contains its tip (never reflog/ancestry), releases the lock then removes it; any other lock reason is never released. To remove a locked worktree by hand: 'worktree.sh --unlock <repo> <branch>' first — 'git worktree remove --force' silently fails on a locked one.
 - Any script that asks gh must tell 'gh cannot answer' (missing, non-zero exit, unreadable output) from 'gh says no': reporting the unknown as 'not merged / no merged PR' leaves locks and worktrees kept forever with a false reason (cleanup-merged.sh merged_pr exits 2 for unknown). status.sh reads worktrees from --porcelain: the plain 'git worktree list' last field is 'locked'/'prunable', not the branch.
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
+- Two-way category definitions in a shared doc (e.g. shared/disposable database) must be one criterion and its exact complement, with the unit named (the database, not the server): PI-33 rounds 1-3 each shipped two independent criteria ('existed before' vs 'created and dropped') that left a case in neither (created, not dropped) and an example crossing units (createdb on a pre-existing server) in both. Check every concrete case against the text alone before closing.
+- A category defined as 'every other' must be walked with its defining criterion and complement only, never with the other category's gloss or the check examples; and when a definition widens (disposable now includes fakes), grep every use that relied on the old subset (a disposable DB as proof must say real).
 - handoff.sh (post PI-14): only log/fact write and normalise the stale 'max N righe' cap comment, on their own write — facts/show/recent/grep are pure reads (ADR-2) and never touch the file, so a stale comment survives them.
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
 - 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
+- 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
+- 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
+- 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
+- 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
+- 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
+- 2026-09-13 PI-28 PR #58 needs work round 2 — union non confinata, falso GREEN — cause: example-not-class
+- 2026-09-13 PI-28 PR #58 round 2 pushed afb6287 — 8 findings closed, overlay now Mode: overlay reviewer
+- 2026-09-13 PI-28 PR #58 needs work — overlay in sessione principale, non eseguibile — cause: first-round
+- 2026-09-13 PI-28 PR #58 draft — overlay-test wave PRs before merge, sharpen finding rules — prose task, no tests
+- 2026-09-13 PI-33 PR #57 approved round 7 delta — tre frasi alla lettera, 14 casi rimisurati — merge: orchestrator
+- 2026-09-13 PI-33 round 7 fix pushed on #57 — run's own hosting path excluded from outside-this-run
+- 2026-09-13 PI-33 PR #57 needs work round 6 delta — server che ospita il DB conta come lettore esterno — cause: example-not-class
+- 2026-09-13 PI-33 round 6 fix pushed on #57 — one criterion for shared/disposable, real restored for proof rows
+- 2026-09-13 PI-33 PR #57 needs work round 5 delta — shared senza 'lasciato', disposable non più ⊂ real — cause: other: tabella percorsa con la glossa
+- 2026-09-13 PI-33 round 5 fix pushed on #57 — shared defined strictly, disposable as complement
+- 2026-09-13 PI-33 PR #57 needs work round 4 — in-memory/fake DB senza categoria — cause: example-not-class
+- 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
+- 2026-09-13 PI-33 PR #57 needs work round 3 — shared/disposable non complementari — cause: example-not-class
+- 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
+- 2026-09-13 PI-33 PR #57 needs work — shared/disposable overlap, missing stop clause
+- 2026-09-13 PI-33 round 2 fix pushed on #57 — database terms + resume-report-format sections, 6 findings closed
+- 2026-09-13 PI-33 PR #57 needs work — database condiviso non definito, regole vaghe — cause: first-round
+- 2026-09-13 PI-33 PR #57 draft — six deferred rules in implementing-common.md, origin/$BASE diff fix — no automated tests, prose
 - 2026-09-13 PI-31 PR #59 approved (delta 3) — every printed argument quoted, 2 mutations red — merge: orchestrator
 - 2026-09-13 PI-31 round 3 pushed on PR #59 — printed commands quoted, C-quoted lock reasons read — 56 tests
 - 2026-09-13 PI-31 PR #59 needs work (delta 2) — release hint breaks on shell-special branch — cause: example-not-class
@@ -56,26 +82,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
 - 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
 - 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
-- 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
-- 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6
-- 2026-09-13 PI-24 PR #48 needs work — esclusioni chiudono lati non voluti — cause: example-not-class
-- 2026-09-13 PI-24 review round 5 pushed — exclusions moved into compass Glyph-clipping verification, round-3 Notes finding closed — 6 cases reproduced
-- 2026-09-13 PI-24 PR #48 needs work — esclusioni per asse senza forma eseguibile — cause: base-moved
-- 2026-09-13 PI-24 review round 4 pushed — qa-engineer cites compass Glyph-clipping verification instead of local method — polygon+mask cases now caught
-- 2026-09-13 PI-24 PR #48 needs work — striscia fuori dal riquadro manca ritagli interni
-- 2026-09-13 PI-24 review round 3 pushed (dup-safe) — pixel-position replaces measureText, no-tolerance rule, animations disabled — 3 findings closed
-- 2026-09-13 PI-24 review round 3 pushed — pixel-position check replaces measureText, no-tolerance rule, animations disabled in screenshots, missing-node_modules message — findings from PR #48 delta review
-- 2026-09-13 PI-23 PR #49 approved (delta 5) — scope page-wide, :120 three proofs, 4 cases re-measured — merge: orchestrator
-- 2026-09-13 PI-23 PR #49 needs work (delta 4) — verification scope misses element and descendants — cause: procedure validated on own fixture, not on the compass techniques citing it
-- 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)
-- 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
-- 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
-- 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
-- 2026-09-12 PI-23 PR #49 needs work (delta) — mask offset and clipper class incomplete — cause: example-not-class
-- 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
-- 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
-- 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
-- 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
-- 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
-- 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
-- 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
