@@ -56,5 +56,89 @@ mkbranch ac1-mixed "bin/other.test.sh" "src/foo.spec.tsx"
 OUT4=$(cd "$M" && bash "$SCRIPT" ac1-mixed main 2>&1)
 ok "mixed — shell test and JS/TS test are both counted" "echo \"\$OUT4\" | grep -qE '^info  test files in diff: 2\$'"
 
+# --- PI-34: the throwaway worktree lives under <repo>/.claude/worktrees/, never /tmp ---
+
+# AC1 — a git-call log (real git wrapped, args recorded) proves the "worktree add" target path, without
+# relying on a racy before/after diff of the real /tmp (this fixture repo itself lives under a mktemp dir).
+REALGIT=$(command -v git)
+FAKEBIN="$S/fakebin"; mkdir -p "$FAKEBIN"
+GITLOG="$S/git-calls.log"; : > "$GITLOG"
+cat > "$FAKEBIN/git" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$GITLOG"
+exec "$REALGIT" "\$@"
+SH
+chmod +x "$FAKEBIN/git"
+
+mkbranch pi34-ac1 "bin/pi34-ac1.test.sh"
+(cd "$M" && PATH="$FAKEBIN:$PATH" bash "$SCRIPT" pi34-ac1 main >/dev/null 2>&1)
+ADD_LINE=$(grep '^worktree add ' "$GITLOG" | tail -1)
+R1=1; printf '%s' "$ADD_LINE" | grep -qF "$M/.claude/worktrees/" && R1=0
+ok "PI-34 AC1 — the throwaway worktree is created under <repo>/.claude/worktrees/" "[ $R1 -eq 0 ]"
+R2=0; grep -q pocket-it-verify "$GITLOG" && R2=1
+ok "PI-34 AC1 — no worktree is created under the old shared /tmp/pocket-it-verify path" "[ $R2 -eq 0 ]"
+
+# AC2 — a SIGTERM sent once the worktree exists (a slow "affected tests" step gives us the window, via a
+# per-branch .pocket-it.json testCommand) leaves no worktree registered and no leftover directory.
+q git -C "$M" checkout -q -b pi34-ac2 main
+mkdir -p "$M/bin"; echo content > "$M/bin/pi34-ac2.test.sh"
+printf '{"testCommand":"sleep 2"}\n' > "$M/.pocket-it.json"
+q git -C "$M" add bin/pi34-ac2.test.sh .pocket-it.json
+q git -C "$M" commit -qm pi34-ac2
+q git -C "$M" push -q -u origin pi34-ac2
+q git -C "$M" checkout -q main
+
+(cd "$M" && exec bash "$SCRIPT" pi34-ac2 main) >"$S/pi34-ac2.log" 2>&1 &
+KPID=$!
+i=0
+while (( i < 100 )) && ! git -C "$M" worktree list | grep -q '.claude/worktrees/verify-'; do sleep 0.1; i=$((i+1)); done
+kill -TERM "$KPID" 2>/dev/null
+j=0
+while (( j < 100 )) && kill -0 "$KPID" 2>/dev/null; do sleep 0.1; j=$((j+1)); done
+kill -0 "$KPID" 2>/dev/null && kill -KILL "$KPID" 2>/dev/null
+wait "$KPID" 2>/dev/null
+
+R3=1; git -C "$M" worktree list | grep -q '.claude/worktrees/verify-' || R3=0
+ok "PI-34 AC2 — a SIGTERM mid-run leaves no worktree registered" "[ $R3 -eq 0 ]"
+R4=1; [ -z "$(find "$M/.claude/worktrees" -mindepth 1 -maxdepth 1 -name 'verify-*' 2>/dev/null)" ] && R4=0
+ok "PI-34 AC2 — no leftover verify-* directory under .claude/worktrees" "[ $R4 -eq 0 ]"
+
+# AC3 — a branch with slashes must never collide with an agent's own worktree sitting at the naive slug
+# (branch "agent/branch/with/slashes" naively slugs to the same "agent-branch-with-slashes" as a real,
+# differently-named branch an agent worktree is already checked out on).
+q git -C "$M" checkout -q -b agent-branch-with-slashes main
+mkdir -p "$M/bin"; echo content > "$M/bin/agent-marker.test.sh"
+q git -C "$M" add bin/agent-marker.test.sh
+q git -C "$M" commit -qm agent-branch-with-slashes
+q git -C "$M" checkout -q main
+
+AGENT_WT="$M/.claude/worktrees/agent-branch-with-slashes"
+q git -C "$M" worktree add -q "$AGENT_WT" agent-branch-with-slashes
+q git -C "$M" worktree lock --reason "pocket-it: agent worktree for agent-branch-with-slashes since 2026-01-01T00:00Z" "$AGENT_WT"
+echo wip-marker > "$AGENT_WT/WIP.txt"
+
+mkbranch "agent/branch/with/slashes" "bin/pi34-ac3.test.sh"
+OUT_AC3=$(cd "$M" && bash "$SCRIPT" "agent/branch/with/slashes" main 2>&1)
+
+R5=1; echo "$OUT_AC3" | grep -qE 'verify: (GREEN|RED)' && R5=0
+ok "PI-34 AC3 — verify.sh completes despite an agent worktree at the same naive slug" "[ $R5 -eq 0 ]"
+R6=1; [ -f "$AGENT_WT/WIP.txt" ] && R6=0
+ok "PI-34 AC3 — the agent worktree's own uncommitted file is untouched" "[ $R6 -eq 0 ]"
+LOCK_LINE=$(git -C "$M" worktree list --porcelain | awk -v w="worktree $AGENT_WT" '$0==w{f=1} f&&/^locked/{print;exit} /^$/{f=0}')
+R7=1; [ -n "$LOCK_LINE" ] && R7=0
+ok "PI-34 AC3 — the agent worktree stays registered and locked, never removed by verify.sh" "[ $R7 -eq 0 ]"
+
+q git -C "$M" worktree unlock "$AGENT_WT"
+q git -C "$M" worktree remove --force "$AGENT_WT"
+
+# AC4 — reviewer.md no longer sends a throwaway worktree to /tmp (lines 39 and 73)
+# (the script already cd'd into bin/ at the top, so the repo root is simply its parent)
+REPO_ROOT="$(cd .. && pwd)"
+RVWR="$REPO_ROOT/.claude/agents/reviewer.md"
+R8=0; grep -nE '(worktree add|WT=).*/tmp/' "$RVWR" >/dev/null 2>&1 && R8=1
+ok "PI-34 AC4 — reviewer.md never creates a worktree at a literal /tmp path" "[ $R8 -eq 0 ]"
+R9=0; grep -n '/tmp' "$RVWR" | grep -qvE '\.claude/worktrees|worktree\.sh' && R9=1
+ok "PI-34 AC4 — every remaining /tmp mention in reviewer.md points to .claude/worktrees or worktree.sh" "[ $R9 -eq 0 ]"
+
 [[ $fail -eq 0 ]] && echo "verify.test.sh: ALL PASS" || echo "verify.test.sh: FAILURES"
 exit $fail

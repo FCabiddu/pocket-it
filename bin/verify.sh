@@ -13,11 +13,18 @@ if [[ "$TARGET" =~ ^[0-9]+$ ]]; then
 else BRANCH="$TARGET"; fi
 [[ -z "$BASE" ]] && BASE=$(python3 -c 'import json;print(json.load(open(".pocket-it.json")).get("baseBranch","main"))' 2>/dev/null || echo main)
 git fetch -q origin "$BRANCH" "$BASE" 2>/dev/null
-WT="/tmp/pocket-it-verify/$(basename "$ROOT")-${BRANCH//\//-}"
-rm -rf "$WT"; mkdir -p "$(dirname "$WT")"
+# throwaway worktree, always under <repo>/.claude/worktrees/ — never /tmp (agents there have no write
+# permission for it, and cleanup-merged.sh does not know to sweep it). Trap is armed before the worktree
+# exists (WT="" is a cleanup no-op) and covers INT/TERM too, so a killed or Ctrl-C'd run still removes it.
+WT=""
+cleanup(){ [[ -n "$WT" ]] || return 0; cd "$ROOT" 2>/dev/null || cd / 2>/dev/null
+  git worktree remove --force "$WT" >/dev/null 2>&1 || { rm -rf "$WT" 2>/dev/null; git worktree prune >/dev/null 2>&1; }; }
+trap cleanup EXIT INT TERM
+EXCLUDE="$ROOT/.git/info/exclude"; mkdir -p "$(dirname "$EXCLUDE")"
+grep -qxF '.claude/worktrees/' "$EXCLUDE" 2>/dev/null || echo '.claude/worktrees/' >> "$EXCLUDE"
+WT="$ROOT/.claude/worktrees/verify-$$-${BRANCH//\//-}"   # $$ keeps it distinct from any agent's slug (worktree.sh)
+mkdir -p "$(dirname "$WT")"
 git worktree add -q --detach "$WT" "origin/$BRANCH" 2>/dev/null || git worktree add -q --detach "$WT" "$BRANCH" || { echo "cannot check out $BRANCH"; exit 2; }
-cleanup(){ git worktree remove --force "$WT" >/dev/null 2>&1; }
-trap cleanup EXIT
 cd "$WT"
 # reuse the main checkout's node_modules when the lockfile is unchanged
 if [[ -d "$ROOT/node_modules" && ! -d node_modules ]]; then

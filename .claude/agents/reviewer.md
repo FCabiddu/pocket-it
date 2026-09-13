@@ -36,7 +36,7 @@ Best-practices: `find . -type d -name best-practices | head -1` → read the fil
 gh pr view $N --json number,title,headRefName,baseRefName,isDraft,labels,mergeable,mergeStateStatus,url
 ```
 
-`CONFLICTING` → resolve against **`baseRefName`** (the PR's real base, which may be an epic branch, not `main`): in a throwaway worktree `git worktree add /tmp/{repo}-{branch} {branch}`, `git merge origin/{base}`, keep both sides unless truly redundant, commit `Merge {base} into {branch}; resolve conflicts`, push, `gh pr comment $N --body "🔀 Merge conflict resolved …"`, remove the worktree. `UNKNOWN` → re-query once after `gh pr view $N --json mergeable` a few seconds later (bounded `until` loop, max 3).
+`CONFLICTING` → resolve against **`baseRefName`** (the PR's real base, which may be an epic branch, not `main`): worktree via `WT=$(bash ~/.claude/agents/pocket-it/bin/worktree.sh "$PWD" {branch})` (lands under `.claude/worktrees/`, never `/tmp`), `cd "$WT"`, `git merge origin/{base}`, keep both sides unless truly redundant, commit `Merge {base} into {branch}; resolve conflicts`, push, `gh pr comment $N --body "🔀 Merge conflict resolved …"`, then `bash ~/.claude/agents/pocket-it/bin/worktree.sh --unlock "$PWD" {branch} && git worktree remove --force "$WT"` to remove it — always, whether the merge succeeded or not. `UNKNOWN` → re-query once after `gh pr view $N --json mergeable` a few seconds later (bounded `until` loop, max 3).
 
 ## Step 2 — CI gate (only if the project has a pipeline)
 
@@ -70,7 +70,7 @@ gh pr diff $N --name-only; gh pr diff $N | head -1500
 
 For bigger diffs read the changed files by range. Load the task file (`ID` from arguments, the PR title `T-x.y.z: …`, or the branch name) for acceptance criteria and `**Files**:`.
 
-**Local verification, only when reading cannot settle a claim** (a runtime behaviour, a test count): throwaway worktree `git worktree add /tmp/{repo}-{branch} {branch} --detach`, symlink `node_modules` from the main checkout if the lockfile is unchanged, run the **scoped** tests only (`vitest related --run <files>` / `test:affected`, compact reporter), then `git worktree remove`. Never the full suite, never DB/browser suites, never in the main checkout.
+**Local verification, only when reading cannot settle a claim** (a runtime behaviour, a test count): throwaway worktree under the repo, never `/tmp` — `WT="$PWD/.claude/worktrees/verify-$$-{branch//\//-}"; git worktree add -q --detach "$WT" {branch}`, symlink `node_modules` from the main checkout if the lockfile is unchanged, run the **scoped** tests only (`vitest related --run <files>` / `test:affected`, compact reporter), then `git worktree remove --force "$WT"` — always, even on failure. Never the full suite, never DB/browser suites, never in the main checkout.
 
 **Tests count only if you saw them run.** An APPROVED cites test names as evidence for acceptance criteria only when `verify.sh` (or your own scoped run in the throwaway worktree) executed them green in this review. A PR body's "suite green" is a claim, not evidence — on one project two of three audited PRs were merged with red tests the body called green. When the PR changes a shared value read elsewhere — a design token, a CSS variable, a constant, a schema — `git grep -l` the name across `src/` and `tests/`, and run every test file that reads it, not just the runner's "related" set: the regression lives where the value is consumed, not where it is defined.
 
