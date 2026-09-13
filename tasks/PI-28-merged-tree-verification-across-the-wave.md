@@ -1,6 +1,6 @@
 # PI-28 — Le PR di una stessa wave non vengono mai testate sovrapposte
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -14,7 +14,7 @@
 **TAD**: none
 **Contract**: none
 **Branch**: task/pi-28-overlay-tests-reviewer-rules
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/58
 
 ## Goal
 In un progetto reale, in una sola giornata, **tre volte** due PR verdi sul proprio branch hanno dato rosso appena mergiate insieme, **senza che git segnalasse alcun conflitto**: un helper di test condiviso diventato asincrono in una PR e chiamato come sincrono nell'altra; asserzioni su stringhe in una lingua dopo il cambio della lingua predefinita in un'altra. Uno dei test non diventava nemmeno rosso, passava a vuoto su un DOM vuoto.
