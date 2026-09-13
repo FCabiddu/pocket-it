@@ -1,6 +1,6 @@
 # PI-33 — Cinque regole per chi implementa, rinviate finché il file era occupato
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: .claude/agents/shared/implementing-common.md
 **TAD**: none
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-33-implementing-common-rules
+**PR**: https://github.com/FCabiddu/pocket-it/pull/57
 
 ## Goal
 Tre regole per gli agenti che implementano sono emerse da incidenti reali e sono state rinviate perché `shared/implementing-common.md` era in modifica da PI-22, ora mergiata. Vanno scritte lì perché è il file che developer e qa-engineer leggono all'avvio.
@@ -25,13 +25,15 @@ Tre regole per gli agenti che implementano sono emerse da incidenti reali e sono
 
 4. **Nessuna scrittura su un database condiviso, nemmeno per provare e nemmeno in review.** Un reviewer ha eseguito cancellazioni e inserimenti sul database reale di un progetto dentro una transazione poi annullata. Le prove sui dati si fanno su una copia o su un database locale usa e getta.
 5. **Un test che verifica l'assenza di qualcosa deve prima provare di aver letto l'input.** Più volte in una giornata un test è rimasto verde con il difetto presente perché asseriva un'assenza: nessun errore, nessun elemento, nessun duplicato. Un controllo che non ha letto niente non trova niente. Il test deve includere un caso positivo che fallisce se l'input non viene letto.
+6. **Quando riprendi un task con `Branch: … ALREADY EXISTS`, lo scope sono tutti i finding ancora aperti di tutti i giri, letti nei commenti della PR, qualunque cosa dica il prompt di ripresa.** Un prompt di ripresa con «nessun'altra modifica» ha fatto saltare un finding del giro precedente e ha causato un giro in più. Nel report si dichiara chiuso ciascun finding, uno per uno.
 
 ## Acceptance criteria
-- [ ] AC1 — Dato il file, quando lo si legge, allora contiene la regola 1, con il motivo in una riga.
-- [ ] AC2 — Dato il file, quando lo si legge, allora contiene la regola 2, e dice chi applica la migrazione sul database reale e quando.
-- [ ] AC3 — Data la §4, quando calcola i file cambiati, allora usa `origin/$BASE`, coerente con la §6.
-- [ ] AC4 — Dato il file, quando lo si legge, allora contiene le regole 4 e 5, ciascuna con il motivo in una riga.
-- [ ] AC5 — Dato il file intero, quando lo si rilegge, allora nessuna delle tre regole contraddice un'altra sezione.
+- [x] AC1 — Dato il file, quando lo si legge, allora contiene la regola 1, con il motivo in una riga.
+- [x] AC2 — Dato il file, quando lo si legge, allora contiene la regola 2, e dice chi applica la migrazione sul database reale e quando.
+- [x] AC3 — Data la §4, quando calcola i file cambiati, allora usa `origin/$BASE`, coerente con la §6.
+- [x] AC4 — Dato il file, quando lo si legge, allora contiene le regole 4 e 5, ciascuna con il motivo in una riga.
+- [x] AC5 — Dato il file intero, quando lo si rilegge, allora nessuna delle regole contraddice un'altra sezione.
+- [x] AC6 — Dato il file, quando lo si legge, allora contiene la regola 6 (scope di ripresa = tutti i finding aperti nei commenti PR, report che dichiara ciascuno chiuso), con il motivo in una riga.
 
 ## Tests expected
 Nessun test automatico: è prosa. Rileggi il file intero. Integration/E2E: non servono.

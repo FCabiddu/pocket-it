@@ -88,3 +88,27 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-30 PR #53 draft — installed copy separate from dev checkout — 36 tests
 - 2026-09-13 PI-30 PR #53 needs work — guard file absent during update fails open
 - 2026-09-13 PI-30 review fixes pushed on PR #53 — atomic swap, guard answer check, fail-closed hook, name search — 45+24 tests
+- 2026-09-13 PI-30 PR #53 approved (delta 2) — README test mutation-proven — merge: orchestrator
+- 2026-09-13 PI-6 PR #56 draft — retro/read-budget prose aligned to 100-fact cap — no new tests, prose only
+- 2026-09-13 PI-6 PR #56 needs work — developer.md legge ancora 30 righe
+- 2026-09-13 PI-6 PR #56 approved (delta 2) — developer.md read budget at 100, class grep clean — merge: orchestrator
+- 2026-09-12 PI-12 PR #39 draft — design memoria a frammenti, 5 task PI-14…PI-18 — nessun test (documento)
+- 2026-09-12 PI-23 PR #49 draft — interlinea minima da metriche font, no-clip su reveal/tendina — 0 test (prosa)
+- 2026-09-12 PI-23 PR #49 needs work — compass minimum line-height formula wrong both ways — cause: first-round
+- 2026-09-12 PI-23 CI fix pushato — tolta formula ascent+descent, misurata su 4 font reali — 0 test (prosa)
+- 2026-09-12 PI-23 PR #49 needs work (delta) — mask offset and clipper class incomplete — cause: example-not-class
+- 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
+- 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
+- 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
+- 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)
+- 2026-09-13 PI-23 PR #49 needs work (delta 4) — verification scope misses element and descendants — cause: procedure validated on own fixture, not on the compass techniques citing it
+- 2026-09-13 PI-23 PR #49 approved (delta 5) — scope page-wide, :120 three proofs, 4 cases re-measured — merge: orchestrator
+- 2026-09-13 PI-24 review round 3 pushed — pixel-position check replaces measureText, no-tolerance rule, animations disabled in screenshots, missing-node_modules message — findings from PR #48 delta review
+- 2026-09-13 PI-24 review round 3 pushed (dup-safe) — pixel-position replaces measureText, no-tolerance rule, animations disabled — 3 findings closed
+- 2026-09-13 PI-24 PR #48 needs work — striscia fuori dal riquadro manca ritagli interni
+- 2026-09-13 PI-24 review round 4 pushed — qa-engineer cites compass Glyph-clipping verification instead of local method — polygon+mask cases now caught
+- 2026-09-13 PI-24 PR #48 needs work — esclusioni per asse senza forma eseguibile — cause: base-moved
+- 2026-09-13 PI-24 review round 5 pushed — exclusions moved into compass Glyph-clipping verification, round-3 Notes finding closed — 6 cases reproduced
+- 2026-09-13 PI-24 PR #48 needs work — esclusioni chiudono lati non voluti — cause: example-not-class
+- 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6
+- 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
