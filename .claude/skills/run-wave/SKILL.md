@@ -51,6 +51,8 @@ Otherwise: launch this here, in the main session — never build or test the tre
 
 **`RED at PR {branch} — …`** → do not merge any PR of this wave yet. Everything before `{branch}` in the merge order tested green in the overlay tree, so merge those for real now, one by one, the normal way (Step 5's merge command) — this also makes the collision reproducible on `{branch}`'s own side, since its base was stale until this moment. Then relaunch `{branch}`'s developer, cause `base-moved`, first instruction: merge the now-current base and reproduce the failure before touching anything else; findings = the overlay's red output. Then one more reviewer call `Mode: delta` on that PR. Then rebuild — relaunch `Mode: overlay` again, `PRs:` now only the branches still unmerged.
 
+**`BLOCKED at PR {branch} — …`** → the tree could not be built and no test ran on `{branch}`: not a defect of that PR, never relaunch its developer, merge nothing yet. Check the input first: `git ls-remote --heads origin {branch}` returns nothing, or `{branch}` is not the PR's `headRefName` → fix `PRs:` and relaunch `Mode: overlay`. The branch is there → the git lines in the report name a tooling failure (a refused commit, a missing identity, unrelated histories): fix it in its own lane, then relaunch `Mode: overlay`.
+
 **`GREEN`** → proceed to Step 5 and merge the rest normally.
 
 ### 5. Close the wave
