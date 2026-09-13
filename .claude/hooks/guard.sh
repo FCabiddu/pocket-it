@@ -17,8 +17,8 @@
 # commands on separate lines, a push under a shell keyword (`if … ; then`, `while`, `for … do`),
 # backslash-newline continuations, and — when the command cannot be parsed at all — a DENY of
 # every push in it, whatever its target, unless the exact audit prefix sits on that push.
-# It DELIBERATELY DOES NOT chase forms an agent would only reach on purpose; these are left to
-# server-side branch protection, not worked around here:
+# For the MAIN SESSION it DELIBERATELY DOES NOT chase forms reached only on purpose; these are
+# left to server-side branch protection (for AGENTS most are denied — see WHO IS CALLING below):
 #   - a string or stdin run as a shell: `bash -c "…"`, `sh -c`, `eval`, `source`, a heredoc
 #     piped into a shell;
 #   - wrappers and indirections: `env -i`/`env -u`, `command`, `exec`, `nohup`, `time`, `nice`,
@@ -29,9 +29,40 @@
 #   - config or environment that changes what an implicit push does (`push.default`,
 #     `remote.*.push`, `GIT_DIR`/`--git-dir` pointing at another repo).
 # Adding a regex per new spelling does not converge; if these matter, they belong on the server.
-# (PI-32 will let the hook read a Claude-Code input field an agent cannot forge and forbid the
-# base branch to agents regardless of the command's shape; this guard then becomes the second
-# line and the main session's guard, and still need not chase every spelling.)
+#
+# WHO IS CALLING — the main session or an agent (PI-32).
+# The audit prefixes (POCKET_IT_ORCHESTRATOR_PUSH=1, POCKET_IT_USER_MERGE=1) were meant to tell
+# the orchestrator, which has the mandate to push the base branch and merge PRs, from the agents,
+# which never have it. A prefix alone cannot do that: it is plain text, written in the skills and
+# in this very file, so any agent that reads the repository can type it — and one did, pushing a
+# diary line to the base branch "with the orchestrator's prefix". A permission obtained by reading
+# a shared file is not a permission.
+# Claude Code itself tells the two apart. When a PreToolUse hook runs inside a subagent, its JSON
+# input carries `agent_id` and `agent_type`; when it runs in the main session those keys are
+# absent. This was checked in the field by recording the same Bash call from both contexts: the
+# subagent's input held both keys with values, the main session's input held neither. The keys
+# are written by Claude Code, not by the command and not by any file an agent can edit.
+# So the caller is read first, and the two callers get two different guards:
+#   - MAIN SESSION (no `agent_id`, no `agent_type`): everything below, unchanged — the prefixes
+#     still authorize by exact value and remain the audit trail that the push or merge was meant.
+#   - AGENT (either key present, whatever its value — empty, null, a number: in doubt it is an
+#     agent): a prefix authorizes nothing. `gh pr merge` is denied except to `agent_type` "retro",
+#     whose mandate is to merge its own text-only PRs (it still needs the merge prefix). Any push
+#     that CAN reach main/master is denied, and the decision does not depend on reading the
+#     command's quoting correctly: two independent readings run and either one denies —
+#     (A) the quote-aware classifier below, and (B) a quote-blind reading that deletes every
+#     quote and backslash instead of pairing them, so a misaligned `$'…\'…'`, a `"$(… ")"`
+#     nesting or a hidden `'…'` cannot move a push out of view. Reading B denies a push that
+#     names main/master, uses --all/--mirror/--prune, a `:` or glob refspec, a variable, an
+#     unresolvable directory, an implicit push from main/master or whose @{push} is main/master,
+#     config that changes what a push does (alias., push.default, remote.*.push, GIT_DIR…), an
+#     unparseable command, or ANSI-C escapes that can encode a word. A push to a task branch
+#     stays allowed. The price is paid in false positives, on purpose: a commit message or PR body
+#     that spells a push to main next to a `git` word is denied for agents, who pass such text
+#     through a file (`git commit -F`, `--body-file`) instead.
+#   Residue for agents, left to server-side protection: `git`/`push` reached through a variable,
+#   an eval of a variable, or an encoding outside ANSI-C quoting; a push both misread by the lexer
+#   AND cut by a quoted separator after `push` in the same command.
 set -uo pipefail
 INPUT=$(cat)
 # Match against the command with heredoc bodies and quoted strings removed, so a commit
@@ -55,9 +86,36 @@ print(c)' 2>/dev/null)
 RAW=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
 try: print(json.load(sys.stdin).get("tool_input",{}).get("command",""))
 except Exception: pass' 2>/dev/null)
+# The caller: "main" only when the input is a JSON object with neither `agent_id` nor
+# `agent_type`; anything else (either key present with any value, an unreadable input) is an
+# agent — in doubt, deny. AGENT_TYPE is the agent_type string, empty when absent or not a string.
+CALLER=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    d=None
+if isinstance(d, dict) and "agent_id" not in d and "agent_type" not in d:
+    print("main")
+else:
+    t=d.get("agent_type") if isinstance(d, dict) else None
+    print("agent:" + (t if isinstance(t, str) and "\n" not in t else ""))' 2>/dev/null)
+IS_AGENT=1; AGENT_TYPE=""
+if [[ "$CALLER" == main ]]; then IS_AGENT=0; else AGENT_TYPE=${CALLER#agent:}; fi
+# The quote-blind text (reading B for agents): continuations joined, every quote and backslash
+# deleted rather than paired, so no quoting trick can hide a word from a search on it.
+NORM=$(printf '%s' "$RAW" | python3 -c 'import sys,re
+s=sys.stdin.read(); s=re.sub(r"\x5c\r?\n", " ", s); print(re.sub(r"[\x27\x22\x5c]", "", s))' 2>/dev/null)
 
 block() { echo "BLOCKED by pocket-it guard: $1. $2" >&2; exit 2; }
 
+# An agent never merges a PR, prefix or not — except `retro`, whose mandate is to merge its own
+# text-only PRs (and which still needs the prefix below). Read on the quote-blind text: a merge
+# spelled `gh "pr" merge` or through the REST endpoint is still a merge.
+if [[ $IS_AGENT == 1 && "$AGENT_TYPE" != retro ]]; then
+  if grep -qE '(^|[^[:alnum:]_-])gh[[:space:]]+([^;&|()[:space:]]+[[:space:]]+)*pr[[:space:]]+([^;&|()[:space:]]+[[:space:]]+)*merge([^[:alnum:]_-]|$)|pulls/[^/[:space:]]+/merge' <<<"$NORM"; then
+    block "gh pr merge from an agent" "Agents never merge PRs, with or without POCKET_IT_USER_MERGE=1: the prefix is the orchestrator's audit trail, not a permission (only the retro agent merges its own PRs). Report the PR as ready; the orchestrator merges it. If this was only text (a comment or PR body), pass it through --body-file."
+  fi
+fi
 # gh pr merge requires the POCKET_IT_USER_MERGE=1 prefix: the audit trail that the merge is covered by the
 # standing default (automerge: true) or by an explicit user instruction. The orchestrator uses it by default
 # after an approved review; it is never used when the user asked for draft PRs, nor on the epic→main PR of
@@ -81,12 +139,22 @@ fi
 # hook's cwd. A parse failure (unbalanced quotes) yields ALLOW: this guards mistakes, and
 # blocking a legitimate command on a lexer error would be the worse failure. See the threat
 # model at the top for what is deliberately out of scope.
-if grep -qE '(^|[^[:alnum:]_])git([^[:alnum:]_]|$)' <<<"$CMD" && grep -qE '(^|[^[:alnum:]_])push([^[:alnum:]_]|$)' <<<"$CMD"; then
-  PUSH_VERDICT=$(python3 - "$RAW" "$PWD" <<'PYEOF'
+# For an agent the gate is the quote-blind text holding a `git` word (which no quoting can hide),
+# and the classifier runs in agent mode: the prefix never authorizes and reading B is added.
+PUSH_MODE=""
+if [[ $IS_AGENT == 1 ]]; then
+  grep -qE '(^|[^[:alnum:]_])git([^[:alnum:]_]|$)' <<<"$NORM" && PUSH_MODE=agent
+elif grep -qE '(^|[^[:alnum:]_])git([^[:alnum:]_]|$)' <<<"$CMD" && grep -qE '(^|[^[:alnum:]_])push([^[:alnum:]_]|$)' <<<"$CMD"; then
+  PUSH_MODE=main
+fi
+if [[ -n "$PUSH_MODE" ]]; then
+  PUSH_VERDICT=$(python3 - "$RAW" "$PWD" "$PUSH_MODE" <<'PYEOF'
 import sys, re, os, subprocess, shlex
 from fnmatch import fnmatch
 
-cmd, hook_cwd = sys.argv[1], sys.argv[2]
+cmd, hook_cwd, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+# The audit prefix authorizes only the main session; for an agent it is inert text.
+PREFIX_COUNTS = (mode == 'main')
 
 HEREDOC_RE = r"<<-?\s*[\x27\"]?([^\s\x27\"<>|;&()]+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)"
 # A command boundary is a run of separator punctuation (`; & && || | |& ( )` and an unquoted
@@ -280,84 +348,227 @@ def analyze(tokens, authorized, c_path, tracked_cd):
         return 'BLOCK_' + kind
     return ''
 
-try:
-    segs = segments(cmd)
-except ValueError:
-    # The command holds `git` and `push` (the gate fired) but the lexer cannot parse it —
-    # anything bash accepts and shlex rejects (ANSI-C `$'…'`, unbalanced quotes). Such a command
-    # has NOT been classified, so nothing about its target can be trusted: ANY `git push` in it is
-    # denied — implicit, HEAD:main, --all, a glob or `:` alike, and a push to a task branch too —
-    # unless the exact audit prefix sits on that push itself (and even then never a force/delete).
-    # A coarse pass finds the pushes: heredocs and quoted strings removed, continuations joined,
-    # cut on separators, then the same assignment/keyword/global-option walk as below.
-    coarse = re.sub(HEREDOC_RE, ' ', cmd, flags=re.S)
-    coarse = re.sub(r'\\\r?\n', ' ', coarse)
-    coarse = re.sub(r'"(?:[^"\\]|\\.)*"', ' STR ', coarse)
-    coarse = re.sub(r"'[^']*'", ' STR ', coarse)
-    for piece in re.split(r'[;&|()\n]+', coarse):
-        toks = piece.split()
-        i, authorized = 0, False
-        while i < len(toks) and (toks[i] == 'env' or toks[i] in BOUNDARY_KEYWORDS
-                                 or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', toks[i])):
-            if toks[i] == 'POCKET_IT_ORCHESTRATOR_PUSH=1':
-                authorized = True
+def classify_quote_aware(cmd):
+    # Reading A. Returns '' or a BLOCK_* verdict. The prefix counts only when PREFIX_COUNTS.
+    try:
+        segs = segments(cmd)
+    except ValueError:
+        # The command holds `git` and `push` (the gate fired) but the lexer cannot parse it —
+        # anything bash accepts and shlex rejects (ANSI-C `$'…'`, unbalanced quotes). Such a command
+        # has NOT been classified, so nothing about its target can be trusted: ANY `git push` in it is
+        # denied — implicit, HEAD:main, --all, a glob or `:` alike, and a push to a task branch too —
+        # unless the exact audit prefix sits on that push itself (and even then never a force/delete).
+        # A coarse pass finds the pushes: heredocs and quoted strings removed, continuations joined,
+        # cut on separators, then the same assignment/keyword/global-option walk as below.
+        coarse = re.sub(HEREDOC_RE, ' ', cmd, flags=re.S)
+        coarse = re.sub(r'\\\r?\n', ' ', coarse)
+        coarse = re.sub(r'"(?:[^"\\]|\\.)*"', ' STR ', coarse)
+        coarse = re.sub(r"'[^']*'", ' STR ', coarse)
+        for piece in re.split(r'[;&|()\n]+', coarse):
+            toks = piece.split()
+            i, authorized = 0, False
+            while i < len(toks) and (toks[i] == 'env' or toks[i] in BOUNDARY_KEYWORDS
+                                     or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', toks[i])):
+                if PREFIX_COUNTS and toks[i] == 'POCKET_IT_ORCHESTRATOR_PUSH=1':
+                    authorized = True
+                i += 1
+            if i >= len(toks) or toks[i] != 'git':
+                continue
             i += 1
-        if i >= len(toks) or toks[i] != 'git':
+            while i < len(toks) and toks[i].startswith('-'):
+                i += 2 if toks[i] in GIT_VALUE_OPTS else 1
+            if i >= len(toks) or toks[i] != 'push':
+                continue
+            rest = toks[i + 1:]
+            if not authorized:
+                return 'BLOCK_UNPARSED'
+            if (is_force(rest) or has_delete_flag(rest) or has_mirror_or_prune(rest)
+                    or any(t.startswith('+') or t.startswith(':') for t in rest)):
+                return 'BLOCK_FORCE'
+        return ''
+
+    tracked_cd = None
+    for seg in segs:
+        if len(seg) >= 2 and seg[0] == 'cd':
+            tracked_cd = seg[1]
+            continue
+        # Strip a leading `env` and NAME=VALUE assignments; the audit prefix authorizes ONLY by its
+        # exact value and ONLY on this push's own command word (not merely present in the command).
+        i = 0
+        authorized = False
+        while i < len(seg):
+            t = seg[i]
+            if t == 'env':
+                i += 1; continue
+            if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', t):
+                if PREFIX_COUNTS and t == 'POCKET_IT_ORCHESTRATOR_PUSH=1':
+                    authorized = True
+                i += 1; continue
+            break
+        if i >= len(seg) or seg[i] != 'git':
             continue
         i += 1
-        while i < len(toks) and toks[i].startswith('-'):
-            i += 2 if toks[i] in GIT_VALUE_OPTS else 1
-        if i >= len(toks) or toks[i] != 'push':
+        c_path = None
+        while i < len(seg) and seg[i].startswith('-'):
+            opt = seg[i]
+            if opt in GIT_VALUE_OPTS:
+                if opt == '-C' and i + 1 < len(seg):
+                    c_path = seg[i + 1]
+                i += 2
+            else:
+                i += 1
+        if i >= len(seg) or seg[i] != 'push':
             continue
-        rest = toks[i + 1:]
-        if not authorized:
-            print('BLOCK_UNPARSED'); sys.exit(0)
-        if (is_force(rest) or has_delete_flag(rest) or has_mirror_or_prune(rest)
-                or any(t.startswith('+') or t.startswith(':') for t in rest)):
-            print('BLOCK_FORCE'); sys.exit(0)
-    print(''); sys.exit(0)
+        v = analyze(seg[i + 1:], authorized, c_path, tracked_cd)
+        if v:
+            return v
+    return ''
 
-result = ''
-tracked_cd = None
-for seg in segs:
-    if len(seg) >= 2 and seg[0] == 'cd':
-        tracked_cd = seg[1]
-        continue
-    # Strip a leading `env` and NAME=VALUE assignments; the audit prefix authorizes ONLY by its
-    # exact value and ONLY on this push's own command word (not merely present in the command).
-    i = 0
-    authorized = False
-    while i < len(seg):
-        t = seg[i]
-        if t == 'env':
-            i += 1; continue
-        if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', t):
-            if t == 'POCKET_IT_ORCHESTRATOR_PUSH=1':
-                authorized = True
-            i += 1; continue
-        break
-    if i >= len(seg) or seg[i] != 'git':
-        continue
-    i += 1
-    c_path = None
-    while i < len(seg) and seg[i].startswith('-'):
-        opt = seg[i]
-        if opt in GIT_VALUE_OPTS:
-            if opt == '-C' and i + 1 < len(seg):
-                c_path = seg[i + 1]
-            i += 2
-        else:
-            i += 1
-    if i >= len(seg) or seg[i] != 'push':
-        continue
-    v = analyze(seg[i + 1:], authorized, c_path, tracked_cd)
-    if v:
-        result = v; break
+# ── Reading B, agents only: quote-blind. Quotes and backslashes are DELETED, never paired, so a
+# misaligned quote (an ANSI-C string with an escaped quote, a double quote nested in a command
+# substitution) cannot carry a push out of view: every word the shell
+# could execute is still a word here. Separators and shell keywords cut segments. It over-reads on
+# purpose — text inside a commit message is read as if it were a command — and denies in doubt.
+B_TOKEN_RE = re.compile(r'[;&|()\n\x60]+|[^\s;&|()\x60]+')
+BASE_WORD_RE = re.compile(r'(?<![A-Za-z0-9_.-])(main|master)(?![A-Za-z0-9_.-])')
+PUSH_WORD_RE = re.compile(r'(?<![A-Za-z0-9_])push(?![A-Za-z0-9_])')
+# Config or environment that changes what a push does or where it goes, and the plumbing push.
+CONFIG_DOUBT_RE = re.compile(r'alias\.|push\.default|remote\.[^\s=]*\.push|GIT_CONFIG|--config-env'
+                             r'|GIT_DIR|--git-dir|GIT_WORK_TREE|--work-tree|send-pack')
+# ANSI-C quoting with an escape that can encode any character (a hex, unicode or octal escape).
+ANSI_ESCAPE_RE = re.compile(r"\x24\x27[^\x27]*\\(x[0-9A-Fa-f]|u[0-9A-Fa-f]|U[0-9A-Fa-f]|[0-7]|c.)")
 
-print(result)
+def b_is_sep(t):
+    return t in BOUNDARY_KEYWORDS or all(ch in ';&|()\n\x60' for ch in t)
+
+def b_strip_redirections(tokens):
+    out, k = [], 0
+    while k < len(tokens):
+        t = tokens[k]
+        if '>' in t or '<' in t:
+            # `2>`, `>`, `&>` alone take the next token as target; `>/dev/null` carries its own.
+            k += 2 if re.fullmatch(r'\d*[<>]+&?', t) else 1
+            continue
+        out.append(t); k += 1
+    return out
+
+def b_resolve(path, base):
+    # None when the directory cannot be known: a variable, a `~user`, `-`, or a missing path.
+    if path is None:
+        return base
+    if '\x24' in path or path == '-' or re.match(r'~[^/]', path):
+        return None
+    p = os.path.expanduser(path)
+    p = p if p.startswith('/') else base.rstrip('/') + '/' + p
+    return p if os.path.isdir(p) else None
+
+def b_push_destination(path):
+    try:
+        r = subprocess.run(["git", "-C", path, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{push}"],
+                           capture_output=True, text=True, timeout=3)
+        return r.stdout.strip() if r.returncode == 0 else ''
+    except Exception:
+        return ''
+
+def agent_doubt(raw):
+    n = re.sub(r'\\\r?\n', ' ', raw)
+    n = re.sub(r'[\x27\x22\x5c]', '', n)
+    toks = B_TOKEN_RE.findall(n)
+    git_seen, pushes = False, []
+    for k, t in enumerate(toks):
+        if b_is_sep(t):
+            continue
+        if git_seen and PUSH_WORD_RE.search(t):
+            pushes.append(k)
+        if t == 'git' or t.endswith('/git'):
+            git_seen = True
+    if git_seen and ANSI_ESCAPE_RE.search(raw):
+        return 'ANSI-C quoting with a hex, unicode or octal escape can spell any word, so the command cannot be read'
+    if not pushes:
+        return ''
+    try:
+        segments(raw)
+    except ValueError:
+        return 'the command cannot be parsed, so the target of its push cannot be verified'
+    m = CONFIG_DOUBT_RE.search(n)
+    if m:
+        return '"%s" can change what a push does or where it goes' % m.group(0)
+    if re.search(r'(^|\s)(\x27\x27|\x22\x22)(\s|$)', raw):
+        return 'an empty quoted argument can be an empty refspec'
+    for k in pushes:
+        s = k
+        while s > 0 and not b_is_sep(toks[s - 1]):
+            s -= 1
+        e = k + 1
+        while e < len(toks) and not b_is_sep(toks[e]):
+            e += 1
+        tail = b_strip_redirections(toks[k + 1:e])
+        # A strict push is `git [global options] push` in one segment: the only kind whose
+        # arguments are read as refspecs and whose implicit target is resolved.
+        strict, c_path = False, None
+        g = max((j for j in range(s, k) if toks[j] == 'git' or toks[j].endswith('/git')), default=None)
+        if g is not None and toks[k] == 'push':
+            j = g + 1
+            while j < k and toks[j].startswith('-'):
+                if toks[j] in GIT_VALUE_OPTS:
+                    if toks[j] == '-C' and j + 1 < k:
+                        c_path = toks[j + 1]
+                    j += 2
+                else:
+                    j += 1
+            strict = (j == k)
+        for t in [toks[k]] + tail:
+            if BASE_WORD_RE.search(t):
+                return 'the push names main/master'
+            if t in ('--all', ':', '+:') or t.startswith('--mirror') or t.startswith('--prune'):
+                return '%s pushes or prunes every branch, main included' % t
+            if '*' in t and (strict or ':' in t or '/' in t):
+                return 'a glob refspec can match main/master'
+            if strict and ('\x24' in t or '\x60' in t):
+                return 'a variable or substitution hides the target of the push'
+        if not strict:
+            continue
+        refs = push_positionals(tail)[1:]
+        if refs and not any(strip_plus(r)[0] in ('HEAD', '@') for r in refs):
+            continue                                   # explicit destinations, none of them the base
+        cd_path = None
+        for j in range(k - 1, -1, -1):
+            if toks[j] in ('cd', 'pushd') and (j == 0 or b_is_sep(toks[j - 1])):
+                nxt = toks[j + 1] if j + 1 < len(toks) and not b_is_sep(toks[j + 1]) else '~'
+                cd_path = nxt
+                break
+        base = hook_cwd
+        if cd_path is not None:
+            base = b_resolve(cd_path, hook_cwd)
+            if base is None:
+                return 'the directory of an implicit push (%s) cannot be resolved' % cd_path
+        d = b_resolve(c_path, base)
+        if d is None:
+            return 'the directory of an implicit push (-C %s) cannot be resolved' % c_path
+        if branch_of(d) in ('main', 'master'):
+            return 'an implicit push from a checkout on main/master'
+        if not refs:
+            dest = b_push_destination(d)
+            if dest and norm(dest.split('/', 1)[-1]) in ('main', 'master'):
+                return 'the current branch pushes to %s by its upstream configuration' % dest
+    return ''
+
+if mode == 'agent':
+    verdict = classify_quote_aware(cmd)
+    if verdict:
+        reason = {'BLOCK_FORCE': 'it rewrites or removes the base branch',
+                  'BLOCK_UNPARSED': 'the command cannot be parsed, so the target of its push cannot be verified'
+                  }.get(verdict, 'the push reaches main/master')
+        print('BLOCK_AGENT ' + reason)
+    else:
+        reason = agent_doubt(cmd)
+        print('BLOCK_AGENT ' + reason if reason else '')
+else:
+    print(classify_quote_aware(cmd))
 PYEOF
 )
   case "$PUSH_VERDICT" in
+    BLOCK_AGENT*)   block "git push that can reach main/master, from an agent (${PUSH_VERDICT#BLOCK_AGENT })" "Agents never push the base branch — not with POCKET_IT_ORCHESTRATOR_PUSH=1, which authorizes only the main session, and not in any spelling: in doubt the guard denies. Push your task branch in a command of its own, e.g. git push -u origin HEAD from your worktree or git push -u origin <task-branch> spelled literally, with no main/master and no variable in that command; pass commit messages or PR bodies that mention such a push through a file (git commit -F, --body-file). Diary lines (handoff.sh log/fact) are committed on your own task branch and travel with your PR; with no branch of your own, leave them uncommitted in the working tree — the orchestrator commits them on the base branch when it closes the wave." ;;
     BLOCK_FORCE)    block "git push to main/master" "Never rewrite main." ;;
     BLOCK_IMPLICIT) block "git push to main/master" "Push a task branch and open a draft PR. Current branch is main — use a branch and a PR." ;;
     BLOCK_EXPLICIT) block "git push to main/master" "Push a task branch and open a draft PR." ;;
