@@ -1,6 +1,6 @@
 # PI-34 — verify.sh e il reviewer creano le worktree usa e getta sotto .claude/worktrees, mai in /tmp
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: `bin/verify.sh`, `bin/verify.test.sh`, `.claude/agents/reviewer.md`
 **TAD**: none — follow existing conventions (`bin/worktree.sh`, `.claude/worktrees/`)
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-34-verify-worktree-not-in-tmp
+**PR**: https://github.com/FCabiddu/pocket-it/pull/64
 
 ## Goal
 `bin/verify.sh` crea la worktree di verifica in `/tmp/pocket-it-verify/…` (riga 16). `reviewer.md` ne fa creare altre due in `/tmp/{repo}-{branch}`: una per risolvere i conflitti (riga 39), una per la verifica locale (riga 73). Tutto questo va contro la regola «worktree sotto `.claude/worktrees/`, mai `/tmp`». In una sola giornata sei reviewer non hanno usato `verify.sh` per questo motivo e hanno rifatto i controlli a mano. Da `/tmp` alcuni push sono stati anche negati dai permessi della sessione. Ogni worktree usa e getta creata da uno script o prescritta da un agente deve stare sotto `<repo>/.claude/worktrees/` e va rimossa sempre, anche quando lo script fallisce o viene interrotto.
