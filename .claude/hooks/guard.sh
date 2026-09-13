@@ -382,7 +382,8 @@ PYEOF
 CMD=$(printf '%s' "$DROPPED" | python3 -c 'import sys,re
 c=sys.stdin.read()
 c=re.sub(r"<<-?\s*[\x27\"]?([^\s\x27\"<>|;&()]+)[\x27\"]?[^\n]*\n.*?\n\s*\1\s*(?=\n|$)", " HEREDOC ", c, flags=re.S)
-c=re.sub(r"\"(?:[^\"\\\\]|\\\\.)*\"", " STR ", c)
+# A double-quoted string may hold escaped characters (\x5c$, \x5c"): one backslash escapes one character.
+c=re.sub(r"\"(?:[^\"\\\\]|\\.)*\"", " STR ", c)
 c=re.sub(r"\x27[^\x27]*\x27", " STR ", c)
 print(c)' 2>/dev/null)
 [[ -z "$CMD" ]] && CMD=$DROPPED

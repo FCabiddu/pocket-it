@@ -537,6 +537,12 @@ expect_case ALLOW "$TMPROOT/neutral" "gh pr comment 3 --body killall"   # (T)
 agent_case ALLOW "$TMPROOT/neutral" "$DEV" "git commit -qm pkill-is-blocked"   # (T)
 expect_case ALLOW "$TMPROOT/neutral" "git commit -m \"never pkill node\""
 expect_case BLOCK "$TMPROOT/neutral" "gh pr comment 3 --body killall && pkill node"
+# A quoted positional argument with an escaped character (\$, \") is still one string: its words
+# stay hidden (before this round one backslash un-hid the whole string), and the real command after it is still seen.
+expect_case ALLOW "$TMPROOT/neutral" "handoff.sh fact \"cost \\\$5, never pkill by pattern\""
+expect_case ALLOW "$TMPROOT/neutral" "echo \"in \\\$HOME; gh pr merge 3 runs later\""
+expect_case BLOCK "$TMPROOT/neutral" "handoff.sh fact \"cost \\\$5\" && pkill node"
+expect_case BLOCK "$TMPROOT/neutral" "echo \"a \\\\\" && gh pr merge 3"
 agent_case BLOCK "$TMPROOT/neutral" "$DEV" "git commit -qm x; killall node"
 
 # Rule: APP_STATUS → prod.
