@@ -33,6 +33,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - clip-path basic shapes (inset/polygon) resolve against the border-box by default, while overflow clips at the padding edge: a reset that swaps an overflow clip for a clip-path on the same side must say padding-box, or a bordered element shows content under its (transparent) border only in the reset shot — PI-24 round 6 measured a false red 291/1024 on a clean bordered scroller. Clean fixtures for any exclusion must include a border on the excused side.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
 - 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
 - 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6
 - 2026-09-13 PI-24 PR #48 needs work — esclusioni chiudono lati non voluti — cause: example-not-class
@@ -72,4 +73,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
 - 2026-09-13 PI-13 review round 3 pushed — redirections, newlines, keywords covered; lexer error denies — 161 guard cases, 4 mutations proven
 - 2026-09-13 PI-22 PR #46 approved round 3 — copied/renamed branches kept, §5/§6 aligned — merge: user
-- 2026-09-12 PI-25 PR #50 needs work (delta) — id regex drops alphanumeric real ids — cause: example-not-class
