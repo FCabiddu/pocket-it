@@ -42,6 +42,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A test that compares a path printed by a script with its own $PWD must resolve it first (pwd -P): the script resolves symlinks, so the test is green under .claude/worktrees and red under macOS /tmp -> /private/tmp, which is where verify.sh builds its worktree (PI-29 round 5: doctor.test.sh 'absolute script path' red only in verify.sh). Reviewers and developers run verify.sh, not only the suite from .claude/worktrees.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-29 round 6 fix pushed — test paths resolved with pwd -P, symlink-proof — 88 tests green from a symlinked dir too
 - 2026-09-13 PI-29 PR #60 needs work (delta 5) — test path not resolved, verify RED — cause: other: test path logical vs pwd -P, earlier rounds measured only outside /tmp
 - 2026-09-13 PI-29 round 5 fix pushed — no printed command ever pushes; save is local-only, publishing left to a person — 88 tests green
 - 2026-09-13 PI-29 PR #60 needs work (delta 4) — rescue push republishes removed secret — cause: example-not-class
@@ -81,4 +82,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 BUDGET PI-23 4 review rounds vs S(120) — progressing: single glyph-clipping-verification method, zero threshold, 3 categories reproduced — each round closed a real gap (formula, offset limit, clipper class, metrics fallback+threshold)
 - 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
 - 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
-- 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
