@@ -30,6 +30,7 @@ for a in "$@"; do case "$a" in --dry-run) DRY=1;; --all) ALL=1;; *) echo "usage:
 git rev-parse --git-common-dir >/dev/null 2>&1 || { echo "usage: run cleanup-merged.sh inside a git repository" >&2; exit 2; }
 
 abs(){ (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)   # worktree.sh sits beside this script: the --unlock hint is a runnable command
 CUR=$(abs "$(git rev-parse --show-toplevel)")
 
 # Parse `git worktree list --porcelain` (bash 3.2 friendly: one "path|sha|branch|flags|lock reason" string per entry;
@@ -78,19 +79,28 @@ history(){ # $1 tip sha, $2 branch → reads the branch's reflog oldest first; p
   elif [[ -z "$start" ]]; then echo unknown   # no reflog, pruned past the creation, or copied/renamed: cannot tell, so keep
   elif [[ "$start" == "origin/$2" || "$start" == "refs/remotes/origin/$2" ]]; then echo "remote $start"
   else echo "fresh $start"; fi; }
-merged_pr(){ # $1 sha, $2 branch → exit 0 printing "PR #n merged" when a merged PR's head contains the tip; else exit 1,
-  # printing "commits not in merged PR #n" when merged PRs exist without it, nothing when there is none (or no gh)
-  local n oid found=""
-  command -v gh >/dev/null 2>&1 || return 1
+merged_pr(){ # $1 sha, $2 branch → three answers, never a "no" that is really an "I don't know":
+  #   exit 0 "PR #n merged"                  a merged PR's head contains the tip
+  #   exit 1 "commits not in merged PR #n"   merged PRs exist, none contains the tip
+  #   exit 1 ""                              gh answered: no merged PR for the branch
+  #   exit 2 "gh not available" | "gh pr list failed (exit N)" | "gh pr list output unreadable"   cannot tell
+  local out rc n oid found="" line
+  command -v gh >/dev/null 2>&1 || { echo "gh not available"; return 2; }
+  out=$(cd "$MAIN" && gh pr list --state merged --head "$2" --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null); rc=$?
+  (( rc == 0 )) || { echo "gh pr list failed (exit $rc)"; return 2; }
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    [[ "$line" =~ ^[0-9]+\ [0-9a-f]{40}$ ]] || { echo "gh pr list output unreadable"; return 2; }
+  done <<<"$out"
   while read -r n oid; do
-    [[ -z "$n" || "$n" == null ]] && continue
-    [[ -n "$oid" ]] && is_anc "$1" "$oid" && { echo "PR #$n merged"; return 0; }
+    [[ -z "$n" ]] && continue
+    is_anc "$1" "$oid" && { echo "PR #$n merged"; return 0; }
     found="$n"
-  done < <(cd "$MAIN" && gh pr list --state merged --head "$2" --json number,headRefOid --jq '.[] | "\(.number) \(.headRefOid)"' 2>/dev/null)
+  done <<<"$out"
   [[ -n "$found" ]] && echo "commits not in merged PR #$found"
   return 1; }
 decide(){ # $1 sha, $2 branch → prints the reason; exit 0 = remove, 1 = keep
-  local k m r
+  local k m r rc
   k=$(history "$1" "$2")
   case "$k" in
     unknown) echo "reflog cannot tell whether it has commits of its own"; return 1;;
@@ -99,7 +109,11 @@ decide(){ # $1 sha, $2 branch → prints the reason; exit 0 = remove, 1 = keep
   esac
   # Squash-merged PRs leave no ancestry: ask gh even if the remote branch still exists, and remove only if the PR's
   # head contains the local tip — commits made after the merge are work the PR never carried.
-  r=$(merged_pr "$1" "$2") && { echo "$r"; return 0; }
+  r=$(merged_pr "$1" "$2"); rc=$?
+  (( rc == 0 )) && { echo "$r"; return 0; }
+  if (( rc == 2 )); then
+    [[ "$k" == remote* ]] && echo "created from ${k#remote }, merged PRs unknown: $r" || echo "not merged into a base, merged PRs unknown: $r"
+    return 1; fi
   [[ -n "$r" ]] && { echo "$r"; return 1; }
   [[ "$k" == remote* ]] && { echo "created from ${k#remote }, no merged PR contains it"; return 1; }
   echo "not merged"; return 1; }
@@ -129,21 +143,29 @@ remove(){ # $1 path, $2 reason, $3 branch to delete afterwards ("" for none), $4
     [[ -n "$lr" ]] && g worktree lock --reason "$lr" "$p" >/dev/null 2>&1   # not removed: it stays protected as it was
     keep "$p" "git worktree remove failed"; k=$(kb "$p"); after=$((after+${k:-0})); fi; }
 locked_entry(){ # $1 path, $2 sha, $3 branch, $4 lock reason → the only way out of a lock is a merged PR containing the tip
-  local p="$1" sha="$2" b="$3" lr="$4" shown st why
+  local p="$1" sha="$2" b="$3" lr="$4" shown st why rc rel
   shown="locked: ${lr:-no reason given}"
-  case "$lr" in "pocket-it: "*) ;; *) keep "$p" "$shown; not a pocket-it lock, never released"; return 0;; esac
+  case "$lr" in "pocket-it: "*) ;; *) keep "$p" "$shown; not a pocket-it lock, never released — its owner runs: git worktree unlock $(printf '%q' "$p")"; return 0;; esac
   if [[ ! -d "$p" ]]; then   # deleted from disk: the lock protects nothing any more, only the branch is left to judge
     if (( DRY )); then echo "would unlock and prune worktree $p (missing on disk)"
-    else g worktree unlock "$p" >/dev/null 2>&1; g worktree prune >/dev/null 2>&1; echo "unlocked and pruned worktree $p (missing on disk)"; fi
+    elif g worktree unlock "$p" >/dev/null 2>&1; then g worktree prune >/dev/null 2>&1; echo "unlocked and pruned worktree $p (missing on disk)"
+    else keep "$p" "$shown; missing on disk, unlock failed"; return 0; fi
     removed=$((removed+1))
-    [[ -n "$b" ]] && ! { protected "$b" && (( ! ALL )); } && merged_pr "$sha" "$b" >/dev/null && drop_branch "$b"
-    return 0; fi
+    [[ -z "$b" ]] && return 0
+    protected "$b" && (( ! ALL )) && { echo "kept branch $b (protected)"; return 0; }
+    why=$(merged_pr "$sha" "$b"); rc=$?
+    (( rc == 0 )) && { drop_branch "$b"; return 0; }
+    (( rc == 2 )) && why="merged PRs unknown: $why"
+    echo "kept branch $b (${why:-no merged PR contains its tip})"; return 0; fi
   [[ -z "$b" ]] && { keep "$p" "$shown; no branch"; return 0; }
-  protected "$b" && (( ! ALL )) && { keep "$p" "$shown; protected branch $b"; return 0; }
+  rel="release if abandoned or merged without a PR: bash $(printf '%q' "$SELF_DIR/worktree.sh") --unlock $(printf '%q' "$MAIN") $b"
+  protected "$b" && (( ! ALL )) && { keep "$p" "$shown; protected branch $b (--all to judge it); $rel"; return 0; }
   st=$(git -C "$p" status --porcelain 2>/dev/null) || { keep "$p" "$shown; git status failed"; return 0; }
   [[ -n "$st" ]] && { keep "$p" "$shown; dirty"; return 0; }
-  why=$(merged_pr "$sha" "$b") || { keep "$p" "$shown; ${why:-no merged PR contains its tip}"; return 0; }
-  remove "$p" "$why, lock released" "$b" "$lr"; }
+  why=$(merged_pr "$sha" "$b"); rc=$?
+  (( rc == 0 )) && { remove "$p" "$why, lock released" "$b" "$lr"; return 0; }
+  (( rc == 2 )) && { keep "$p" "$shown; merged PRs unknown: $why; $rel"; return 0; }
+  keep "$p" "$shown; ${why:-no merged PR contains its tip}; $rel"; }
 
 i=0
 for e in "${entries[@]}"; do
