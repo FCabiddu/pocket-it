@@ -1,6 +1,6 @@
 # PI-22 — `cleanup-merged.sh` cancella il worktree di un agente che sta ancora lavorando
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/cleanup-merged.sh, bin/cleanup-merged.test.sh, .claude/agents/shared/implementing-common.md
 **TAD**: none — segui le convenzioni degli altri script in `bin/`
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-22-cleanup-keeps-running-worktrees
+**PR**: https://github.com/FCabiddu/pocket-it/pull/46
 
 ## Goal
 `bin/cleanup-merged.sh` rimuove il worktree e il branch locale delle PR già mergiate. Le pipeline lo lanciano **dopo ogni merge**, anche mentre altri agenti stanno lavorando in parallelo nei loro worktree.
@@ -35,11 +35,11 @@ Due difetti, in due posti diversi, e vanno chiusi entrambi.
 **B. L'agente, perso il worktree, ha ripiegato in silenzio sul checkout principale.** Qualunque sia la causa per cui il percorso del worktree non esiste più, un agente che lavora fuori dal proprio worktree modifica l'albero condiviso di tutte le altre sessioni. Deve fermarsi e riferire, non proseguire altrove.
 
 ## Acceptance criteria
-- [ ] AC1 — Dato un worktree il cui branch non ha nessun commit oltre la base, quando lo script gira, allora il worktree e il branch restano, e lo script dice perché li ha conservati.
-- [ ] AC2 — Dato un worktree il cui branch ha commit propri ed è stato mergiato per antenato nella base, quando lo script gira, allora viene rimosso come oggi.
-- [ ] AC3 — Dato un worktree il cui branch corrisponde a una PR mergiata con squash, quando lo script gira, allora viene rimosso come oggi.
-- [ ] AC4 — Dato un worktree con modifiche non committate, quando lo script gira, allora resta come oggi.
-- [ ] AC5 — Date le regole condivise lette all'avvio da ogni agente che implementa, quando il percorso del proprio worktree non esiste più, allora prescrivono di fermarsi e riferire, e vietano esplicitamente di proseguire nel checkout principale o in qualunque altra directory.
+- [x] AC1 — Dato un worktree il cui branch non ha nessun commit oltre la base, quando lo script gira, allora il worktree e il branch restano, e lo script dice perché li ha conservati.
+- [x] AC2 — Dato un worktree il cui branch ha commit propri ed è stato mergiato per antenato nella base, quando lo script gira, allora viene rimosso come oggi.
+- [x] AC3 — Dato un worktree il cui branch corrisponde a una PR mergiata con squash, quando lo script gira, allora viene rimosso come oggi.
+- [x] AC4 — Dato un worktree con modifiche non committate, quando lo script gira, allora resta come oggi.
+- [x] AC5 — Date le regole condivise lette all'avvio da ogni agente che implementa, quando il percorso del proprio worktree non esiste più, allora prescrivono di fermarsi e riferire, e vietano esplicitamente di proseguire nel checkout principale o in qualunque altra directory.
 
 ## Tests expected
 Un caso per AC1-AC4 in `bin/cleanup-merged.test.sh`, nello stile dei casi esistenti. Prova per mutazione AC1: togliendo la condizione sui commit propri, il suo caso deve diventare rosso. AC5 è prosa, si verifica leggendo il diff. Integration/E2E: non servono.

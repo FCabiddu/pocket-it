@@ -51,8 +51,12 @@ for tid in sorted(status, key=sort_key):
     taken.update(files_of.get(tid, []))
     ready.append(tid)
 for tid in ready:
+    # model_hint is a starting suggestion from Risk alone, never the decision: the orchestrator
+    # picks the model per launch (irreversible/destructive work, security boundaries, open-ended
+    # reasoning, wide surface -> opus; mechanical, well-specified or prose-only -> sonnet) and is
+    # never expected to just forward this value.
     print(json.dumps({"issue": tid, "label": label[tid], "risk": risk[tid], "status": status[tid],
-                      "model": "opus" if risk[tid].lower() == "high" else "sonnet", "budget": budget.get(tid, ""),
+                      "model_hint": "opus" if risk[tid].lower() == "high" else "sonnet", "budget": budget.get(tid, ""),
                       "agent": "qa-engineer" if label[tid].upper() == "QA" else "developer",
                       "files": files_of.get(tid, [])}, ensure_ascii=False))
 inprog = [t for t in status if status[t].lower() == "in progress"]

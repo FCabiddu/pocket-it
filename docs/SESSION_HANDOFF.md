@@ -15,14 +15,25 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - guard.sh force-push detection must cover short-flag clusters mixed with digit flags (-f4/-4f, IPv4/IPv6) and destructive base-branch removal (-d/--delete, empty-source refspec, --mirror/--prune) — not just -f/--force as separate tokens
 - doctor.sh / next-wave.sh id regex, identical in both files: `^#\s*(?=[A-Za-z][A-Za-z0-9]*-[^\s:]*\d)([A-Za-z][A-Za-z0-9]*(?:[-.][A-Za-z0-9]+)+)` — a letter-led prefix (alphanumeric segments allowed, e.g. E2E, I18N, A11Y), one or more `-`/`.` segments, a digit required somewhere past the first hyphen (lookahead), no trailing punctuation swallowed. A plain hyphenated word ("Follow-up") has no digit and is not an id; a segment that mixes letters and digits (`STYLE-PR1`, `WELCOME-A11Y-1`) or a letter suffix on the number (`T-1.2.3a` vs `T-1.2.3b`, `QF-10` vs `QF-10b`) must stay distinct — a prior regex requiring a pure-digit final segment silently dropped the former and merged the latter, the same disappearing-task failure PI-25 exists to catch. Verified by a per-file id comparison against `main` on a real ~400-file board: only word-only, digit-free headers change (id -> none); zero cases of two different ids collapsing to the same string. doctor.sh's duplicate check counts only a declared header id (never the filename-guess fallback); a summary EPIC/STORY file is excluded before the check even sees it (same pre-existing files filter). Do not tighten this regex again without running it file-by-file against a real board, not just counting errors.
 - a test asserting 'no error/no duplicate' on a single, un-duplicated fixture is vacuous if the checked condition also produces no error when the id/shape is simply not recognised at all — it can't distinguish 'read and clean' from 'not read'. To prove a shape IS read, declare the same id twice (two files) and require the positive signal (the duplicate error) to fire.
+- cleanup-merged.sh: ancestry or topology never proves a branch has work of its own — a fresh branch is an ancestor of its base, and the base it came from may since be merged and deleted. 'Commits of its own' is read from the branch's own reflog (a commit/cherry-pick/revert/am/merge-commit entry, or a rebase replaying one, still in the tip's history); fresh (only 'branch: Created from') and no-reflog branches are kept; 'Branch: copied'/'Branch: renamed' entries restart the reading (git branch -c/-m carry another ref's reflog, commit entries included). Commit criteria cannot tell a live agent on an already-merged branch from a leftover: liveness is the worktree lock (PI-31). A merged PR removes only if its headRefOid contains the local tip. Under set -o pipefail never 'producer | grep -q' (the early exit SIGPIPEs the producer and the pipe reads as false).
+- PI-26: a task's Files list can miss occurrences of a repo-wide wording rule (planner didn't grep every phrasing) — before closing such a task, grep the mechanism with several phrasings across the whole repo, not just the cited files.
+- guard.sh: redirections (`2>&1 | tail`, `&>/dev/null`, `>file`) are stripped with their fd and target before a push's positionals are counted, since PI-13 round 3; before that a bare push with a redirection stopped looking implicit and passed from the base branch.
+- guard.sh push guard is NOT a security boundary: it stops a COOPERATIVE agent pushing to the base branch by MISTAKE in a normal shell form; deliberate evasions (eval, bash -c, env -i, wrappers, quoted/escaped git, on-the-fly aliases, push-affecting config, send-pack) are left to server-side branch protection, and the threat model is at the top of guard.sh. The classifier tokenises the RAW command quote-aware (never a regex split on raw text), with heredoc bodies removed, an unquoted newline and shell keywords (if/then/do/…) as boundaries and redirections stripped. Any git push in a command it cannot parse is DENIED whatever its target (task branches too), unless the exact prefix sits on that push; a backslash-newline is joined before newlines split commands. The audit prefix authorizes only by exact value on the push's own command word.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-25 PR #50 conflict resolved — union of handoff/archive (0 lines lost), next-wave.test both blocks kept; PI-26 fixtures T-HI/T-LO -> T-HI-1/T-LO-1 (digit-less ids are not ids under PI-25) — testCommand 357 ok
 - 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
 - 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
 - 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class
 - 2026-09-13 PI-25 PR #50 fix pushed round 4 — repo8's vacuous 'no error' assertions replaced with real duplicate pairs per id shape
 - 2026-09-13 PI-25 PR #50 needs work (delta 3) — doctor alnum-id test is vacuous — cause: other: vacuous test
 - 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
+- 2026-09-13 PI-13 PR #47 approved round 4 — parse error denies every push, continuations joined — merge: user
+- 2026-09-13 BUDGET PI-13 ~100 turns vs 120 over 4 review rounds (47/26/19/9) — progressing: 10 commits, 179 guard tests green — spec first framed the hook as a security boundary, each round found new shell grammar; reframed to cooperative-agent threat model in round 2
+- 2026-09-13 PI-13 review round 4 pushed — unparseable commands deny every push, continuations joined — 179 guard cases
+- 2026-09-13 PI-13 PR #47 delta needs work round 3 — parser fallback lets implicit push through
+- 2026-09-13 PI-13 review round 3 pushed — redirections, newlines, keywords covered; lexer error denies — 161 guard cases, 4 mutations proven
+- 2026-09-13 PI-22 PR #46 approved round 3 — copied/renamed branches kept, §5/§6 aligned — merge: user
 - 2026-09-12 PI-25 PR #50 needs work (delta) — id regex drops alphanumeric real ids — cause: example-not-class
 - 2026-09-12 PI-25 PR #50 fix pushed — id regex now requires a numeric segment, AC3 test hardened
 - 2026-09-12 PI-25 PR #50 needs work — hyphenated words read as task ids — cause: first-round
@@ -49,11 +60,4 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-12 PI-10 PR #36 needs work — prefix lets clustered -uf and +refspec force through
 - 2026-09-12 PI-10 PR #36 draft — authorized push prefix for main, plus intake fix — 10 tests
 - 2026-09-12 PI-11 PR #35 draft — verify.sh now recognises *.test.sh — 6 tests
-- 2026-09-12 PI-9 PR #32 approved — codici di uscita e canali verificati invariati, merge: orchestrator
-- 2026-09-12 PI-9 PR #32 draft — handoff log/fact now name the file path — 7 tests
-- 2026-09-12 PI-8 PR #30 approved — archive one order end to end, LOGCAP sole source of 40, merge: orchestrator
-- 2026-09-12 PI-8 PR #30 needs work — archive ordering contradicts its own header comment
-- 2026-09-12 PI-8 PR #30 fix pushed — one archive order, LOGCAP-only hardcode fix — 9 tests
-- 2026-09-12 PI-8 PR #30 draft — log rotation archives overflow instead of dropping it — 9 tests
-- 2026-09-11 PI-6 PR #24 draft - next-wave.sh total-order sort key for mixed alphanumeric ids - 6 tests
-- 2026-09-10 PI-5 PR #21 approved and merged — cap 100, refusal behaviour unchanged
+- 2026-09-12 PI-13 PR #47 delta needs work — redirections, newlines, lexer error reopen main
