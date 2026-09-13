@@ -521,5 +521,50 @@ ok "exit 2 on 'grep' with no argument" '[[ "$rc17e" -eq 2 ]]'
 ok "usage line on 'grep' with no argument" '[[ "$out17e" == usage:* ]]'
 rm -rf "$S17"
 
+# Review round 3: the finding above listed five FORMS of malformed argv, not the class — extra arguments
+# ("facts X", "show X", "recent 3 X", "grep A B") were being silently ignored, exit 0. Fix: one grammar
+# declaration per read subcommand (SPEC in bin/handoff.sh — min args, max args, an optional per-arg type
+# check, and a known-bad example value for that check), read via the internal `__spec` command, that
+# BOTH drives the real validation AND generates these tests — so nothing here repeats a number by hand,
+# and a new subcommand is unusable (validate() rejects it) unless it gets a SPEC entry too.
+S18=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test18.XXXXXX")
+git init -q "$S18" >/dev/null
+speclines=$(cd "$S18" && bash "$SCRIPT" __spec)
+ok "argspec — __spec lists the four read subcommands" \
+   '[[ "$(printf "%s\n" "$speclines" | grep -c .)" -eq 4 ]]'
+while read -r specname lo hi bad; do
+  [[ -z "$specname" ]] && continue
+
+  # one argument more than the declared max, regardless of its content — the class this round closes
+  extra=()
+  for ((i = 0; i <= hi; i++)); do extra+=("X"); done
+  outmany=$(cd "$S18" && bash "$SCRIPT" "$specname" "${extra[@]}" 2>&1); rcmany=$?
+  ok "argspec[$specname] — $((hi + 1)) args (declared max $hi) → exit 2" '[[ "$rcmany" -eq 2 ]]'
+  ok "argspec[$specname] — usage line on too many args" '[[ "$outmany" == usage:* ]]'
+
+  # one argument fewer than the declared min, only for subcommands that require at least one
+  if [[ "$lo" -gt 0 ]]; then
+    short=()
+    for ((i = 0; i < lo - 1; i++)); do short+=("X"); done
+    # bash 3.2 (macOS default) treats "${short[@]}" on a still-empty array as an unbound variable under
+    # `set -u` — guard the expansion instead of relying on it being silently empty.
+    if [[ "${#short[@]}" -gt 0 ]]; then
+      outfew=$(cd "$S18" && bash "$SCRIPT" "$specname" "${short[@]}" 2>&1); rcfew=$?
+    else
+      outfew=$(cd "$S18" && bash "$SCRIPT" "$specname" 2>&1); rcfew=$?
+    fi
+    ok "argspec[$specname] — $((lo - 1)) args (declared min $lo) → exit 2" '[[ "$rcfew" -eq 2 ]]'
+    ok "argspec[$specname] — usage line on too few args" '[[ "$outfew" == usage:* ]]'
+  fi
+
+  # the declaration's own known-bad value, only for subcommands with a per-arg type check
+  if [[ "$bad" != "-" ]]; then
+    outbad=$(cd "$S18" && bash "$SCRIPT" "$specname" "$bad" 2>&1); rcbad=$?
+    ok "argspec[$specname] — declared bad value '$bad' → exit 2" '[[ "$rcbad" -eq 2 ]]'
+    ok "argspec[$specname] — usage line on the declared bad value" '[[ "$outbad" == usage:* ]]'
+  fi
+done <<<"$speclines"
+rm -rf "$S18"
+
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"

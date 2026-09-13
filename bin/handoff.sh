@@ -168,10 +168,11 @@ def collect_log():
     secondary.extend(reversed(arch_log))   # frozen archive: oldest-at-top-in-file, read bottom-up = newest first
     return sorted(secondary, key=lambda l: day_of(l), reverse=True)
 
-if cmd == "facts":
+def do_facts(rest):
     for l in collect_facts():
         print(l)
-elif cmd == "show":
+
+def do_show(rest):
     facts = collect_facts()
     log = collect_log()[:LOGCAP]
     print("# Session handoff\n")
@@ -187,36 +188,70 @@ elif cmd == "show":
     if len(facts) >= CAP:
         tag = f"{CAP}/{CAP} (cap)" if len(facts) == CAP else f"{len(facts)}/{CAP} (oltre il tetto)"
         print(f"facts: {tag}")
-elif cmd == "recent":
+
+def do_recent(rest):
     log = collect_log()
     if rest and rest[0] == "--all":
         out = log
     elif not rest:
         out = log[:LOGCAP]
     else:
-        if not re.fullmatch(r'[0-9]+', rest[0]):  # reject "abc", "--al", "-1" (a negative slice is not an error, it's wrong)
-            usage_exit()
-        out = log[: int(rest[0])]
+        out = log[: int(rest[0])]  # validate() already proved rest[0] is "--all" or digits-only
     for l in out:
         print(l)
-elif cmd == "grep":
-    if not rest:
-        usage_exit()
-    try:
-        pat = re.compile(rest[0])
-    except re.error:
-        usage_exit()
+
+def do_grep(rest):
+    pat = re.compile(rest[0])  # validate() already proved rest[0] compiles
     for l in collect_log():
         if pat.search(l):
             print(l)
-else:
+
+def _is_valid_regex(a):
+    try:
+        re.compile(a)
+        return True
+    except re.error:
+        return False
+
+# --- Single declaration for every read subcommand's grammar (§5.1): (min args, max args, per-arg type
+# check or None, one example value known to fail that check — used only to generate a test). Extra args,
+# missing args, and a value that fails the check are ALL "malformed argv" (exit 2 + usage) — never a
+# silent ignore, never a Python traceback. `validate()` and `__spec` (bin/handoff.test.sh) both read this
+# same dict, so there is exactly one place that knows a subcommand's arity: HANDLERS and SPEC are asserted
+# in sync below, so a new elif-branch added without a SPEC entry cannot run (validate() rejects it before
+# the handler is ever reached) — the whole suite catches it immediately, not just one test.
+SPEC = {
+    "facts":  (0, 0, None, None),
+    "show":   (0, 0, None, None),
+    "recent": (0, 1, lambda a: a == "--all" or bool(re.fullmatch(r'[0-9]+', a)), "abc"),
+    "grep":   (1, 1, _is_valid_regex, "["),
+}
+HANDLERS = {"facts": do_facts, "show": do_show, "recent": do_recent, "grep": do_grep}
+assert set(SPEC) == set(HANDLERS), "handoff.sh: SPEC and HANDLERS out of sync — every read subcommand needs both"
+
+def validate(cmd, rest):
+    lo, hi, check, _bad = SPEC[cmd]
+    if not (lo <= len(rest) <= hi):
+        usage_exit()
+    if check:
+        for a in rest:
+            if not check(a):
+                usage_exit()
+
+if cmd == "__spec":  # internal, used only by bin/handoff.test.sh to generate the arity/type tests below
+    for name, (lo, hi, _check, bad) in SPEC.items():
+        print(f"{name} {lo} {hi} {bad if bad is not None else '-'}")
+elif cmd not in SPEC:
     usage_exit()
+else:
+    validate(cmd, rest)
+    HANDLERS[cmd](rest)
 PY
 }
 
 cmd="${1:-show}"; shift || true
 case "$cmd" in
-  facts|show|recent|grep)
+  facts|show|recent|grep|__spec)
     compose "$@"; exit $?;;
 esac
 mkdir -p "$ROOT/docs"
