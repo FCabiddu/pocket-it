@@ -111,3 +111,7 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-24 review round 5 pushed — exclusions moved into compass Glyph-clipping verification, round-3 Notes finding closed — 6 cases reproduced
 - 2026-09-13 PI-24 PR #48 needs work — esclusioni chiudono lati non voluti — cause: example-not-class
 - 2026-09-13 PI-24 review round 6 pushed — exclusions corrected per side (line-clamp descender, ellipsis start, scroller cross-axis), round-5 'artifact' claim retracted — 5/6 not 4/6
+- 2026-09-13 PI-24 PR #48 needs work — scroller exclusion false red with border — cause: example-not-class
+- 2026-09-13 PI-24 round 7 pushed — padding-box on scrollable-exclusion clip-path (bordered false positive), Exclusions opening sentence fixed to five techniques
+- 2026-09-13 PI-24 PR #48 approved round 7 delta — merge: user (not merged on request)
+- 2026-09-13 PI-31 PR #59 draft — worktrees locked, cleanup releases on merged PR — 32 tests
