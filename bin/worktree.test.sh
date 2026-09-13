@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Self-test for worktree.sh against a scratch repo: a fake origin, a fresh branch created off origin/main, an
 # existing remote branch checked out tracking, an existing local branch with an unpushed commit that must
-# survive a re-run, idempotent re-runs, a stale non-worktree directory, the .git/info/exclude line, and usage
-# errors.
+# survive a re-run, idempotent re-runs, a stale non-worktree directory, the .git/info/exclude line, usage
+# errors, and the lock (PI-31): created locked with a reason naming branch and date, on git with atomic --lock and on
+# older git; relocked on reuse; --unlock releases only pocket-it's lock; a failed creation leaves no worktree and no lock.
 cd "$(dirname "$0")"
 SCRIPT="$PWD/worktree.sh"
 S=$(mktemp -d "${TMPDIR:-/tmp}/worktree-test.XXXXXX")
@@ -62,7 +63,9 @@ OUT=$(bash "$SCRIPT" "$M" task/wip); WTWIP="$M/.claude/worktrees/task-wip"
 q git -C "$M" push -q origin task/wip                                    # origin/task/wip now exists, at the base tip
 echo wip > "$WTWIP/wip"; q git -C "$WTWIP" add wip; q git -C "$WTWIP" commit -qm "UNPUSHED WIP"
 WIP_SHA=$(git -C "$WTWIP" rev-parse HEAD)
+q bash "$SCRIPT" --unlock "$M" task/wip                                    # created locked: release it, as for abandoned work
 q git -C "$M" worktree remove "$WTWIP"                                    # branch task/wip stays, worktree gone
+ok "local branch with unpushed commit: worktree really removed before the re-run" "[[ ! -d $WTWIP ]]"
 OUT2=$(bash "$SCRIPT" "$M" task/wip); rc=$?
 ok "local branch with unpushed commit: exit 0" "[[ $rc -eq 0 ]]"
 ok "local branch with unpushed commit: worktree recreated" "[[ \"$OUT2\" == \"$WTWIP\" ]] && [[ -d $WTWIP ]]"
@@ -79,5 +82,66 @@ ok "stale non-worktree directory: left untouched" "[[ -f $STALE_WT/leftover ]]"
 # 7. AC4 — .git/info/exclude has the line once, not duplicated across branches
 ok "AC4 exclude has the line" "grep -qxF '.claude/worktrees/' $M/.git/info/exclude"
 ok "AC4 exclude has it exactly once" "[[ \$(grep -cxF '.claude/worktrees/' $M/.git/info/exclude) -eq 1 ]]"
+
+# 8. PI-31 AC1 — every worktree it creates is locked, reason naming the branch and the date
+lockof(){ git -C "$M" worktree list --porcelain | awk -v w="worktree $1" '/^worktree /{f=($0==w)} f && /^locked/{print}'; }
+DATE_RE='[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z'
+ok "PI-31 AC1 new branch: locked, reason names branch and date" "[[ \"\$(lockof $WT1)\" =~ ^locked\ pocket-it:\ agent\ worktree\ for\ task/new1\ since\ $DATE_RE\$ ]]"
+ok "PI-31 AC1 remote branch checked out: locked" "[[ \"\$(lockof $WT2)\" =~ ^locked\ pocket-it:\ agent\ worktree\ for\ task/existing\ since\ $DATE_RE\$ ]]"
+ok "PI-31 AC1 existing local branch checked out: locked" "[[ \"\$(lockof $WTWIP)\" =~ ^locked\ pocket-it:\ agent\ worktree\ for\ task/wip\ since\ $DATE_RE\$ ]]"
+
+# 9. PI-31 reuse keeps a lock as it is, and locks again a worktree that was released
+BEFORE=$(lockof "$WT1"); OUT=$(bash "$SCRIPT" "$M" task/new1 2>/dev/null); rc=$?
+ok "PI-31 reuse of a locked worktree: exit 0, same path, lock unchanged" "[[ $rc -eq 0 && \"$OUT\" == \"$WT1\" && \"\$(lockof $WT1)\" == \"$BEFORE\" ]]"
+OUT=$(bash "$SCRIPT" --unlock "$M" task/new1 2>/dev/null); rc=$?
+ok "PI-31 --unlock: exit 0, prints the path, lock released" "[[ $rc -eq 0 && \"$OUT\" == \"$WT1\" && -z \"\$(lockof $WT1)\" ]]"
+ERR=$(bash "$SCRIPT" --unlock "$M" task/new1 2>&1 >/dev/null); rc=$?
+ok "PI-31 --unlock twice: exit 0, says it is not locked" "[[ $rc -eq 0 ]] && grep -q 'is not locked' <<<\"$ERR\""
+OUT=$(bash "$SCRIPT" "$M" task/new1 2>/dev/null); rc=$?
+ok "PI-31 reuse of a released worktree: locked again" "[[ $rc -eq 0 && \"\$(lockof $WT1)\" =~ ^locked\ pocket-it:\ agent\ worktree\ for\ task/new1 ]]"
+
+# 10. PI-31 a lock someone else placed is never released nor replaced
+q git -C "$M" worktree unlock "$WT2"; q git -C "$M" worktree lock --reason "manual hold" "$WT2"
+ERR=$(bash "$SCRIPT" --unlock "$M" task/existing 2>&1 >/dev/null); rc=$?
+ok "PI-31 --unlock on a foreign lock: exit 1, says so, lock kept" "[[ $rc -eq 1 && \"\$(lockof $WT2)\" == 'locked manual hold' ]] && grep -q 'locked by someone else (manual hold)' <<<\"$ERR\""
+ERR=$(bash "$SCRIPT" "$M" task/existing 2>&1 >/dev/null)
+ok "PI-31 reuse of a foreign-locked worktree: foreign reason left as it is, and said" "[[ \"\$(lockof $WT2)\" == 'locked manual hold' ]] && grep -q 'locked by someone else (manual hold), left as it is' <<<\"$ERR\""
+ERR=$(bash "$SCRIPT" --unlock "$M" task/nowhere 2>&1 >/dev/null); rc=$?
+ok "PI-31 --unlock of a branch with no worktree: exit 2" "[[ $rc -eq 2 ]] && grep -q 'no worktree has task/nowhere' <<<\"$ERR\""
+bash "$SCRIPT" --unlock "$M" task/new1 extra >/dev/null 2>&1; rc=$?
+ok "PI-31 --unlock with a base argument: usage error" "[[ $rc -eq 2 ]]"
+
+# 11. PI-31 error paths leave no worktree and so no lock behind
+COUNT=$(git -C "$M" worktree list --porcelain | grep -c '^worktree ')
+bash "$SCRIPT" "$M" task/badbase nosuchbase >/dev/null 2>&1; rc=$?
+ok "PI-31 missing base: exit 2, no worktree registered, no lock" "[[ $rc -eq 2 && ! -d $M/.claude/worktrees/task-badbase ]] && [[ \$(git -C $M worktree list --porcelain | grep -c '^worktree ') -eq $COUNT ]]"
+bash "$SCRIPT" "$M" main >/dev/null 2>&1; rc=$?
+ok "PI-31 branch already checked out elsewhere: exit 2, no worktree registered, no lock" "[[ $rc -eq 2 && ! -d $M/.claude/worktrees/main ]] && [[ \$(git -C $M worktree list --porcelain | grep -c '^worktree ') -eq $COUNT ]]"
+
+# 12. PI-31 git without `worktree add --reason` (< 2.36): the worktree is locked right after creation
+REALGIT=$(command -v git); mkdir -p "$S/oldgit"
+cat > "$S/oldgit/git" <<SHIM
+#!/usr/bin/env bash
+for a in "\$@"; do [[ "\$a" == --reason || "\$a" == --lock ]] && [[ " \$* " == *" add "* ]] && { echo "error: unknown option" >&2; exit 129; }; done
+[[ " \$* " == *" worktree add -h "* ]] && { echo "usage: git worktree add [-f] [--detach] [--checkout] [--lock] [-b <new-branch>] <path> [<commit-ish>]"; exit 129; }
+exec "$REALGIT" "\$@"
+SHIM
+chmod +x "$S/oldgit/git"
+OUT=$(PATH="$S/oldgit:$PATH" bash "$SCRIPT" "$M" task/oldgit 2>/dev/null); rc=$?
+WTOLD="$M/.claude/worktrees/task-oldgit"
+ok "PI-31 older git: worktree created" "[[ $rc -eq 0 && \"$OUT\" == \"$WTOLD\" && -d $WTOLD ]]"
+ok "PI-31 older git: locked, reason names branch and date" "[[ \"\$(lockof $WTOLD)\" =~ ^locked\ pocket-it:\ agent\ worktree\ for\ task/oldgit\ since\ $DATE_RE\$ ]]"
+
+# 13. PI-31 round 3 — branch names with shell characters and a quote (git prints such a lock reason C-quoted)
+for b in 'task/q"u(x)$y' "task/it's;a|b" 'task/caffè'; do
+  P=$(cd / && bash "$SCRIPT" "$M" "$b" 2>/dev/null); rc=$?
+  LK=$(git -C "$M" worktree list --porcelain | W="worktree $P" awk '/^worktree /{f=($0==ENVIRON["W"])} f && /^locked/{print}')
+  ok "PI-31 r3 [$b] created from another folder and locked" '[[ $rc -eq 0 && -d "$P" && -n "$LK" ]]'
+  ERR=$(cd / && bash "$SCRIPT" "$M" "$b" 2>&1 >/dev/null)
+  ok "PI-31 r3 [$b] reuse recognises its own lock (not someone else's)" '! grep -q "someone else" <<<"$ERR"'
+  OUT=$(cd / && bash "$SCRIPT" --unlock "$M" "$b" 2>/dev/null); rc=$?
+  LK=$(git -C "$M" worktree list --porcelain | W="worktree $P" awk '/^worktree /{f=($0==ENVIRON["W"])} f && /^locked/{print}')
+  ok "PI-31 r3 [$b] --unlock from another folder releases it" '[[ $rc -eq 0 && "$OUT" == "$P" && -z "$LK" ]]'
+done
 
 exit $fail
