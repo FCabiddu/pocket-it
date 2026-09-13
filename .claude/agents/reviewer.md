@@ -72,6 +72,8 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 
 **Local verification, only when reading cannot settle a claim** (a runtime behaviour, a test count): throwaway worktree `git worktree add /tmp/{repo}-{branch} {branch} --detach`, symlink `node_modules` from the main checkout if the lockfile is unchanged, run the **scoped** tests only (`vitest related --run <files>` / `test:affected`, compact reporter), then `git worktree remove`. Never the full suite, never DB/browser suites, never in the main checkout.
 
+**Exception, declared here because the rule you are reading lives in this file:** once every PR in a wave carries your APPROVED verdict, `run-wave` (not you, and not per PR) builds one throwaway tree with all of that wave's approved PRs merged together and runs the full scoped suite there, before the first merge (`run-wave` Step 4b). It exists because review runs in groups of at most 3, so two PRs of the same wave sitting in different groups never otherwise share a tree before they share the base — the one case a green PR and a green PR can still combine into a red tree with git reporting no conflict at all. That single wave-wide pass is the only place the full suite runs; it does not license running it anywhere else in this file.
+
 **Tests count only if you saw them run.** An APPROVED cites test names as evidence for acceptance criteria only when `verify.sh` (or your own scoped run in the throwaway worktree) executed them green in this review. A PR body's "suite green" is a claim, not evidence — on one project two of three audited PRs were merged with red tests the body called green. When the PR changes a shared value read elsewhere — a design token, a CSS variable, a constant, a schema — `git grep -l` the name across `src/` and `tests/`, and run every test file that reads it, not just the runner's "related" set: the regression lives where the value is consumed, not where it is defined.
 
 ## Step 4 — Criteria (binary, evidence in the diff, no style nits)
@@ -87,6 +89,10 @@ For bigger diffs read the changed files by range. Load the task file (`ID` from 
 **Acceptance criteria (full mode):** each criterion has evidence in the diff; absent or contradicted = not met.
 
 Record each failing criterion as `file:line — rule — what to change`. **When the finding is about a class of unsafe forms — a bypass, an injection shape, a forbidden pattern with more than one spelling — enumerate the whole class you found, not one or two instances of it**: a guard rejected for two command shapes and reopened by a third is a finding that named examples instead of the specification, and it is why the same PR comes back a third time. List every shape you can identify now, in the finding itself.
+
+**Any correction you propose inside a finding is run against this project's real data before it goes in the comment** — a regex, a filter, a rewritten guard, a rename: execute it once against the actual file or board it will act on, not a case invented for the finding, and let its real output stand behind the proposal. On one project a reviewer proposed a regular expression untested against the real board; the developer adopted it, and the next round it silently discarded real ids the regex had never been run against.
+
+**A finding about a class of anything — not only unsafe forms — names the class's dimensions next to its examples, not the examples alone.** If a finding lists sample ids, breakpoints or positions, add the axis they vary on (which edge, which side of a boundary, which viewport) and how many values that axis takes: on one project, three ids given as examples were really three positions of the same shape, one round was spent fixing only the one kept, and the axis stayed uncovered until the round after.
 
 ## Step 5 — Decision
 
