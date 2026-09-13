@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # pocket-it doctor — zero-token pre-flight for a target project.
 # Usage (from the project root): bash ~/.claude/agents/pocket-it/bin/doctor.sh [--wave N]
-#   bash ~/.claude/agents/pocket-it/bin/doctor.sh --accept-base   — after reviewing an intentional
-#     base-branch rewrite (see the ERROR's own instructions), tell doctor to stop flagging it
+#   bash <this-script's-own-path> --accept-base   — after reviewing an intentional base-branch
+#     rewrite (see the ERROR's own instructions), tell doctor to stop flagging it. Every command
+#     doctor prints (recovery, accept) is a self-contained shell one-liner with an absolute path to
+#     this script and every ref name shell-quoted: it runs as-is from any directory in any project.
 # Exit 0 = ready to launch agents; exit 1 = problems listed (fix before launching).
 set -uo pipefail
+DOCTOR_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)/$(basename "${BASH_SOURCE[0]}")"
 ACCEPT_BASE=0; [[ "${1:-}" == "--accept-base" ]] && ACCEPT_BASE=1
 WAVE="${2:-}"; [[ "${1:-}" == "--wave" ]] || WAVE=""
-python3 - "$WAVE" "$ACCEPT_BASE" <<'PY'
-import json, os, re, sys, glob, subprocess
+python3 - "$WAVE" "$ACCEPT_BASE" "$DOCTOR_ABS" <<'PY'
+import json, os, re, sys, glob, subprocess, shlex
 wave = sys.argv[1]
 accept_base = sys.argv[2] == "1"
+doctor_abs = sys.argv[3]
 errs, warns = [], []
 def err(m): errs.append(m)
 def warn(m): warns.append(m)
@@ -43,9 +47,12 @@ if sh(f"git rev-parse --verify --quiet {base}") == "" and sh(f"git rev-parse --v
 # Server-side branch protection is not available on every plan; this is the fallback that at least
 # makes it visible, while it is still recoverable (git keeps the old commit around until gc runs).
 # The seen commit lives under the shared git-common-dir (never committed, shared by every worktree).
-# Classification never reads a git error message (round 2): git's text is localised on a build with
-# NLS support, so "does the ref exist" comes only from `ls-remote --exit-code`'s own exit status (2 =
-# no matching ref, git's documented, language-independent signal), never from stdout/stderr wording.
+# Classification never reads a git error message: git's text is localised on a build with NLS
+# support, so "does the ref exist" comes only from `ls-remote --exit-code`'s own exit status (2 = no
+# matching ref, git's documented, language-independent signal), never from stdout/stderr wording.
+# Every command printed below is a self-contained one-liner: an absolute, shell-quoted path to THIS
+# script (doctor_abs, resolved by the bash wrapper before python even starts) and shlex.quote() on
+# every ref name — it must run as-is from any cwd in any project, not just from inside pocket-it.
 GIT_ENV = {**os.environ, "LC_ALL": "C", "LANGUAGE": "C"}  # belt and braces for any stderr text still shown to a human
 def _load_seen(path):
     d = {}
@@ -58,9 +65,20 @@ def _save_seen(path, d):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         for k, v in sorted(d.items()): f.write(f"{k} {v}\n")
+def _classify_base(base, env):
+    # ('ok'|'deleted'|'unreachable', detail) — from ls-remote's exit code alone, never from text.
+    ls = subprocess.run(["git", "ls-remote", "--exit-code", "origin", f"refs/heads/{base}"],
+                         capture_output=True, text=True, env=env)
+    if ls.returncode == 0: return "ok", None
+    if ls.returncode == 2: return "deleted", None
+    stderr = ls.stderr.strip()
+    return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")
+
 common_dir = sh("git rev-parse --git-common-dir")
 has_origin = sh("git remote get-url origin") != ""
 seen_file = os.path.join(os.path.abspath(common_dir), "pocket-it", "base-seen") if common_dir else None
+qbase = shlex.quote(base)
+accept_cmd = f"bash {shlex.quote(doctor_abs)} --accept-base"
 
 if accept_base:
     # a human reviewed an intentional rewrite (per the ERROR's own instructions) and tells doctor to
@@ -68,28 +86,43 @@ if accept_base:
     # branch or a commit — so by construction it cannot discard any local work.
     if not (seen_file and has_origin):
         print("doctor --accept-base: no origin remote configured — nothing to accept"); sys.exit(1)
+    seen = _load_seen(seen_file)
+    prev = seen.get(base)
+    status, detail = _classify_base(base, GIT_ENV)
+    if status == "deleted":
+        if prev:
+            print(f"doctor --accept-base: base branch {base!r} no longer exists on origin — nothing to accept: "
+                  f"restore it with: git push origin {prev}:refs/heads/{qbase} — then re-run doctor.sh")
+        else:
+            print(f"doctor --accept-base: base branch {base!r} does not exist on origin — nothing to accept")
+        sys.exit(1)
+    if status == "unreachable":
+        print(f"doctor --accept-base: could not reach origin to verify base branch {base!r} ({detail}) — try again once reachable")
+        sys.exit(1)
     fetch = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"],
                             capture_output=True, text=True, env=GIT_ENV)
     if fetch.returncode != 0:
-        print(f"doctor --accept-base: could not fetch {base!r} from origin — try again once reachable"); sys.exit(1)
+        stderr = fetch.stderr.strip()
+        print(f"doctor --accept-base: fetch of {base!r} failed right after ls-remote confirmed it exists — "
+              f"transient, try again ({stderr.splitlines()[-1] if stderr else 'no output'})")
+        sys.exit(1)
     remote_sha = sh(f"git rev-parse refs/remotes/origin/{base}")
-    _save_seen(seen_file, {**_load_seen(seen_file), base: remote_sha})
+    _save_seen(seen_file, {**seen, base: remote_sha})
     print(f"doctor --accept-base: {base!r} accepted at {remote_sha} — future runs compare from here")
     sys.exit(0)
 
 if common_dir and has_origin:
     seen = _load_seen(seen_file)
     prev = seen.get(base)
-    ls = subprocess.run(["git", "ls-remote", "--exit-code", "origin", f"refs/heads/{base}"],
-                         capture_output=True, text=True, env=GIT_ENV)
-    if ls.returncode == 2:  # AC3: git's own "no matching ref" signal, independent of message language
+    status, detail = _classify_base(base, GIT_ENV)
+    if status == "deleted":  # AC3
         if prev:
-            err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — recover with: git push origin {prev}:refs/heads/{base} — then re-run doctor.sh")
+            err(f"base branch {base!r} no longer exists on origin (last seen at {prev}) — "
+                f"restore it: git push origin {prev}:refs/heads/{qbase} — then re-run doctor.sh")
         else:
             err(f"base branch {base!r} does not exist on origin")
-    elif ls.returncode != 0:  # unreachable origin, bad auth, etc — never a false ERROR
-        stderr = ls.stderr.strip()
-        warn(f"could not verify base branch {base!r} integrity — origin unreachable ({stderr.splitlines()[-1] if stderr else 'no network'}), skipped")
+    elif status == "unreachable":  # never a false ERROR
+        warn(f"could not verify base branch {base!r} integrity — origin unreachable ({detail}), skipped")
     else:
         # ref exists on the remote: a real fetch (not ls-remote) is required from here — it forces the
         # remote-tracking ref to the live value even on a non-fast-forward (the leading '+') and pulls
@@ -112,16 +145,28 @@ if common_dir and has_origin:
                     if is_ancestor:
                         if remote_sha != prev: _save_seen(seen_file, {**seen, base: remote_sha})  # AC1: advanced normally
                     else:
+                        # a real fix, not just a status update: create a merge commit whose TREE is the
+                        # current (bad) tip's tree unchanged — nothing live is altered, including anything
+                        # pushed after the rewrite — but whose second parent is the lost commit, so it is
+                        # an ancestor again; a plain (non --force) push is a fast-forward from the remote's
+                        # own tip, so it can never collide with a concurrent legitimate push. No checkout,
+                        # no local branch required — it runs from any cwd, on the refs alone.
+                        recover_cmd = (
+                            f"git fetch origin && "
+                            f"T=$(git rev-parse refs/remotes/origin/{qbase}^{{tree}}) && "
+                            f'N=$(git commit-tree "$T" -p refs/remotes/origin/{qbase} -p {prev} '
+                            f"-m 'PI-29 recovery: merge back {prev} after an unexpected rewrite of {base}') && "
+                            f'git push origin "$N":refs/heads/{qbase}'
+                        )
                         err(
                             f"base branch {base!r} was rewritten on origin: commit {prev} is no longer in its history — "
-                            f"see what changed: git log {prev}..refs/remotes/origin/{base} (added by the rewrite), "
-                            f"git log refs/remotes/origin/{base}..{prev} (dropped by it) — "
-                            f"if it was accidental, recover without discarding anything pushed since: "
-                            f"git push origin {prev}:refs/heads/{base}-recovered-{prev[:12]} (a new ref, {base} itself untouched), "
-                            f"then fast-forward {base} back onto it by hand — "
-                            f"if it was intentional: first check that git log refs/remotes/origin/{base}..{prev} prints "
+                            f"see what changed: git log {prev}..refs/remotes/origin/{qbase} (added by the rewrite), "
+                            f"git log refs/remotes/origin/{qbase}..{prev} (dropped by it) — "
+                            f"if it was accidental, merge the old history back onto {base} without discarding anything pushed since: "
+                            f"{recover_cmd} — "
+                            f"if it was intentional: first check that git log refs/remotes/origin/{qbase}..{prev} prints "
                             f"nothing (else those commits only exist in the old history — stop, rescue them first with "
-                            f"git branch rescue-{prev[:12]} {prev}), then accept it with: bash bin/doctor.sh --accept-base"
+                            f"git branch rescue-{prev[:12]} {prev}), then accept it with: {accept_cmd}"
                         )
                         # do not overwrite the seen commit here: keep reporting until it is fixed or explicitly accepted
 

@@ -215,66 +215,133 @@ SCRATCH10="$S/repo10-scratch"
 q git init -q -b main "$SCRATCH10"; q git -C "$SCRATCH10" remote add origin "$BARE10"
 printf 'other\n' > "$SCRATCH10/g.txt"; q git -C "$SCRATCH10" add -A; q git -C "$SCRATCH10" commit -qm orphan
 q git -C "$SCRATCH10" push -q --force origin main
+# a legitimate commit pushed AFTER the bad rewrite — recovery must not discard it (round 3, finding 1)
+printf 'after\n' > "$SCRATCH10/h.txt"; q git -C "$SCRATCH10" add -A; q git -C "$SCRATCH10" commit -qm after-rewrite
+q git -C "$SCRATCH10" push -q origin main
+AFTER_SHA10=$(git -C "$SCRATCH10" rev-parse HEAD)
 
 # AC2: rewritten base — an ERROR that says how to inspect it, how to recover without discarding
-# anything pushed since, and how to accept it if the rewrite was intentional (PI-29 round 2)
+# anything pushed since, and how to accept it if the rewrite was intentional. Round 3: every command
+# it prints must actually RUN, as printed, from inside an arbitrary project (no bin/ dir, nothing
+# pocket-it-specific in the clone) and bring doctor back to green — round 2 only checked the text.
+# Each remediation path (recover / accept / each mutation) gets its OWN fresh origin replaying the
+# same rewrite, and its own clone seeded with the same "last seen" baseline — pushing to origin in
+# one path (the real recovery genuinely mutates the remote) must never disturb another path's test.
+extract_recover_cmd(){ grep '^ERROR base branch' | sed -E 's/.*discarding anything pushed since: (.*) — if it was intentional.*/\1/'; }
+extract_accept_cmd(){ grep '^ERROR base branch' | sed -E 's/.*then accept it with: (.*)$/\1/'; }
+seed_prev(){ # seed_prev <clone-dir> <base> <sha> — pre-record doctor's "last seen" baseline for a clone
+  mkdir -p "$(common "$1")/pocket-it"
+  printf '%s %s\n' "$2" "$3" > "$(common "$1")/pocket-it/base-seen"
+}
+mk_rewritten_bare(){ # mk_rewritten_bare <dest-bare-path> — a fresh origin replaying repo10's own
+  # timeline (SHA1 -> SHA2, then SCRATCH10's force-push + after-rewrite commit) — independent of BARE10
+  q git init -q --bare -b main "$1"
+  q git -C "$1" config receive.denyDeleteCurrent ignore
+  q git -C "$SEED10" push -q "$1" main:main
+  q git -C "$SCRATCH10" push -q --force "$1" main:main
+}
+clone_rewritten(){ # clone_rewritten <dest-dir> — a fresh origin + clone at the post-rewrite state, seeded prev=SHA2
+  mk_rewritten_bare "$1.git"
+  q git clone -q "$1.git" "$1"
+  seed_prev "$1" main "$SHA2"
+}
+
 OUT=$(cd "$WORK10" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
 ok "AC2 rewritten base: ERROR names the lost commit"        "has \"ERROR base branch 'main' was rewritten on origin: commit $SHA2 is no longer in its history\""
 ok "AC2 rewritten base: says how to see what changed"       "has \"git log $SHA2..refs/remotes/origin/main\" && has \"git log refs/remotes/origin/main..$SHA2\""
-ok "AC2 rewritten base: recovery command is additive, not --force onto main" "has \"git push origin $SHA2:refs/heads/main-recovered-\" && ! has \"push --force origin $SHA2:refs/heads/main\""
-ok "AC2 rewritten base: says how to accept an intentional rewrite"          'has "bash bin/doctor.sh --accept-base"'
+ok "AC2 rewritten base: recovery command is not a bare --force onto main" '! has "push --force origin '"$SHA2"':refs/heads/main"'
+ok "AC2 rewritten base: says how to accept an intentional rewrite, absolute script path" \
+  "has \"then accept it with: bash $SCRIPT --accept-base\""
 ok "AC2 rewritten base: doctor exits 1"                '[[ $rc -eq 1 ]]'
 ok "AC2 rewritten base: seen commit NOT advanced (keeps reporting until fixed)" 'seen_has "$WORK10" "main $SHA2"'
 
-# the suggested recovery command, executed for real, must not discard a single local commit: it only
-# ever pushes a NEW ref (main-recovered-<sha>) and never touches main or any local branch/reflog.
-# Run it from WORK10, the clone that actually has $SHA2 as an object (SCRATCH10, the one that did the
-# bad force-push, never fetched it — same as a real operator recovering from their own clone).
-RECOVER_REF=$(grep -oE 'main-recovered-[0-9a-f]+' <<<"$OUT" | head -1)
-LOCAL_BRANCHES_BEFORE=$(git -C "$WORK10" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
-q git -C "$WORK10" push -q origin "$SHA2:refs/heads/$RECOVER_REF"
-LOCAL_BRANCHES_AFTER=$(git -C "$WORK10" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
-ok "recovery command: local branches unchanged (nothing discarded)" '[[ "$LOCAL_BRANCHES_BEFORE" == "$LOCAL_BRANCHES_AFTER" ]]'
-ok "recovery command: main on origin still untouched (still the rewritten tip)" '[[ "$(git -C "$WORK10" ls-remote origin refs/heads/main | cut -f1)" != "$SHA2" ]]'
-ok "recovery command: the new ref carries the lost commit, published, nothing lost" '[[ "$(git -C "$WORK10" ls-remote origin "refs/heads/$RECOVER_REF" | cut -f1)" == "$SHA2" ]]'
+# execute the printed RECOVERY command verbatim, from its own clone's cwd (an arbitrary project
+# checkout, no bin/ dir, nothing pocket-it-specific) — must not discard a single local ref/commit,
+# must keep whatever was pushed to main AFTER the rewrite, and bring the next doctor.sh run to green.
+WORK10R="$S/repo10-work-recover"; clone_rewritten "$WORK10R"
+RECOVER_CMD=$(extract_recover_cmd <<<"$OUT")
+LOCAL_BEFORE=$(git -C "$WORK10R" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
+( cd "$WORK10R" && eval "$RECOVER_CMD" ) >/dev/null 2>&1; recover_rc=$?
+LOCAL_AFTER=$(git -C "$WORK10R" for-each-ref --format='%(refname) %(objectname)' refs/heads | sort)
+ok "recovery command: runs clean from the project's own cwd" '[[ $recover_rc -eq 0 ]]'
+ok "recovery command: local branches/HEAD unchanged (nothing discarded)" '[[ "$LOCAL_BEFORE" == "$LOCAL_AFTER" ]]'
+OUT_POST_RECOVER=$(cd "$WORK10R" && bash "$SCRIPT"); rc_post_recover=$?
+ok "recovery command: doctor.sh is GREEN on the very next run (not just red-with-different-text)" \
+  '[[ $rc_post_recover -eq 0 ]] && ! grep -q "was rewritten on origin" <<<"$OUT_POST_RECOVER"'
+ok "recovery command: the commit pushed AFTER the rewrite is still on main's history" \
+  '[[ "$(cd "$WORK10R" && git fetch -q origin && git merge-base --is-ancestor '"$AFTER_SHA10"' refs/remotes/origin/main; echo $?)" == 0 ]]'
 
-# mutation for AC2: with the rewrite check replaced by a no-op, the same scenario must go green —
-# proves the assertions above are load-bearing, not vacuous
-MUT=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
-sed '/^                        err($/,/^                        )$/c\
-                        pass  # MUTATED for PI-29 AC2 proof' "$SCRIPT" > "$MUT"
-OUTMUT=$(cd "$WORK10" && bash "$MUT"); rcmut=$?
-rm -f "$MUT"
-ok "AC2 mutation: removing the check makes it green (proves the test is not vacuous)" '[[ $rcmut -eq 0 ]] && ! grep -q "was rewritten on origin" <<<"$OUTMUT"'
+# mutation A: revert the fix to round 2's non-converging recovery (publish to a side ref, never
+# touches main) — on a FRESH clone (BARE10's main is still the raw rewrite, untouched by WORK10R's
+# recovery above), the SAME kind of recovery command, executed the SAME way, must fail to go green
+WORK10MA="$S/repo10-work-mutA"; clone_rewritten "$WORK10MA"
+MUT_RECOVER=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
+sed '/^                        recover_cmd = ($/,/^                        )$/c\
+                        recover_cmd = f"git push origin {prev}:refs/heads/{base}-recovered-{prev[:12]} (a new ref, {base} itself untouched)"  # MUTATED round-2 form' "$SCRIPT" > "$MUT_RECOVER"
+OUT_MR=$(cd "$WORK10MA" && bash "$MUT_RECOVER"); rc_mr=$?
+RECOVER_CMD_MR=$(extract_recover_cmd <<<"$OUT_MR")
+( cd "$WORK10MA" && eval "$RECOVER_CMD_MR" ) >/dev/null 2>&1
+OUT_MR_POST=$(cd "$WORK10MA" && bash "$MUT_RECOVER"); rc_mr_post=$?
+rm -f "$MUT_RECOVER"
+ok "mutation A (round-2 recovery form): fails to turn doctor green — proves the round-3 test is not vacuous" \
+  '[[ $rc_mr_post -eq 1 ]] && grep -q "was rewritten on origin" <<<"$OUT_MR_POST"'
 
-# AC2 round 2, finding 1: classification must never rely on git's own (localisable) error text —
-# run under a non-English locale and confirm the rewrite is still an ERROR, not degraded to a warn
-OUT_IT=$(cd "$WORK10" && LC_ALL=it_IT.UTF-8 LANGUAGE=it bash "$SCRIPT")
-ok "locale it_IT: rewrite still reported as ERROR"     'grep -q "ERROR base branch .main. was rewritten" <<<"$OUT_IT"'
-OUT_DE=$(cd "$WORK10" && LC_ALL=de_DE.UTF-8 LANGUAGE=de bash "$SCRIPT")
-ok "locale de_DE: rewrite still reported as ERROR"     'grep -q "ERROR base branch .main. was rewritten" <<<"$OUT_DE"'
-
-# --accept-base: a human decision, never a git operation — updates only doctor's own bookkeeping
-BEFORE_HEAD=$(git -C "$WORK10" rev-parse HEAD); BEFORE_BRANCHES=$(git -C "$WORK10" for-each-ref --format='%(refname)' refs/heads | sort)
-OUT_ACCEPT=$(cd "$WORK10" && bash "$SCRIPT" --accept-base); rc_accept=$?
-ok "--accept-base: exits 0 and confirms the new baseline"  '[[ $rc_accept -eq 0 ]] && grep -q "accepted at" <<<"$OUT_ACCEPT"'
+# --accept-base: extract and run the printed command on ITS OWN fresh clone's cwd (no bin/doctor.sh
+# there); a human decision that only ever updates doctor's own bookkeeping — never a git ref/branch/commit
+WORK10ACC="$S/repo10-work-accept"; clone_rewritten "$WORK10ACC"
+OUT_FOR_ACCEPT=$(cd "$WORK10ACC" && bash "$SCRIPT")
+ACCEPT_CMD=$(extract_accept_cmd <<<"$OUT_FOR_ACCEPT")
+BEFORE_HEAD=$(git -C "$WORK10ACC" rev-parse HEAD); BEFORE_BRANCHES=$(git -C "$WORK10ACC" for-each-ref --format='%(refname)' refs/heads | sort)
+OUT_ACCEPT=$(cd "$WORK10ACC" && eval "$ACCEPT_CMD"); rc_accept=$?
+ok "--accept-base command, run as printed, from the project's own cwd: exits 0"  '[[ $rc_accept -eq 0 ]]'
+ok "--accept-base: confirms the new baseline"  'grep -q "accepted at" <<<"$OUT_ACCEPT"'
 ok "--accept-base: touches no local ref or commit (HEAD/branches unchanged)" \
-  '[[ "$(git -C "$WORK10" rev-parse HEAD)" == "$BEFORE_HEAD" ]] && [[ "$(git -C "$WORK10" for-each-ref --format="%(refname)" refs/heads | sort)" == "$BEFORE_BRANCHES" ]]'
+  '[[ "$(git -C "$WORK10ACC" rev-parse HEAD)" == "$BEFORE_HEAD" ]] && [[ "$(git -C "$WORK10ACC" for-each-ref --format="%(refname)" refs/heads | sort)" == "$BEFORE_BRANCHES" ]]'
 ok "--accept-base: doctor is quiet on the very next run (rewrite no longer flagged)" \
-  '! grep -q "was rewritten on origin" <<<"$(cd "$WORK10" && bash "$SCRIPT")"'
+  '! grep -q "was rewritten on origin" <<<"$(cd "$WORK10ACC" && bash "$SCRIPT")"'
 
-# delete the branch on origin entirely (fresh SCRATCH10 command since main now differs from repo10's SHA2 baseline)
-q git -C "$SCRATCH10" push -q origin --delete main
+# mutation B: revert the accept command to round 2's hardcoded relative form ("bash bin/doctor.sh
+# --accept-base") — running it, as printed, from a project clone (no bin/ subdirectory there) must
+# fail exactly the way round 2 failed in production: "No such file or directory"
+WORK10MB="$S/repo10-work-mutB"; clone_rewritten "$WORK10MB"
+OUT_FOR_MB=$(cd "$WORK10MB" && bash "$SCRIPT")
+MUT_ACCEPT=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
+sed '/^accept_cmd = f"bash {shlex.quote(doctor_abs)} --accept-base"$/c\
+accept_cmd = "bash bin/doctor.sh --accept-base"  # MUTATED round-2 form for PI-29 round-3 proof' "$SCRIPT" > "$MUT_ACCEPT"
+OUT_MA=$(cd "$WORK10MB" && bash "$MUT_ACCEPT"); rc_ma=$?
+ACCEPT_CMD_MA=$(extract_accept_cmd <<<"$OUT_MA")
+ERR_MA=$( ( cd "$WORK10MB" && eval "$ACCEPT_CMD_MA" ) 2>&1 ); rc_ma_run=$?
+rm -f "$MUT_ACCEPT"
+ok "mutation B (round-2 accept form): the printed command, run from the project, fails (no bin/doctor.sh there) — proves the test is not vacuous" \
+  '[[ $rc_ma_run -ne 0 ]] && grep -qi "no such file" <<<"$ERR_MA"'
 
-# AC3: deleted base — an ERROR naming the last known-good commit to recover from (unaffected by locale:
-# classified from `ls-remote --exit-code`'s exit status, never from stderr text)
-OUT=$(cd "$WORK10" && bash "$SCRIPT"); rc=$?
+# AC3: deleted base — an ERROR naming the last known-good commit to recover from (unaffected by
+# locale: classified from `ls-remote --exit-code`'s exit status, never from stderr text — see the
+# fake-git locale regression tests below, repo 13). Its own fresh origin (SHA1->SHA2 only, no
+# rewrite needed to test a deletion) so it is independent of everything repo10 did above.
+BARE10DEL="$S/repo10-del-origin.git"
+q git init -q --bare -b main "$BARE10DEL"
+q git -C "$BARE10DEL" config receive.denyDeleteCurrent ignore
+q git -C "$SEED10" push -q "$BARE10DEL" main:main
+WORK10DEL="$S/repo10-work-deleted"
+q git clone -q "$BARE10DEL" "$WORK10DEL"
+seed_prev "$WORK10DEL" main "$SHA2"
+q git -C "$SEED10" push -q "$BARE10DEL" --delete main
+OUT=$(cd "$WORK10DEL" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
 ok "AC3 deleted base: ERROR reported"                  'has "ERROR base branch '"'"'main'"'"' no longer exists on origin"'
 ok "AC3 deleted base: doctor exits 1"                  '[[ $rc -eq 1 ]]'
-OUT_IT3=$(cd "$WORK10" && LC_ALL=it_IT.UTF-8 LANGUAGE=it bash "$SCRIPT")
-ok "locale it_IT: deleted base still an ERROR (not degraded to warn)" 'grep -q "ERROR base branch .main. no longer exists" <<<"$OUT_IT3"'
+
+# --accept-base on a DELETED base (finding 3, round 3): must say it is deleted and what to do, never
+# "try again once reachable" (that phrase is only true for a transient/unreachable origin)
+OUT_ACCEPT_DEL=$(cd "$WORK10DEL" && bash "$SCRIPT" --accept-base); rc_accept_del=$?
+BASE_SEEN_BEFORE=$(cat "$(common "$WORK10DEL")/pocket-it/base-seen" 2>/dev/null)
+ok "--accept-base on deleted base: exits 1"                          '[[ $rc_accept_del -eq 1 ]]'
+ok "--accept-base on deleted base: says it no longer exists, not 'try again once reachable'" \
+  'grep -q "no longer exists on origin" <<<"$OUT_ACCEPT_DEL" && ! grep -qi "try again once reachable" <<<"$OUT_ACCEPT_DEL"'
+ok "--accept-base on deleted base: says how to restore it"           'grep -q "restore it with: git push origin" <<<"$OUT_ACCEPT_DEL"'
+ok "--accept-base on deleted base: base-seen left untouched"         '[[ "$(cat "$(common "$WORK10DEL")/pocket-it/base-seen" 2>/dev/null)" == "$BASE_SEEN_BEFORE" ]]'
 
 # --- repo 11: the seen commit is shared across worktrees of the same repo (AC5) ---
 BARE11="$S/repo11-origin.git"; SEED11="$S/repo11-seed"
@@ -308,5 +375,60 @@ echo "$OUT" | sed 's/^/      | /'
 ok "unreachable origin: warn, not ERROR"            'has "warn  could not verify base branch '"'"'main'"'"' integrity"'
 ok "unreachable origin: no false ERROR"             '! has "ERROR base branch"'
 ok "unreachable origin: warnings never fail doctor" '[[ $rc -eq 0 ]]'
+
+# --- repo 13: locale regression (finding 4, round 3) — the earlier "run under LC_ALL=it_IT" tests
+# are vacuous on this machine because Apple git ships with no NLS translations at all (confirmed by
+# hand: LC_ALL=it_IT.UTF-8 does not change a single message here), so the old, buggy, text-matching
+# classifier would have passed those tests too. A fake `git` on PATH, put in front of the real one,
+# translates ONLY the one message a text-based classifier would have read (fetch's "couldn't find
+# remote ref"), regardless of locale — simulating an NLS build where that string is never English —
+# so the round-3 fix (classify from `ls-remote --exit-code` alone) is proven to not depend on it,
+# and a mutation that reintroduces text-matching is proven to break under exactly this fake.
+FAKEGIT="$S/fakegit"; mkdir -p "$FAKEGIT"
+cat > "$FAKEGIT/git" <<'GITEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "fetch" ]]; then
+  err=$("$FAKE_GIT_REAL" "$@" 2>&1 1>/dev/null); rc=$?
+  if [[ $rc -ne 0 ]] && grep -qi "couldn.t find remote ref" <<<"$err"; then
+    echo "fatal: impossibile trovare il ref remoto" >&2
+    exit "$rc"
+  fi
+  "$FAKE_GIT_REAL" "$@"
+  exit $?
+fi
+exec "$FAKE_GIT_REAL" "$@"
+GITEOF
+chmod +x "$FAKEGIT/git"
+export FAKE_GIT_REAL="$(command -v git)"
+
+BARE13="$S/repo13-origin.git"; SEED13="$S/repo13-seed"
+seed_origin "$BARE13" "$SEED13" >/dev/null
+WORK13="$S/repo13-work"
+q git clone -q "$BARE13" "$WORK13"
+(cd "$WORK13" && bash "$SCRIPT") >/dev/null   # AC4: record the baseline
+q git -C "$SEED13" push -q origin --delete main   # delete the base branch
+
+OUT_FAKE=$(cd "$WORK13" && PATH="$FAKEGIT:$PATH" LC_ALL=it_IT.UTF-8 LANGUAGE=it bash "$SCRIPT"); rc_fake=$?
+echo "$OUT_FAKE" | sed 's/^/      | /'
+ok "round 3, under a git that never speaks English on this message: deleted base still an ERROR" \
+  '[[ $rc_fake -eq 1 ]] && grep -q "ERROR base branch .main. no longer exists" <<<"$OUT_FAKE"'
+
+MUT_LOCALE=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
+cat > "$MUT_LOCALE.sed" <<'SEDEOF'
+/^def _classify_base(base, env):$/,/^    return "unreachable", (stderr\.splitlines()\[-1\] if stderr else "no network")$/c\
+def _classify_base(base, env):\
+    f = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"], capture_output=True, text=True, env=env)  # MUTATED round-2 form\
+    if f.returncode == 0: return "ok", None\
+    stderr = f.stderr.strip()\
+    if re.search(r"couldn.t find remote ref", stderr, re.I): return "deleted", None\
+    return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")
+SEDEOF
+sed -f "$MUT_LOCALE.sed" "$SCRIPT" > "$MUT_LOCALE"
+rm -f "$MUT_LOCALE.sed"
+OUT_MUT_FAKE=$(cd "$WORK13" && PATH="$FAKEGIT:$PATH" LC_ALL=it_IT.UTF-8 LANGUAGE=it bash "$MUT_LOCALE"); rc_mut_fake=$?
+rm -f "$MUT_LOCALE"
+echo "$OUT_MUT_FAKE" | sed 's/^/      | /'
+ok "mutation (round-2 text-based classify), same fake git: degrades to a warn — proves the test is not vacuous" \
+  '[[ $rc_mut_fake -eq 0 ]] && ! grep -q "ERROR base branch" <<<"$OUT_MUT_FAKE" && grep -q "warn  could not verify base branch" <<<"$OUT_MUT_FAKE"'
 
 exit $fail
