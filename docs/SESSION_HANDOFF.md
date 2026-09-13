@@ -39,8 +39,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Any script that asks gh must tell 'gh cannot answer' (missing, non-zero exit, unreadable output) from 'gh says no': reporting the unknown as 'not merged / no merged PR' leaves locks and worktrees kept forever with a false reason (cleanup-merged.sh merged_pr exits 2 for unknown). status.sh reads worktrees from --porcelain: the plain 'git worktree list' last field is 'locked'/'prunable', not the branch.
 - A command a script prints for a human or agent to run must quote every argument (printf %q), carry absolute paths and work from any cwd (git -C <repo>, never bare git): git branch names may hold ( ) $ ' " ; | & and backticks (only space ~ ^ : ? * [ \ are refused). git worktree list --porcelain C-quotes a lock reason containing " or non-ASCII ("…\"…"), so match lock reasons only after unquoting; never split porcelain fields on | (valid in branch names).
 - A recovery command a script prints must not publish to origin, under any ref name, history the base branch no longer contains: a rewrite may be the removal of a secret, and a pushed rescue-<sha> branch makes every new clone fetch it again (PI-29 round 4, measured). The printed command saves locally only (git branch rescue-<sha12> <sha>); pushing it anywhere is a person's decision, like restoring the base. Tests compare the whole git ls-remote origin before/after, not just refs/heads/<base>.
+- A test that compares a path printed by a script with its own $PWD must resolve it first (pwd -P): the script resolves symlinks, so the test is green under .claude/worktrees and red under macOS /tmp -> /private/tmp, which is where verify.sh builds its worktree (PI-29 round 5: doctor.test.sh 'absolute script path' red only in verify.sh). Reviewers and developers run verify.sh, not only the suite from .claude/worktrees.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-29 PR #60 needs work (delta 5) — test path not resolved, verify RED — cause: other: test path logical vs pwd -P, earlier rounds measured only outside /tmp
 - 2026-09-13 PI-29 round 5 fix pushed — no printed command ever pushes; save is local-only, publishing left to a person — 88 tests green
 - 2026-09-13 PI-29 PR #60 needs work (delta 4) — rescue push republishes removed secret — cause: example-not-class
 - 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
@@ -80,4 +82,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-23 PR #49 needs work — compass offre ancora measureText e soglia 30px
 - 2026-09-13 PI-23 fix pushed round 3 — clipper class named in full (5 props measured missed by old check), offset limit = total padding on 5 fonts
 - 2026-09-12 PI-23 PR #49 needs work (delta 2) — clipper class listed by example not by name, offset limit measured once — cause: example-not-class
-- 2026-09-12 PI-23 PR #49 needs work (delta) — mask offset and clipper class incomplete — cause: example-not-class
