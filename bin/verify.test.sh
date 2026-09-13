@@ -126,6 +126,42 @@ kill_mid_run(){
 kill_mid_run "PI-34 AC2 SIGTERM (test-run phase)" TERM 143
 kill_mid_run "PI-34 AC2 SIGINT (test-run phase)" INT 130
 
+# round 3 — the trap must be armed before the *first* external command verify.sh ever runs, not just from
+# worktree creation down. Every external command the script shells out to is either one of the two ungated
+# calls before a worktree exists (git fetch, git worktree add — each gets its own phase test here and above/
+# below) or funnelled through run()+guard() afterwards (lint, type-check, the test command — one shared
+# codepath, already proven by the test-run-phase case above for both INT and TERM). That covers every phase by
+# the script's own control flow, not by a hand-picked subset of it: a signal fired at the earliest possible
+# point (fetch, before this fix the very first uncovered phase) is the strongest instance of "any phase" left
+# to prove, since the trap is armed once and never disabled except inside on_signal itself.
+REALGIT3=$(command -v git)
+FAKEBIN3="$S/fakebin3"; mkdir -p "$FAKEBIN3"
+FETCH_MARK="$S/fetch-started"
+cat > "$FAKEBIN3/git" <<SH
+#!/usr/bin/env bash
+if [[ "\$1" == fetch ]]; then touch "$FETCH_MARK"; sleep 1.5; exec "$REALGIT3" "\$@"; fi
+exec "$REALGIT3" "\$@"
+SH
+chmod +x "$FAKEBIN3/git"
+mkbranch pi34-ac2fetch "bin/pi34-ac2fetch.test.sh"
+LOG_FETCH="$S/kmr-fetch.log"
+rm -f "$FETCH_MARK"
+(cd "$M" && exec env PATH="$FAKEBIN3:$PATH" bash "$SCRIPT" pi34-ac2fetch main) >"$LOG_FETCH" 2>&1 &
+KPID_F=$!
+i=0
+while (( i < 50 )) && [ ! -f "$FETCH_MARK" ]; do sleep 0.1; i=$((i+1)); done
+mstat_before_f=$(git -C "$M" status --porcelain)
+kill -TERM "$KPID_F" 2>/dev/null
+j=0
+while (( j < 100 )) && kill -0 "$KPID_F" 2>/dev/null; do sleep 0.1; j=$((j+1)); done
+kill -0 "$KPID_F" 2>/dev/null && kill -KILL "$KPID_F" 2>/dev/null
+wait "$KPID_F" 2>/dev/null; RC_F=$?
+R_WT_F=1; git -C "$M" worktree list | grep -q '.claude/worktrees/verify-' || R_WT_F=0
+mstat_after_f=$(git -C "$M" status --porcelain)
+ok "PI-34 AC2 — SIGTERM during fetch (before any worktree exists) leaves nothing registered" "[ $R_WT_F -eq 0 ]"
+ok "PI-34 AC2 — SIGTERM during fetch exits 143, never GREEN" "[ $RC_F -eq 143 ] && ! grep -q 'verify: GREEN' '$LOG_FETCH'"
+ok "PI-34 AC2 — SIGTERM during fetch never touches the main checkout" "[ \"\$mstat_before_f\" = \"\$mstat_after_f\" ]"
+
 # same class of check, one signal, during a different phase: right after the worktree is created but before
 # any check has run — a git shim delays returning from "worktree add" so the kill lands there instead.
 REALGIT2=$(command -v git)
@@ -198,6 +234,16 @@ ok "PI-34 finding 2 — reviewer.md states it must never touch the branch's own 
 # PI-34 finding 3 — $WT must be computed once and reused for removal, not recomputed with $$ in a later call
 R15=1; grep -qE 'created and removed in the \*\*same\*\* shell call' "$RVWR" && R15=0
 ok "PI-34 finding 3 — local verification computes \$WT once, in the same shell call as its removal" "[ $R15 -eq 0 ]"
+
+# PI-34 finding 3, round 3 — line 39 (conflict resolution) closed the $$ class only on line 73 (single-call
+# local verification, where $$ is safe because create+remove share one command); conflict resolution spans
+# several Bash calls (create, merge, edit conflicts, commit, push, remove) so $$ there would name a different
+# path on each call. The conflict-resolution paragraph must build its path from the stable PR number instead.
+CONFLICT_PARA=$(awk '/CONFLICTING.*resolve against/,/UNKNOWN.*re-query/' "$RVWR")
+R16=1; echo "$CONFLICT_PARA" | grep -qF '$$' || R16=0
+ok "PI-34 finding 3 (round 3) — conflict resolution's worktree path no longer depends on \$\$" "[ $R16 -eq 0 ]"
+R17=1; echo "$CONFLICT_PARA" | grep -qF 'reviewer-conflict-pr{N}' && R17=0
+ok "PI-34 finding 3 (round 3) — conflict resolution uses a literal, PR-number-based path" "[ $R17 -eq 0 ]"
 
 # PI-34 finding 5 — .git/info/exclude must resolve via --git-common-dir: a linked worktree's own ".git" is a
 # FILE (a gitlink), not a directory, and mkdir -p on a path below it used to fail when verify.sh was launched

@@ -196,11 +196,26 @@ q git -C "$M" worktree add -q --detach "$NEWSCRATCH_INUSE" main
 INUSE_PID=$!
 sleep 0.2   # let the backgrounded process actually chdir before lsof looks
 OUT=$(cd "$M" && bash "$SCRIPT")
-ok "PI-34 unused verify-* scratch removed immediately, no 24h wait" "has 'removed worktree .*verify-999999-unused \(detached scratch, unused\)' && [[ ! -d \"$NEWSCRATCH_UNUSED\" ]]"
+ok "PI-34 unused verify-* scratch removed immediately, no 24h wait" "has 'removed worktree .*verify-999999-unused \(detached scratch, clean and unused\)' && [[ ! -d \"$NEWSCRATCH_UNUSED\" ]]"
 ok "PI-34 in-use wave-overlay-* scratch kept while a process has it as cwd" "has 'kept .*$INUSE_BASENAME \(detached scratch, in use\)' && [[ -d \"$NEWSCRATCH_INUSE\" ]]"
 kill "$INUSE_PID" 2>/dev/null; wait "$INUSE_PID" 2>/dev/null
 OUT=$(cd "$M" && bash "$SCRIPT")
-ok "PI-34 scratch removed on the next run once no process uses it (kill -9 recovery)" "has 'removed worktree .*$INUSE_BASENAME \(detached scratch, unused\)' && [[ ! -d \"$NEWSCRATCH_INUSE\" ]]"
+ok "PI-34 scratch removed on the next run once no process uses it (kill -9 recovery)" "has 'removed worktree .*$INUSE_BASENAME \(detached scratch, clean and unused\)' && [[ ! -d \"$NEWSCRATCH_INUSE\" ]]"
+
+# PI-34 round 3, finding 2 — a scratch worktree holding work nothing else has a copy of is never force-removed:
+# dirty (uncommitted change) and outside .claude/worktrees/ (basename alone used to be enough to match).
+DIRTY_SCRATCH="$WT/verify-777777-dirty"
+q git -C "$M" worktree add -q --detach "$DIRTY_SCRATCH" main
+echo uncommitted >> "$DIRTY_SCRATCH/f"
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 dirty verify-* scratch kept, never force-removed" "has 'kept .*verify-777777-dirty \(detached scratch, dirty or mid-merge/rebase' && [[ -d \"$DIRTY_SCRATCH\" ]] && grep -q uncommitted \"$DIRTY_SCRATCH/f\""
+q git -C "$M" worktree remove --force "$DIRTY_SCRATCH"
+
+EXTERNAL_SCRATCH="$S/verify-elsewhere"
+q git -C "$M" worktree add -q --detach "$EXTERNAL_SCRATCH" main
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 a same-named worktree outside .claude/worktrees/ is left alone (basename is not enough)" "has 'kept .*verify-elsewhere \(detached\)' && [[ -d \"$EXTERNAL_SCRATCH\" ]]"
+q git -C "$M" worktree remove --force "$EXTERNAL_SCRATCH"
 # 6. PI-31 — locked worktrees, created by the real worktree.sh: a protection independent of the commit criteria
 WTSH="$PWD/worktree.sh"
 lockof(){ git -C "$M" worktree list --porcelain | awk -v w="/$1" '/^worktree /{f=(substr($0,length($0)-length(w)+1)==w)} f && /^locked/{print}'; }
