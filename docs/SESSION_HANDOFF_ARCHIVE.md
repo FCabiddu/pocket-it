@@ -81,3 +81,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-25 PR #50 fix pushed round 3 — id regex allows alnum segments and letter suffixes — file-by-file compare vs main on a real board
 - 2026-09-13 PI-25 PR #50 needs work (delta 3) — doctor alnum-id test is vacuous — cause: other: vacuous test
 - 2026-09-13 PI-25 PR #50 fix pushed round 4 — repo8's vacuous 'no error' assertions replaced with real duplicate pairs per id shape
+- 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class

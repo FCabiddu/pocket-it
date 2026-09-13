@@ -35,6 +35,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Guardie su git log --name-status: sempre -m --first-parent (altrimenti la D dentro un merge sparisce) e --no-renames (altrimenti una cancellazione con file simile esce come R e l'esito dipende da diff.renames)
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
 - 2026-09-13 PI-12 PR #39 approved round 4 delta — no-renames guard, 12 cases measured — merge: orchestrator on instruction
 - 2026-09-13 PI-12 PR #39 fix pushed round 4 — guardia con --no-renames, compact 1/N e rinomina vera come casi — nessun test (documento)
 - 2026-09-13 PI-12 PR #39 needs work round 3 delta — compact esce come R, serve --no-renames — cause: example-not-class
@@ -74,4 +75,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-25 PR #50 conflict resolved — union of handoff/archive (0 lines lost), next-wave.test both blocks kept; PI-26 fixtures T-HI/T-LO -> T-HI-1/T-LO-1 (digit-less ids are not ids under PI-25) — testCommand 357 ok
 - 2026-09-13 PI-25 PR #50 approved (delta 5) — merge: user
 - 2026-09-13 PI-25 PR #50 fix pushed round 5 — repo8 covers all three alnum-segment positions (prefix, middle, trailing)
-- 2026-09-13 PI-25 PR #50 needs work (delta 4) — prefix-digit id shape untested in doctor — cause: example-not-class
