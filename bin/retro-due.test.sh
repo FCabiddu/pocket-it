@@ -264,6 +264,72 @@ ok "F2 — exactly 3 signals (2 needs-work-cause + 1 repeat), not inflated by th
    '[[ "$out13" == "RETRO DUE: 3 segnali"* ]]'
 rm -rf "$S13"
 
+# --- R3F1 (round 3): the cause field is read only from its own " — cause: …" position, never the first
+# "cause:"-shaped substring on the line ("because:", "root cause:", or a mention earlier in the free text)
+S20=$(mkrepo)
+writelog "$S20" \
+  "- 2026-09-03 PI-51 PR #81 needs work — rosso because: trap tardi — cause: first-round" \
+  "- 2026-09-02 PI-52 PR #82 needs work — root cause: base mossa — cause: first-round" \
+  "- 2026-09-01 PI-53 PR #83 needs work — because: x — cause: example-not-class"
+out20=$(run "$S20")
+ok "R3F1 negative — 'because:' embedded earlier in the line is not read as the cause field" '! grep -q "PI-51" <<<"$out20"'
+ok "R3F1 negative — 'root cause:' (no leading em-dash of its own) is not read as the cause field" '! grep -q "PI-52" <<<"$out20"'
+ok "R3F1 positive — the real trailing '— cause:' field is read even after an earlier 'because:' mention" \
+   'grep -qE "^PI-53 — needs-work-cause —" <<<"$out20"'
+ok "R3F1 — exactly one signal in this fixture" '[[ "$out20" == "RETRO DUE: 1 segnali"* ]]'
+rm -rf "$S20"
+
+# a Facts-section line mentioning "cause:"/"needs work" as ordinary words is never read at all — the Log
+# section is a hard boundary, so it cannot leak a false positive or hide a real one
+S21=$(mkrepo)
+mkdir -p "$S21/docs"
+cat > "$S21/docs/SESSION_HANDOFF.md" <<'EOF'
+# Session handoff
+
+## Fatti che non scadono
+- a fact mentioning cause: something and needs work as ordinary words, never a log signal
+
+## Log (più recente in alto, ultime 40 righe)
+- 2026-09-01 PI-55 PR #85 needs work — reason — cause: example-not-class
+EOF
+out21=$(cd "$S21" && bash "$SCRIPT")
+ok "R3F1 — a fact mentioning 'cause:'/'needs work' never affects the Log-derived signal" \
+   '[[ "$out21" == "RETRO DUE: 1 segnali"* ]] && grep -q "PI-55" <<<"$out21"'
+rm -rf "$S21"
+
+# --- R3F2 (round 3): the needs-work outcome must be the word right after "PR #<n>" itself, in one of its
+# real qualified forms — not merely present somewhere before the next em-dash on the same line. Positive:
+# every real form from the log (implementing-common.md / reviewer.md); negative: "needs work" named in
+# another outcome's own free text (approved/re-review/merged/draft) ---
+S22=$(mkrepo)
+writelog "$S22" \
+  "- 2026-09-10 PI-93 PR #93 draft — needs work fixes applied — 3 tests — cause: other: fake93" \
+  "- 2026-09-09 PI-92 PR #92 merged after needs work — ok — cause: other: fake92" \
+  "- 2026-09-08 PI-91 PR #91 re-review after needs work fixed — ok — cause: other: fake91" \
+  "- 2026-09-07 PI-90 PR #90 approved (delta 3, 2 needs work closed) — merge: orchestrator — cause: other: fake90" \
+  "- 2026-09-06 PI-65 PR #65 delta needs work round 2 — reason — cause: other: r6" \
+  "- 2026-09-05 PI-64 PR #64 delta needs work — reason — cause: other: r5" \
+  "- 2026-09-04 PI-63 PR #63 needs work round 2 delta — reason — cause: other: r4" \
+  "- 2026-09-03 PI-62 PR #62 needs work round 2 — reason — cause: other: r3" \
+  "- 2026-09-02 PI-61 PR #61 needs work (delta 2) — reason — cause: other: r2" \
+  "- 2026-09-01 PI-60 PR #60 needs work — reason — cause: other: r1"
+out22=$(run "$S22")
+ok "R3F2 positive — plain 'PR #n needs work'"               'grep -qE "^PI-60 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 positive — 'PR #n needs work (delta n)'"           'grep -qE "^PI-61 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 positive — 'PR #n needs work round n'"              'grep -qE "^PI-62 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 positive — 'PR #n needs work round n delta'"        'grep -qE "^PI-63 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 positive — 'PR #n delta needs work'"                 'grep -qE "^PI-64 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 positive — 'PR #n delta needs work round n'"         'grep -qE "^PI-65 — needs-work-cause —" <<<"$out22"'
+# each false form also carries a real "— cause: …" field of its own, so if it were wrongly read as a
+# review round it would show up as a visible needs-work-cause signal — an absent line alone cannot tell
+# "correctly not a round" apart from "a round with no cause", so this is what makes the negative load-bearing
+ok "R3F2 negative — 'approved (… 2 needs work closed)' is not a review round" '! grep -q "PI-90" <<<"$out22"'
+ok "R3F2 negative — 're-review after needs work fixed' is not a review round" '! grep -q "PI-91" <<<"$out22"'
+ok "R3F2 negative — 'merged after needs work' is not a review round" '! grep -q "PI-92" <<<"$out22"'
+ok "R3F2 negative — a draft line's own 'needs work fixes' mention is not a review round" '! grep -q "PI-93" <<<"$out22"'
+ok "R3F2 — exactly the 6 real forms signal, nothing else" '[[ "$out22" == "RETRO DUE: 6 segnali"* ]]'
+rm -rf "$S22"
+
 # --- F3 (round 2): a cause value stops at the first em-dash, so "cause: X — fix at: A" and
 # "cause: X — fix at: B" are recognised as the same cause ---
 S14=$(mkrepo)

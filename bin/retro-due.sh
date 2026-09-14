@@ -19,7 +19,12 @@
 # produce (round 2 finding: a bare substring search also counted BUDGET/STALL named in an unrelated log
 # line's own description, and counted a skill's own PR-closing log line — "QF-{n} PR #{m} needs work — …"
 # — as a second needs-work round on top of the reviewer's; quickfix's closing status word is now
-# "needs-work", hyphenated, precisely so it never collides with this anchor).
+# "needs-work", hyphenated, precisely so it never collides with this anchor). Round 3: an example in
+# place of the whole class — "no em-dash before needs work" still matched a verb elsewhere on the same
+# line ("approved (… 2 needs work closed)", "re-review after needs work fixed"); the outcome word must
+# come right after "PR #<n>" itself, not merely somewhere before the next em-dash. Likewise `cause:` is
+# read only from its own " — cause: …" field, never the first "cause:"-shaped substring on the line
+# ("because:", "root cause:", or the taxonomy word quoted earlier in the free text).
 #
 # Read-only: never writes, never touches git status (the composer path inherits this from bin/handoff.sh's
 # own PI-14 guarantee; the fallback path only ever opens files for reading).
@@ -52,15 +57,26 @@ MARK_RE = re.compile(rf'^- {DATE} retro-mark {DATE} \S+$')
 # ("- <date> BUDGET <ID> …" / "- <date> STALL <ID> …") — never a word search across the whole line.
 BUDGET_RE = re.compile(rf'^- {DATE} BUDGET\b')
 STALL_RE = re.compile(rf'^- {DATE} STALL\b')
-# A real review round: "<ID> PR #<n> needs work …" (reviewer.md), the ID and "PR #<n>" always immediately
-# before it, with no em-dash in between — an em-dash starts the free-text description that follows. This
-# also excludes a skill's own PR-closing log line, which never uses this two-word, space-separated form.
-NEEDS_WORK_RE = re.compile(r'PR #\d+[^—]*\bneeds work\b')
-# The cause value stops at the first em-dash: reviewer.md's own line shape is
-# "cause: {taxonomy} — fix at: {destination}" — the old non-anchored ".+?$" swallowed "— fix at: …" too,
-# so no two "cause: X — fix at: A" / "cause: X — fix at: B" pair (b)'s own diagnostic case ever compared
-# equal.
-CAUSE_RE = re.compile(r'cause:\s*([^—]+)')
+# A real review round, anchored to the whole line's own shape (reviewer.md): "- <date> <ID> PR #<n>
+# [delta ]needs work[ (delta N)| round N[ delta]]" then either the end of the line or the " — " that
+# starts the free-text description. Round 2's "no em-dash in between" version still matched a verb
+# elsewhere in the same line ("approved (delta 3, 2 needs work closed)", "re-review after needs work
+# fixed") because it only required "needs work" to *follow* "PR #<n>" somewhere before an em-dash — never
+# that "needs work" (with its own real qualifiers) is the OUTCOME word right after "PR #<n>" itself.
+NEEDS_WORK_RE = re.compile(
+    rf'^- {DATE} \S+ PR #\d+ (?:delta )?needs work(?: \(delta \d+\)| round \d+(?: delta)?)?(?:\s—|$)'
+)
+# The cause value is read only from its own field, "<sep> cause: <value><sep>" where <sep> is " — " —
+# never the first "cause:" substring anywhere in the line. Round 2's `cause:\s*([^—]+)` still matched
+# inside "because: …" (a real substring of "be" + "cause:") and "root cause: …" (no separating em-dash of
+# its own), so the wrong, earlier "cause:" won when the real field came later on the same line. `findall`
+# + the last match: a line can quote "cause:" more than once in its own free text before the real field.
+CAUSE_RE = re.compile(r'(?:^|\s)—\s+cause:\s*([^—]+?)\s*(?=\s—\s|$)')
+
+
+def extract_cause(line):
+    matches = CAUSE_RE.findall(line)
+    return matches[-1].strip() if matches else None
 
 
 class InputError(Exception):
@@ -190,10 +206,9 @@ def run():
         if STALL_RE.match(line):
             signals.append((tid, "stall", line))
             continue
-        if NEEDS_WORK_RE.search(line):
+        if NEEDS_WORK_RE.match(line):
             needs_work_count[tid] = needs_work_count.get(tid, 0) + 1
-            m = CAUSE_RE.search(line)
-            cause = m.group(1).strip() if m else None
+            cause = extract_cause(line)
             if cause and cause != "first-round":
                 signals.append((tid, "needs-work-cause", line))
                 prior = cause_first_task.get(cause)
