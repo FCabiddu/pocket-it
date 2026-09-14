@@ -21,15 +21,23 @@
 # and its entry pruned (its branch is deleted only on that same merged-PR condition). A lock with any other reason was
 # placed by someone else and is never released.
 # Only clean worktrees are removed; dirty ones (or ones whose `git status` fails) are kept. Detached-HEAD scratch
-# worktrees (PI-34: `.claude/worktrees/verify-*`, `wave-overlay-*` and `reviewer-conflict-*` — verify.sh, the
-# reviewer's wave overlay pass and its conflict resolution; the legacy `/tmp/*` layout still recognised too) are
-# never removed on their basename alone: the path must sit under this repo's own `.claude/worktrees/` (a
-# same-named folder anywhere else, e.g. a sibling `../verify-elsewhere`, is left untouched), `git status
-# --porcelain` must be empty and no merge or rebase may be in progress there (uncommitted or half-resolved work
-# is kept, never force-removed), and no process may have it open or as a cwd (`lsof +D`) — every one of those,
-# never gated by an age, so a `kill -9`'d run must not leave an orphan waiting 24 h, but a live or dirty one is
-# never swept just because it is old. `lsof` missing falls back to the old 24h-age rule for the *clean* case only,
-# so a live one is never guessed at. The corresponding local branch is then deleted and `git worktree prune`
+# worktrees (PI-34: `.claude/worktrees/verify-<pid>-*`, `wave-overlay-<epoch>` and `reviewer-conflict-pr<N>` —
+# verify.sh, the reviewer's wave overlay pass and its conflict resolution; the legacy `/tmp/*` layout still
+# recognised too) are removed only when every one of these holds:
+#   - the path sits under this repo's own `.claude/worktrees/`, with a basename in exactly one of those digit-
+#     bearing forms — never a bare basename match, so a same-named folder elsewhere (`../verify-elsewhere`) or
+#     an agent's own worktree whose branch merely slugs to a lookalike name (`verify-login`, no pid) is left alone;
+#   - `git status --porcelain` is empty and no merge or rebase is in progress there (uncommitted or half-resolved
+#     work is kept, never force-removed);
+#   - every commit reachable from its `HEAD` is also reachable from some remote-tracking ref (`git rev-list HEAD
+#     --not --remotes` empty) — a resolution committed but not yet pushed (the window between `git commit` and
+#     `git push` in the reviewer's own conflict-resolution flow, or a real agent worktree with a local commit
+#     never pushed) is kept, since removing it would lose the only copy of that commit;
+#   - no process has it open or as a cwd (`lsof +D`).
+# None of these is gated by age, so a `kill -9`'d run must not leave an orphan waiting 24 h, but a live, dirty or
+# not-yet-pushed one is never swept just because it is old. `lsof` missing falls back to the old 24h-age rule for
+# the case that is otherwise clean, on a remote and unused. The corresponding local branch is then deleted and
+# `git worktree prune`
 # runs. One line per action, a summary with the freed size at the end.
 # Exit 0 always (2 on usage error). Safe to run repeatedly.
 set -uo pipefail
@@ -147,8 +155,18 @@ is_scratch_legacy(){ case "$1" in /tmp/*|/private/tmp/*) return 0;; esac; return
 # PI-34 round 3: a basename match is not enough — "../verify-elsewhere", outside .claude/worktrees/ entirely,
 # used to be swept the same as a real scratch worktree because only the basename was checked. The path itself
 # must sit under *this* repo's own .claude/worktrees/ (MAIN, not wherever the script happens to be invoked
-# from) before its basename is even looked at.
-is_scratch_new(){ case "$1" in "$MAIN/.claude/worktrees/"verify-*|"$MAIN/.claude/worktrees/"wave-overlay-*|"$MAIN/.claude/worktrees/"reviewer-conflict-*) return 0;; esac; return 1; }
+# from), and the basename must be one of the exact forms verify.sh/reviewer.md actually create — a digit-bearing
+# suffix, never the bare branch slug worktree.sh uses for an agent's own worktree. Round 4: "verify-*" alone
+# still matched "verify-login" (an agent's real worktree for a branch literally named "verify-login"); tightened
+# to require the pid: "verify-<digits>-<anything>", "wave-overlay-<digits>" (no extra suffix), "reviewer-
+# conflict-pr<digits>" (the PR-number-keyed name reviewer.md's conflict resolution now uses, never a pid).
+is_scratch_new(){ local p="$1" base
+  case "$p" in "$MAIN/.claude/worktrees/"*) ;; *) return 1;; esac
+  base=$(basename "$p")
+  [[ "$base" =~ ^verify-[0-9]+-.+$ ]] && return 0
+  [[ "$base" =~ ^wave-overlay-[0-9]+$ ]] && return 0
+  [[ "$base" =~ ^reviewer-conflict-pr[0-9]+$ ]] && return 0
+  return 1; }
 # PI-34 round 3: a scratch worktree is never force-removed while it might hold work nothing else has a copy of
 # — uncommitted changes, staged changes, untracked files, or a merge/rebase paused mid-resolution. Before this,
 # the detached-scratch branch below skipped the dirty check the ordinary branch-based path already had, so a
@@ -161,6 +179,15 @@ scratch_clean(){ local p="$1" st mh rm ra
   rm=$(git -C "$p" rev-parse --git-path rebase-merge 2>/dev/null) && [[ -d "$rm" ]] && return 1
   ra=$(git -C "$p" rev-parse --git-path rebase-apply 2>/dev/null) && [[ -d "$ra" ]] && return 1
   return 0; }
+# PI-34 round 4: `scratch_clean` alone let a *committed* resolution through — clean by `git status`, but its
+# commit sat only in this worktree's detached HEAD, on no ref at all: `reviewer-conflict-pr7` between `git
+# commit` and `git push` (nothing holds it open in between, across separate Bash calls), and a real agent
+# worktree `verify-login` with a local `wip` commit never pushed, were both swept as "clean and unused". A
+# scratch is only disposable when every commit reachable from its HEAD is also reachable from some remote-
+# tracking ref — i.e. nothing on it exists solely in this one directory.
+head_on_remote(){ local p="$1" out rc
+  out=$(git -C "$p" rev-list HEAD --not --remotes 2>/dev/null); rc=$?
+  (( rc == 0 )) && [[ -z "$out" ]]; }
 older_24h(){ [[ -n "$(find "$1" -maxdepth 0 -mmin +1440 2>/dev/null)" ]]; }
 in_use(){ command -v lsof >/dev/null 2>&1 && [[ -n "$(lsof +D "$1" 2>/dev/null)" ]]; }   # exit status is not
   # reliable here — measured 1 even with a match printed, once the open file sits below $1 rather than at it —
@@ -226,6 +253,7 @@ for e in "${entries[@]}"; do
     P="$(abs "$p")"
     if is_scratch_new "$P"; then
       if ! scratch_clean "$p"; then keep "$p" "detached scratch, dirty or mid-merge/rebase — holds work nothing else has a copy of"
+      elif ! head_on_remote "$p"; then keep "$p" "detached scratch, HEAD has commits not on any remote — holds work nothing else has a copy of"
       elif in_use "$p"; then keep "$p" "detached scratch, in use"
       elif command -v lsof >/dev/null 2>&1; then remove "$p" "detached scratch, clean and unused" ""
       elif older_24h "$p"; then remove "$p" "detached scratch older than 24 h (lsof unavailable)" ""
