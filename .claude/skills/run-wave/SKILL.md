@@ -52,6 +52,8 @@ Then: one developer per PR, in one message, background, prompt `Issue: {id} — 
 
 Then one more reviewer call per affected group with `Mode: delta` (reads only the fix commits — cheap). **Never merge a PR that carries `needs-work` without that delta re-review**, however small the fix: the reviewer swaps the labels, and a merged PR left with `needs-work` corrupts the retro's numbers.
 
+**Retro trigger — after every review, first round and any delta re-review alike.** `bash ~/.claude/agents/pocket-it/bin/retro-due.sh`. Exit 0 (`retro-due: nothing`) → continue. Exit 2 is a script or environment error, not a "no signals" answer: fix it, do not treat it as nothing. Exit 10 (`RETRO DUE: …`) → first `gh pr list --state open --json headRefName --jq '.[].headRefName' | grep -q '^retro/'`: a match means a retro triggered earlier in this same wave already has a branch or PR open and unmerged — do not launch a second one on the same signals, note it in the report and move on. No match → launch the `retro` agent right now, in background — `subagent_type: retro`, `run_in_background: true`, prompt `Signals:` followed by the script's signal lines verbatim (the exact input `retro.md` declares for this trigger) — never asking, never waiting for the epic to close; this runs in addition to the end-of-board retro in Step 5's "Learning hooks", not instead of it. Run this check once per collect step for the whole wave, not once per review group, even when more than one group's review reported exit 10 at once.
+
 ### 4b. Overlay verification — every APPROVED PR of the wave, one tree, before the first merge
 
 Skip entirely when the wave has at most one APPROVED PR: nothing to overlap, no launch, no cost.

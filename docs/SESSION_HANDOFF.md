@@ -50,6 +50,14 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
+- 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
+- 2026-09-14 PI-35 PR #66 needs work (delta 3) — forma (delta) non riconosciuta — cause: example-not-class
+- 2026-09-14 PI-35 round 3 fix pushed — cause/needs-work read by field position not example, mark verified above #65 — 71 tests green
+- 2026-09-14 PI-35 PR #66 needs work (delta 2) — cause e needs work non ancorati — cause: example-not-class
+- 2026-09-14 PI-35 round 2 fix pushed — anchored mark/BUDGET/STALL/needs-work, exit-2 contract, no duplicate retro, initial mark above #65 — 57 tests green
+- 2026-09-13 PI-35 PR #66 needs work — il segno si riconosce anche in prosa — cause: first-round
+- 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests
 - 2026-09-14 PI-34 PR #64 approved (delta 4) — merge: orchestrator, prima di #66
 - 2026-09-14 PI-34 PR #64 giro 4 fix pushed — scratch tenuta se HEAD non su remote, nomi scratch a cifre esatte — 2 nuovi test, 180 verdi
 - 2026-09-14 PI-34 PR #64 needs work (delta 3) — scratch con commit non pushato rimossa — cause: other: condizione (c) elencata non applicata
@@ -58,6 +66,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-34 giro 2 fixes pushed — SIGINT/TERM exit codes, conflict-resolution worktree reuse, scratch liveness, git-common-dir — 24 tests
 - 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
 - 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
+- 2026-09-13 retro-mark 2026-09-13 flow-errors
 - 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
 - 2026-09-13 PI-29 PR #60 approved (delta 6) — pwd -P paths, suite green via symlink and verify.sh — merge: orchestrator
 - 2026-09-13 PI-29 round 6 fix pushed — test paths resolved with pwd -P, symlink-proof — 88 tests green from a symlinked dir too
@@ -81,12 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
 - 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
 - 2026-09-13 PI-28 PR #58 needs work round 2 — union non confinata, falso GREEN — cause: example-not-class
-- 2026-09-13 PI-28 PR #58 round 2 pushed afb6287 — 8 findings closed, overlay now Mode: overlay reviewer
-- 2026-09-13 PI-28 PR #58 needs work — overlay in sessione principale, non eseguibile — cause: first-round
-- 2026-09-13 PI-28 PR #58 draft — overlay-test wave PRs before merge, sharpen finding rules — prose task, no tests
-- 2026-09-13 PI-33 PR #57 approved round 7 delta — tre frasi alla lettera, 14 casi rimisurati — merge: orchestrator
-- 2026-09-13 PI-33 round 7 fix pushed on #57 — run's own hosting path excluded from outside-this-run
-- 2026-09-13 PI-33 PR #57 needs work round 6 delta — server che ospita il DB conta come lettore esterno — cause: example-not-class
-- 2026-09-13 PI-33 round 6 fix pushed on #57 — one criterion for shared/disposable, real restored for proof rows
-- 2026-09-13 PI-33 PR #57 needs work round 5 delta — shared senza 'lasciato', disposable non più ⊂ real — cause: other: tabella percorsa con la glossa
-- 2026-09-13 PI-33 round 5 fix pushed on #57 — shared defined strictly, disposable as complement
