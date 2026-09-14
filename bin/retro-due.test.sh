@@ -330,6 +330,74 @@ ok "R3F2 negative — a draft line's own 'needs work fixes' mention is not a rev
 ok "R3F2 — exactly the 6 real forms signal, nothing else" '[[ "$out22" == "RETRO DUE: 6 segnali"* ]]'
 rm -rf "$S22"
 
+# --- R4F1 (round 4): the needs-work qualifier forms are derived from THIS project's own real log +
+# archive at test time, never a hand-copied example list again — round 3's own list (copied from the
+# reviewer's examples) missed the real form "needs work (delta)" with no number, present 3 times in this
+# project's own history. Classification reuses the SCRIPT'S OWN compiled NEEDS_WORK_RE (exec'd from the
+# script's embedded python body with harmless argv) rather than a second regex written by hand here,
+# which could itself drift from the real one the same way the reviewer.md template already had.
+REAL_NEEDS_WORK=$(bash ../bin/handoff.sh recent --all 2>/dev/null | grep -E 'PR #[0-9]+.*needs work')
+real_count=$(printf '%s\n' "$REAL_NEEDS_WORK" | grep -c . || true)
+ok "R4F1 setup — this project's own log/archive has real needs-work lines to test against (not vacuous)" \
+   '[[ "$real_count" -gt 0 ]]'
+classify_real=$(python3 - "$SCRIPT" "$REAL_NEEDS_WORK" <<'PY'
+import sys, re, io, contextlib
+script_path, lines_blob = sys.argv[1], sys.argv[2]
+body = re.search(r"<<'PY'\n(.*?)\nPY\n", open(script_path).read(), re.S).group(1)
+ns = {}
+sys.argv = ["retro-due.sh", "/nonexistent-root-for-test", "/nonexistent-handoff-for-test"]
+try:
+    with contextlib.redirect_stdout(io.StringIO()):   # run()'s own "retro-due: nothing"/exit never leaks
+        exec(compile(body, "retro-due-embedded", "exec"), ns)
+except SystemExit:
+    pass
+NEEDS_WORK_RE = ns["NEEDS_WORK_RE"]
+unrecognised = [l for l in lines_blob.split("\n") if l and not NEEDS_WORK_RE.match(l)]
+print(("UNRECOGNISED:\n" + "\n".join(unrecognised)) if unrecognised else "ALL RECOGNISED")
+PY
+)
+ok "R4F1 — every real 'PR #n … needs work …' line in this project's own log/archive is recognised" \
+   '[[ "$classify_real" == "ALL RECOGNISED" ]]'
+[[ "$classify_real" != "ALL RECOGNISED" ]] && echo "$classify_real"
+
+# --- R4F2 (round 4): the reviewer's own NEEDS WORK log template (reviewer.md:142) is read as a signal —
+# the template line is taken from the file itself, not hand-copied here, so the producer (reviewer.md)
+# and this consumer (retro-due.sh) are checked against the same text and can never drift apart again.
+TEMPLATE=$(grep -oE '\{ID\} PR #\{N\} needs work\{ \(delta N\)\} — \{first finding, six words\} — cause: \{[^}]*\}' ../.claude/agents/reviewer.md)
+ok "R4F2 setup — the exact template line is present in reviewer.md (not hand-copied here)" '[[ -n "$TEMPLATE" ]]'
+
+instantiate(){ # instantiate ID N DELTA_SUFFIX CAUSE — fills the extracted template, nothing hand-built
+  local id="$1" n="$2" delta="$3" cause="$4" line="$TEMPLATE"
+  line="${line/\{ID\}/$id}"
+  line="${line/\{N\}/$n}"
+  line="${line/\{ (delta N)\}/$delta}"
+  line="${line/\{first finding, six words\}/a short finding description}"
+  line="${line/\{first-round|example-not-class|base-moved|verification-reintroduced|other: …\}/$cause}"
+  printf -- '- 2026-09-01 %s' "$line"
+}
+
+for cause in "example-not-class" "base-moved" "verification-reintroduced" "other: something specific"; do
+  Sx=$(mkrepo)
+  writelog "$Sx" "$(instantiate PI-80 80 '' "$cause")"
+  outx=$(run "$Sx")
+  ok "R4F2 — the template instantiated with cause: $cause is read as a signal" '[[ "$outx" == "RETRO DUE: 1 segnali"* ]]'
+  rm -rf "$Sx"
+done
+
+Sfr=$(mkrepo)
+writelog "$Sfr" "$(instantiate PI-81 81 '' "first-round")"
+outfr=$(run "$Sfr")
+ok "R4F2 — the template instantiated with cause: first-round alone is not a signal (unchanged convention)" \
+   '[[ "$outfr" == "retro-due: nothing" ]]'
+rm -rf "$Sfr"
+
+Sdelta=$(mkrepo)
+writelog "$Sdelta" "$(instantiate PI-82 82 ' (delta 2)' "example-not-class")"
+outdelta=$(run "$Sdelta")
+ok "R4F2 — the template's optional '(delta N)' qualifier still reads as a signal" \
+   '[[ "$outdelta" == "RETRO DUE: 1 segnali"* ]]'
+rm -rf "$Sdelta"
+
 # --- F3 (round 2): a cause value stops at the first em-dash, so "cause: X — fix at: A" and
 # "cause: X — fix at: B" are recognised as the same cause ---
 S14=$(mkrepo)

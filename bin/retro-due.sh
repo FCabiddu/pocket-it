@@ -58,13 +58,17 @@ MARK_RE = re.compile(rf'^- {DATE} retro-mark {DATE} \S+$')
 BUDGET_RE = re.compile(rf'^- {DATE} BUDGET\b')
 STALL_RE = re.compile(rf'^- {DATE} STALL\b')
 # A real review round, anchored to the whole line's own shape (reviewer.md): "- <date> <ID> PR #<n>
-# [delta ]needs work[ (delta N)| round N[ delta]]" then either the end of the line or the " — " that
+# [delta ]needs work[ (<anything>)| round N[ delta]]" then either the end of the line or the " — " that
 # starts the free-text description. Round 2's "no em-dash in between" version still matched a verb
 # elsewhere in the same line ("approved (delta 3, 2 needs work closed)", "re-review after needs work
 # fixed") because it only required "needs work" to *follow* "PR #<n>" somewhere before an em-dash — never
 # that "needs work" (with its own real qualifiers) is the OUTCOME word right after "PR #<n>" itself.
+# Round 3's own qualifier list was hand-copied from the reviewer's examples rather than derived from the
+# real log/archive, and missed "needs work (delta)" with no number (3 real review rounds in this
+# project's own history) — the parenthesised qualifier is read generically, whatever it says, never
+# re-enumerated by hand again.
 NEEDS_WORK_RE = re.compile(
-    rf'^- {DATE} \S+ PR #\d+ (?:delta )?needs work(?: \(delta \d+\)| round \d+(?: delta)?)?(?:\s—|$)'
+    rf'^- {DATE} \S+ PR #\d+ (?:delta )?needs work(?: \([^)]*\)| round \d+(?: delta)?)?(?:\s—|$)'
 )
 # The cause value is read only from its own field, "<sep> cause: <value><sep>" where <sep> is " — " —
 # never the first "cause:" substring anywhere in the line. Round 2's `cause:\s*([^—]+)` still matched
