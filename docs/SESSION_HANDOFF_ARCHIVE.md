@@ -133,3 +133,11 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-33 PR #57 needs work — shared/disposable overlap, missing stop clause
 - 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
 - 2026-09-13 PI-33 PR #57 needs work round 3 — shared/disposable non complementari — cause: example-not-class
+- 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
+- 2026-09-13 PI-33 PR #57 needs work round 4 — in-memory/fake DB senza categoria — cause: example-not-class
+- 2026-09-13 PI-33 round 5 fix pushed on #57 — shared defined strictly, disposable as complement
+- 2026-09-13 PI-33 PR #57 needs work round 5 delta — shared senza 'lasciato', disposable non più ⊂ real — cause: other: tabella percorsa con la glossa
+- 2026-09-13 PI-33 round 6 fix pushed on #57 — one criterion for shared/disposable, real restored for proof rows
+- 2026-09-13 PI-33 PR #57 needs work round 6 delta — server che ospita il DB conta come lettore esterno — cause: example-not-class
+- 2026-09-13 PI-33 round 7 fix pushed on #57 — run's own hosting path excluded from outside-this-run
+- 2026-09-13 PI-33 PR #57 approved round 7 delta — tre frasi alla lettera, 14 casi rimisurati — merge: orchestrator

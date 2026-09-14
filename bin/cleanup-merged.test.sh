@@ -184,6 +184,61 @@ ok "--all removes the merged epic worktree" "has 'removed worktree .*epic-e1 \(m
 ok "--all still keeps live, dirty, locked" "has 'kept .*agent-live \(not merged\)' && has 'kept .*agent-dirty \(dirty\)' && has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released — its owner runs: git -C [^ ]+ worktree unlock .*agent-locked\)'"
 ok "--all still keeps worktrees with no commits of its own" "has 'kept .*task-atbase \($NOOWN' && has 'kept .*task-behind \($NOOWN' && has 'kept .*task-fromepic \($NOOWN' && has 'kept .*task-fromgoneepic \($NOOWN' && has 'kept .*task-noreflog'"
 ok "worktree list is consistent" "[[ \$(git -C $M worktree list | wc -l | tr -d ' ') -eq 26 ]]"
+# 5b. PI-34 finding 4 — .claude/worktrees/verify-*/wave-overlay-* scratch is removed once no process uses it,
+# never gated by a 24h age like the legacy /tmp layout above: a kill -9'd verify.sh or overlay pass must not
+# leave a permanent orphan. Isolated fixtures, own bash "$SCRIPT" runs, no effect on the counts checked above.
+NEWSCRATCH_UNUSED="$WT/verify-999999-unused"
+q git -C "$M" worktree add -q --detach "$NEWSCRATCH_UNUSED" main
+INUSE_BASENAME="wave-overlay-$$"   # PI-34 round 4: the real form is digits with no suffix — no "-inuse" tail
+NEWSCRATCH_INUSE="$WT/$INUSE_BASENAME"
+q git -C "$M" worktree add -q --detach "$NEWSCRATCH_INUSE" main
+(cd "$NEWSCRATCH_INUSE" && exec tail -f /dev/null) &
+INUSE_PID=$!
+sleep 0.2   # let the backgrounded process actually chdir before lsof looks
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 unused verify-* scratch removed immediately, no 24h wait" "has 'removed worktree .*verify-999999-unused \(detached scratch, clean and unused\)' && [[ ! -d \"$NEWSCRATCH_UNUSED\" ]]"
+ok "PI-34 in-use wave-overlay-* scratch kept while a process has it as cwd" "has 'kept .*$INUSE_BASENAME \(detached scratch, in use\)' && [[ -d \"$NEWSCRATCH_INUSE\" ]]"
+kill "$INUSE_PID" 2>/dev/null; wait "$INUSE_PID" 2>/dev/null
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 scratch removed on the next run once no process uses it (kill -9 recovery)" "has 'removed worktree .*$INUSE_BASENAME \(detached scratch, clean and unused\)' && [[ ! -d \"$NEWSCRATCH_INUSE\" ]]"
+
+# PI-34 round 3, finding 2 — a scratch worktree holding work nothing else has a copy of is never force-removed:
+# dirty (uncommitted change) and outside .claude/worktrees/ (basename alone used to be enough to match).
+DIRTY_SCRATCH="$WT/verify-777777-dirty"
+q git -C "$M" worktree add -q --detach "$DIRTY_SCRATCH" main
+echo uncommitted >> "$DIRTY_SCRATCH/f"
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 dirty verify-* scratch kept, never force-removed" "has 'kept .*verify-777777-dirty \(detached scratch, dirty or mid-merge/rebase' && [[ -d \"$DIRTY_SCRATCH\" ]] && grep -q uncommitted \"$DIRTY_SCRATCH/f\""
+q git -C "$M" worktree remove --force "$DIRTY_SCRATCH"
+
+EXTERNAL_SCRATCH="$S/verify-elsewhere"
+q git -C "$M" worktree add -q --detach "$EXTERNAL_SCRATCH" main
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 a same-named worktree outside .claude/worktrees/ is left alone (basename is not enough)" "has 'kept .*verify-elsewhere \(detached\)' && [[ -d \"$EXTERNAL_SCRATCH\" ]]"
+q git -C "$M" worktree remove --force "$EXTERNAL_SCRATCH"
+
+# PI-34 round 4, finding (a) — a name inside .claude/worktrees/ that merely starts with a scratch prefix but
+# carries no pid/PR-number suffix (an agent's real worktree for a branch literally named "verify-login") must
+# never enter the scratch branch at all: clean, HEAD on a remote, unused — everything a real scratch would need
+# to be removed — and still kept, because its basename does not match the exact digit-bearing form.
+AGENTNAME_SCRATCH="$WT/verify-login"
+q git -C "$M" worktree add -q --detach "$AGENTNAME_SCRATCH" main
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 (a) a clean, on-remote 'verify-login' worktree is kept as an ordinary detached worktree, not swept as scratch" "has 'kept .*verify-login \(detached\)' && [[ -d \"$AGENTNAME_SCRATCH\" ]]"
+q git -C "$M" worktree remove --force "$AGENTNAME_SCRATCH"
+
+# PI-34 round 4, finding (c1) — a scratch worktree whose name and git status both pass, but whose HEAD carries a
+# commit that exists on no remote-tracking ref (the window between `git commit` and `git push` in the
+# reviewer's own conflict-resolution flow, keyed by PR number, or a real agent worktree with a local commit
+# never pushed) must still be kept — removing it would lose the only copy of that commit.
+UNPUSHED_SCRATCH="$WT/reviewer-conflict-pr7"
+q git -C "$M" worktree add -q --detach "$UNPUSHED_SCRATCH" main
+echo unpushed > "$UNPUSHED_SCRATCH/unpushed.txt"; q git -C "$UNPUSHED_SCRATCH" add unpushed.txt; q git -C "$UNPUSHED_SCRATCH" commit -qm "resolved, not pushed yet"
+UNPUSHED_SHA=$(git -C "$UNPUSHED_SCRATCH" rev-parse HEAD)
+OUT=$(cd "$M" && bash "$SCRIPT")
+ok "PI-34 (c1) a committed-but-unpushed reviewer-conflict-pr* scratch is kept, never force-removed" "has 'kept .*reviewer-conflict-pr7 \(detached scratch, HEAD has commits not on any remote' && [[ -d \"$UNPUSHED_SCRATCH\" ]] && git -C \"$M\" cat-file -e $UNPUSHED_SHA"
+q git -C "$M" worktree remove --force "$UNPUSHED_SCRATCH"
+
 # 6. PI-31 — locked worktrees, created by the real worktree.sh: a protection independent of the commit criteria
 WTSH="$PWD/worktree.sh"
 lockof(){ git -C "$M" worktree list --porcelain | awk -v w="/$1" '/^worktree /{f=(substr($0,length($0)-length(w)+1)==w)} f && /^locked/{print}'; }
