@@ -142,3 +142,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-33 round 7 fix pushed on #57 — run's own hosting path excluded from outside-this-run
 - 2026-09-13 PI-33 PR #57 approved round 7 delta — tre frasi alla lettera, 14 casi rimisurati — merge: orchestrator
 - 2026-09-13 PI-28 PR #58 draft — overlay-test wave PRs before merge, sharpen finding rules — prose task, no tests
+- 2026-09-13 PI-28 PR #58 needs work — overlay in sessione principale, non eseguibile — cause: first-round

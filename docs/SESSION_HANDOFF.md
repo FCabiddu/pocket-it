@@ -50,6 +50,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
 - 2026-09-14 PI-35 PR #66 needs work (delta 3) — forma (delta) non riconosciuta — cause: example-not-class
 - 2026-09-14 PI-35 round 3 fix pushed — cause/needs-work read by field position not example, mark verified above #65 — 71 tests green
 - 2026-09-14 PI-35 PR #66 needs work (delta 2) — cause e needs work non ancorati — cause: example-not-class
@@ -89,4 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
 - 2026-09-13 PI-28 PR #58 needs work round 2 — union non confinata, falso GREEN — cause: example-not-class
 - 2026-09-13 PI-28 PR #58 round 2 pushed afb6287 — 8 findings closed, overlay now Mode: overlay reviewer
-- 2026-09-13 PI-28 PR #58 needs work — overlay in sessione principale, non eseguibile — cause: first-round
