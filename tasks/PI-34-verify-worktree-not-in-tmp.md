@@ -1,6 +1,6 @@
 # PI-34 — verify.sh e il reviewer creano le worktree usa e getta sotto .claude/worktrees, mai in /tmp
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix

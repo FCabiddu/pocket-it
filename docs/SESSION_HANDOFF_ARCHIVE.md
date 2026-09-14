@@ -134,3 +134,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
 - 2026-09-13 PI-33 PR #57 needs work round 3 — shared/disposable non complementari — cause: example-not-class
 - 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
+- 2026-09-13 PI-33 PR #57 needs work round 4 — in-memory/fake DB senza categoria — cause: example-not-class
