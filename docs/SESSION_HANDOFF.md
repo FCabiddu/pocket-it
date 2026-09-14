@@ -45,8 +45,19 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A recovery command a script prints must not publish to origin, under any ref name, history the base branch no longer contains: a rewrite may be the removal of a secret, and a pushed rescue-<sha> branch makes every new clone fetch it again (PI-29 round 4, measured). The printed command saves locally only (git branch rescue-<sha12> <sha>); pushing it anywhere is a person's decision, like restoring the base. Tests compare the whole git ls-remote origin before/after, not just refs/heads/<base>.
 - A test that compares a path printed by a script with its own $PWD must resolve it first (pwd -P): the script resolves symlinks, so the test is green under .claude/worktrees and red under macOS /tmp -> /private/tmp, which is where verify.sh builds its worktree (PI-29 round 5: doctor.test.sh 'absolute script path' red only in verify.sh). Reviewers and developers run verify.sh, not only the suite from .claude/worktrees.
 - Estimate: a task that defines or guards a class of cases (a hook guard, a category definition, a shared verification procedure, the commands a script prints) is M, never S, and ships its case table in the ACs — PI-12, PI-23, PI-24, PI-28, PI-29 and PI-33, all sized S or M without a table, took 4 to 7 review rounds each (retro 2026-09-13).
+- bash: 'cmd &' from a non-interactive, job-control-off shell starts with SIGINT pre-ignored — a trap … INT inside it never fires (SIGTERM unaffected); a test harness that signals a backgrounded script needs 'set -m' before the & to get realistic (foreground-equivalent) signal delivery.
+- lsof +D <dir>: exit status is not reliable for 'anything open under here' — measured exit 1 even when it printed a matching process, whenever the open file/cwd sits in a subdirectory of the queried path rather than at it exactly. Check the actual listing output (non-empty), never the exit code.
+- A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-14 PI-34 PR #64 approved (delta 4) — merge: orchestrator, prima di #66
+- 2026-09-14 PI-34 PR #64 giro 4 fix pushed — scratch tenuta se HEAD non su remote, nomi scratch a cifre esatte — 2 nuovi test, 180 verdi
+- 2026-09-14 PI-34 PR #64 needs work (delta 3) — scratch con commit non pushato rimossa — cause: other: condizione (c) elencata non applicata
+- 2026-09-13 PI-34 PR #64 giro 3 fix pushed — trap prima del fetch, scratch mai rimossa sporca, reviewer.md:39 senza $$ — 5 nuovi test, 178 verdi
+- 2026-09-13 PI-34 PR #64 needs work (delta 2) — trap armato dopo il fetch, scratch sporche rimosse — cause: example-not-class
+- 2026-09-13 PI-34 giro 2 fixes pushed — SIGINT/TERM exit codes, conflict-resolution worktree reuse, scratch liveness, git-common-dir — 24 tests
+- 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
+- 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
 - 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
 - 2026-09-13 PI-29 PR #60 approved (delta 6) — pwd -P paths, suite green via symlink and verify.sh — merge: orchestrator
 - 2026-09-13 PI-29 round 6 fix pushed — test paths resolved with pwd -P, symlink-proof — 88 tests green from a symlinked dir too
@@ -79,11 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-33 round 6 fix pushed on #57 — one criterion for shared/disposable, real restored for proof rows
 - 2026-09-13 PI-33 PR #57 needs work round 5 delta — shared senza 'lasciato', disposable non più ⊂ real — cause: other: tabella percorsa con la glossa
 - 2026-09-13 PI-33 round 5 fix pushed on #57 — shared defined strictly, disposable as complement
-- 2026-09-13 PI-33 PR #57 needs work round 4 — in-memory/fake DB senza categoria — cause: example-not-class
-- 2026-09-13 PI-33 round 4 fix pushed on #57 — disposable strict, shared as complement
-- 2026-09-13 PI-33 PR #57 needs work round 3 — shared/disposable non complementari — cause: example-not-class
-- 2026-09-13 PI-33 round 3 fix pushed on #57 — real/shared/disposable made disjoint, blocked clause restored
-- 2026-09-13 PI-33 PR #57 needs work — shared/disposable overlap, missing stop clause
-- 2026-09-13 PI-33 round 2 fix pushed on #57 — database terms + resume-report-format sections, 6 findings closed
-- 2026-09-13 PI-33 PR #57 needs work — database condiviso non definito, regole vaghe — cause: first-round
-- 2026-09-13 PI-33 PR #57 draft — six deferred rules in implementing-common.md, origin/$BASE diff fix — no automated tests, prose
