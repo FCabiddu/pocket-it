@@ -51,6 +51,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
+- 2026-09-15 PI-38 PR #76 needs work — AC1 unmet: remote branch deferred one run — cause: first-round
 - 2026-09-15 PI-15 mergiato su main (#71) — i lettori passano al composer di handoff.sh; PI-16 e PI-17 si sbloccano
 - 2026-09-15 PI-15 PR #71 approved (delta round 2) — AC1 grep verified 0/exit1, two-directional probe by reviewer, status.test.sh 16/16, verify GREEN — merge: orchestrator
 - 2026-09-15 PI-37 PR #74 needs work — verify.sh RED on retro-due R4F1, pre-existing on main — cause: base-moved
