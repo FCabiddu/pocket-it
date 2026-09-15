@@ -14,7 +14,7 @@
 **TAD**: none — convenzioni di `bin/cleanup-merged.sh`
 **Contract**: `cleanup-merged.sh` continua a stampare la sua riga di riepilogo e a non toccare worktree sporche, bloccate o non mergiate.
 **Branch**: task/pi-38-merge-leaves-remote-branch-alive
-**PR**: —
+**PR**: https://github.com/FCabiddu/pocket-it/pull/76
 
 ## Goal
 Il passo di merge di entrambe le skill è `POCKET_IT_USER_MERGE=1 gh pr merge {n} --squash --delete-branch`. Il merge riesce sempre; la **pulizia** no, e in due modi diversi a seconda di dove viene lanciato il comando:
