@@ -1,6 +1,6 @@
 # PI-15 — I lettori passano al compositore
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
