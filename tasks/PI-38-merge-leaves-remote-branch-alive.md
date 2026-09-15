@@ -1,6 +1,6 @@
 # PI-38 — `gh pr merge --delete-branch` fallisce la pulizia da una worktree e il ramo remoto sopravvive
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
