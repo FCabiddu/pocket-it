@@ -1,6 +1,6 @@
 # PI-37 — Un task mergiato che resta «Needs Work» torna a proporsi come lavoro pronto
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
