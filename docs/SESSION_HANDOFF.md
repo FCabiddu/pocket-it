@@ -48,8 +48,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - bash: 'cmd &' from a non-interactive, job-control-off shell starts with SIGINT pre-ignored — a trap … INT inside it never fires (SIGTERM unaffected); a test harness that signals a backgrounded script needs 'set -m' before the & to get realistic (foreground-equivalent) signal delivery.
 - lsof +D <dir>: exit status is not reliable for 'anything open under here' — measured exit 1 even when it printed a matching process, whenever the open file/cwd sits in a subdirectory of the queried path rather than at it exactly. Check the actual listing output (non-empty), never the exit code.
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
+- doctor.sh sed-range markers (per una mutazione eseguibile): un em dash sulla stessa riga dell'indirizzo /BEGIN/,/END/ fa fallire silenziosamente l'intero range sotto BSD sed (macOS, confermato anche con LC_ALL=C) — marker su riga pulita, prosa con em dash sulla riga dopo.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 PI-37 PR draft — doctor warns merged-PR non-Done task, run-wave Step 5 fixes Status — 111 tests
 - 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
 - 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
 - 2026-09-14 PI-35 PR #66 needs work (delta 3) — forma (delta) non riconosciuta — cause: example-not-class
@@ -89,4 +91,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
 - 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
 - 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
-- 2026-09-13 PI-28 PR #58 needs work round 2 — union non confinata, falso GREEN — cause: example-not-class
