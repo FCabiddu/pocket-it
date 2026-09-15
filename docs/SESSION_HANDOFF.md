@@ -50,6 +50,8 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
+- 2026-09-15 2026-09-15 PI-15 PR #71 needs work — AC1 dichiara zero occorrenze del grep ma non e' vero; causa di primo giro: bin/status.test.sh vuole la stessa indirezione per variabile gia' applicata a retro-due.test.sh. Secondo giro lanciato
 - 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
 - 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
@@ -88,5 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
 - 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
 - 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
-- 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
-- 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
