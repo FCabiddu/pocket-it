@@ -41,7 +41,17 @@ wtnames=$(git worktree list --porcelain | awk '
   END{ flush() }')
 wt=$(git worktree list --porcelain | grep -c '^worktree ')
 [[ "$wt" -gt 1 ]] && echo "worktrees: $((wt-1)) ($(head -5 <<<"$wtnames" | paste -sd, -))"
-if [[ -f docs/SESSION_HANDOFF.md ]]; then
-  echo "handoff facts:"; awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /{print "  "$0}' docs/SESSION_HANDOFF.md | head -8
-  echo "handoff log (last 4):"; awk '/^## Log/{f=1;next} f && /^- /{print "  "$0}' docs/SESSION_HANDOFF.md | head -4
-else echo "handoff: docs/SESSION_HANDOFF.md missing — agents create it on first PR (bin/handoff.sh)"; fi
+# memory present = the frozen sources (pre-PI-16) or any fragment under docs/handoff/** (post-PI-16, PI-14
+# composer); the composer itself (bin/handoff.sh facts|recent) never distinguishes "empty" from "absent",
+# so status.sh checks presence on disk itself before asking it to compose.
+HANDOFF_MAIN="docs/SESSION_HANDOFF.md"; HANDOFF_ARCHIVE="${HANDOFF_MAIN%.md}_ARCHIVE.md"
+handoff_has_memory() {
+  [[ -f "$HANDOFF_MAIN" ]] && return 0
+  [[ -f "$HANDOFF_ARCHIVE" ]] && return 0
+  [[ -d docs/handoff ]] && find docs/handoff -mindepth 2 -name '*.md' -print -quit 2>/dev/null | grep -q . && return 0
+  return 1
+}
+if handoff_has_memory; then
+  echo "handoff facts:"; bash "$BIN/handoff.sh" facts 2>/dev/null | head -8 | sed 's/^/  /'
+  echo "handoff log (last 4):"; bash "$BIN/handoff.sh" recent 4 2>/dev/null | sed 's/^/  /'
+else echo "handoff: nessuna memoria"; fi
