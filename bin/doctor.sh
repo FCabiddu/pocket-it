@@ -11,7 +11,7 @@ DOCTOR_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)/$(b
 ACCEPT_BASE=0; [[ "${1:-}" == "--accept-base" ]] && ACCEPT_BASE=1
 WAVE="${2:-}"; [[ "${1:-}" == "--wave" ]] || WAVE=""
 python3 - "$WAVE" "$ACCEPT_BASE" "$DOCTOR_ABS" <<'PY'
-import json, os, re, sys, glob, subprocess, shlex
+import json, os, re, sys, glob, subprocess, shlex, shutil
 wave = sys.argv[1]
 accept_base = sys.argv[2] == "1"
 doctor_abs = sys.argv[3]
@@ -246,6 +246,39 @@ for epic_dir in sorted(d for d in glob.glob("tasks/EPIC-*") if os.path.isdir(d))
         st = summary_status(story_file)
         if not st.lower().startswith("done") and all(summary_status(c).lower().startswith("done") for c in story_children):
             warn(f'{story_file}: says "{st}" but all {len(story_children)} children are Done — update the summary')
+
+# PI-37 CHECK BEGIN
+# 2c. merged PR left on a non-Done task. A gap between two lanes: quickfix/SKILL.md already
+# corrects Status to Done right after its own merge, run-wave/SKILL.md Step 5 now does too (same PR),
+# this is the net for whoever else merges, or forgets. `gh` reachability is the ONLY thing this check
+# is allowed to depend on; a slow or absent network must never slow doctor.sh down, so every `gh` call
+# below carries Python's own subprocess timeout (no shell `timeout`/`gtimeout`: absent on macOS) and
+# any failure — missing binary, no auth, no network, no permission on this repo — skips the whole
+# check in silence: no warning, no error, nothing written. Read-only: never touches a task file.
+if shutil.which("gh"):
+    try:
+        _auth = subprocess.run(["gh","auth","status"], capture_output=True, text=True, timeout=3)
+        _gh_ready = _auth.returncode == 0
+    except Exception:
+        _gh_ready = False
+    merged_prs = None
+    if _gh_ready:
+        try:
+            _prs = subprocess.run(["gh","pr","list","--state","merged","--json","number","--limit","1000"],
+                                   capture_output=True, text=True, timeout=5)
+            if _prs.returncode == 0: merged_prs = {p["number"] for p in json.loads(_prs.stdout)}
+        except Exception:
+            merged_prs = None
+    if merged_prs is not None:
+        for tid, t in tasks.items():
+            status = t["fields"].get("Status","").strip()
+            if status.lower().startswith("done"): continue  # AC2: Done (+ any trailing note) with a merged PR is not the case this warns about — same "startswith" convention as the rest of this file (e.g. the Depends-on and legacy-summary checks above)
+            m_pr = re.search(r"(?:pull/|#)\s*(\d+)", t["fields"].get("PR",""))  # AC2: no PR / open / closed-without-merge never matches a merged number below
+            if not m_pr: continue
+            num = int(m_pr.group(1))
+            if num in merged_prs:
+                warn(f"{t['file']}: PR #{num} is merged but **Status** is {status!r} — set it to Done (or reopen the PR if it should not have merged)")
+# PI-37 CHECK END
 
 # 3. DEPS.json
 deps_files = glob.glob("implementation-plans/*_DEPS.json")
