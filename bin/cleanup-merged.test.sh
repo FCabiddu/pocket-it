@@ -30,16 +30,26 @@ fail=0
 ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 has(){ grep -qE "$1" <<<"$OUT"; }
 branch_exists(){ git -C "$M" rev-parse --verify -q "refs/heads/$1" >/dev/null 2>&1; }
+remote_exists(){ git -C "${2:-$M}" rev-parse --verify -q "refs/remotes/origin/$1" >/dev/null 2>&1; }   # after a run: its own fetch --prune already ran
 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 q(){ "$@" >/dev/null 2>&1; }
-# fake gh: `gh pr list --state merged --head <branch> …` prints the "number headRefOid" lines recorded in $PRS/<branch>
+# fake gh: `gh pr list --state merged --head <branch> …` prints the "number headRefOid" lines recorded in
+# $PRS/<branch> (per-branch mode, used by merged_pr()); with no --head (PI-38's reap_remote_branches, one call
+# for every merged PR) it walks every $PRS/<branch> file and prints "branch<TAB>headRefOid" per recorded line —
+# the shape `--json headRefName,headRefOid --jq '.[] | "\(.headRefName)\t\(.headRefOid)"'` asks for.
 export PRS="$S/prs"; mkdir -p "$S/bin" "$PRS"; cat > "$S/bin/gh" <<'GH'
 #!/usr/bin/env bash
 [[ -n "${GH_FAIL:-}" ]] && { echo "HTTP 401: Bad credentials" >&2; exit 4; }
 [[ -n "${GH_GARBAGE:-}" ]] && { echo "<html>rate limited</html>"; exit 0; }
 h=""; prev=""; for a in "$@"; do [[ "$prev" == --head ]] && h="$a"; prev="$a"; done
-f="$PRS/${h//\//__}"; [[ -n "$h" && -f "$f" ]] && cat "$f"; exit 0
+if [[ -n "$h" ]]; then f="$PRS/${h//\//__}"; [[ -f "$f" ]] && cat "$f"; exit 0; fi
+for f in "$PRS"/*; do
+  [[ -f "$f" ]] || continue
+  b="${f##*/}"; b="${b//__//}"
+  while read -r _num oid; do [[ -n "$oid" ]] && printf '%s\t%s\n' "$b" "$oid"; done < "$f"
+done
+exit 0
 GH
 chmod +x "$S/bin/gh"; export PATH="$S/bin:$PATH"
 pr(){ echo "$2 $(git -C "$M" rev-parse "${3:-$1}")" >> "$PRS/${1//\//__}"; }   # $1 branch, $2 PR number, $3 head (default: branch tip)
@@ -122,7 +132,7 @@ ok "dry-run announces the merged worktree" "has 'would remove worktree .*agent-m
 ok "dry-run announces the squash-merged worktree via PR" "has 'would remove worktree .*/squash \(PR #7 merged\)'"
 ok "dry-run announces the worktree.sh-style squash-merged worktree via PR (AC6)" "has 'would remove worktree .*/task-viaworktree \(PR #8 merged\)'"
 ok "dry-run never announces a worktree with no commits of its own (AC1)" "! has 'would remove worktree .*task-(atbase|behind|fromepic|reused|fromgoneepic|fromfix|fromsha|pulled|resetback|freshrebased|noreflog|copied|renamed|revempty|revnopr)'"
-ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 12 worktrees would be removed, 10 branches would be deleted, 26 kept'"
+ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 12 worktrees would be removed, 10 branches would be deleted, 0 remote branches would be deleted, 26 kept'"
 ok "dry-run leaves the directories" "[[ -d $WT/agent-merged && -d $OLD/squash && -d $WT/task-viaworktree && -d $SCRATCH_WT ]]"
 ok "dry-run leaves the branches" "branch_exists task/merged && branch_exists task/squash && branch_exists task/viaworktree && branch_exists task/gone"
 # 3. real run from a non-main worktree whose own branch is merged
@@ -170,14 +180,23 @@ ok "detached worktree outside /tmp kept" "has 'kept .*/detached \(detached\)' &&
 ok "old detached scratch under /tmp removed" "has 'removed worktree .*pocket-it-cleanup-test-$$ \(detached scratch older than 24 h\)' && [[ ! -d $SCRATCH_WT ]]"
 ok "missing on disk, merged: pruned and branch deleted" "has 'pruned worktree .*task-gone ' && ! branch_exists task/gone"
 ok "missing on disk, no commits of its own: pruned, branch kept" "has 'pruned worktree .*task-gonefresh' && branch_exists task/gonefresh"
-ok "summary line" "has '^cleanup-merged: 11 worktrees removed, 9 branches deleted, 27 kept, freed [0-9.]+ MB$'"
+ok "summary line" "has '^cleanup-merged: 11 worktrees removed, 9 branches deleted, 0 remote branches deleted, 27 kept, freed [0-9.]+ MB$'"
 ok "main checkout untouched" "[[ -d $M && \$(git -C $M branch --show-current) == main ]]"
-# 4. run again from main: the former current worktree goes, nothing else changes (idempotent)
+# PI-38 AC1 precondition: while task-revmerged/task-squashremote's own worktree is still checked out, this same
+# run leaves their remote branches untouched (never removed out from under a live worktree) — the bug's exact
+# starting condition: a merged PR whose remote branch is still on origin.
+ok "PI-38 precondition: revmerged's remote branch still on origin right after its own worktree is gone" "remote_exists task/revmerged"
+ok "PI-38 precondition: squashremote's remote branch still on origin right after its own worktree is gone" "remote_exists task/squashremote"
+# 4. run again from main: the former current worktree goes, nothing else changes (idempotent). This run also
+# reaps the two remote branches above — no worktree references them any more since run 3 removed those — via
+# the independent PI-38 pass, proving AC1 without a dedicated fixture of its own.
 OUT=$(cd "$M" && bash "$SCRIPT")
 ok "former current worktree removed on the next run" "has 'removed worktree .*agent-current \(merged into origin/main\)' && ! branch_exists task/current"
-ok "second run summary" "has '^cleanup-merged: 1 worktrees removed, 1 branches deleted, 26 kept'"
+ok "PI-38 AC1: a merged squash-PR's remote branch, no worktree left, is deleted on this later run" "has 'deleted remote branch task/revmerged \(merged\)' && ! remote_exists task/revmerged"
+ok "PI-38 AC1: same for the plain squash-merged one" "has 'deleted remote branch task/squashremote \(merged\)' && ! remote_exists task/squashremote"
+ok "second run summary" "has '^cleanup-merged: 1 worktrees removed, 1 branches deleted, 2 remote branches deleted, 26 kept'"
 OUT=$(cd "$M" && bash "$SCRIPT")
-ok "third run is a no-op" "has '^cleanup-merged: 0 worktrees removed, 0 branches deleted, 26 kept, freed 0.0 MB$'"
+ok "third run is a no-op" "has '^cleanup-merged: 0 worktrees removed, 0 branches deleted, 0 remote branches deleted, 26 kept, freed 0.0 MB$'"
 # 5. --all also cleans the merged epic branch, and still keeps everything with work in it
 OUT=$(cd "$M" && bash "$SCRIPT" --all)
 ok "--all removes the merged epic worktree" "has 'removed worktree .*epic-e1 \(merged into origin/main\)' && [[ ! -d $OLD/epic-e1 ]] && ! branch_exists epic/e1"
