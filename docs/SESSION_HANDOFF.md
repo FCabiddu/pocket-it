@@ -50,6 +50,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 PI-15 PR #71 needs work — AC1 grep not actually empty, status.test.sh matches
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
 - 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
 - 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
@@ -89,5 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
 - 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
 - 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
-- 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
-- 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
