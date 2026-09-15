@@ -341,4 +341,43 @@ expect_case BLOCK "$TMPROOT/feat-repo" "git push --force \\${NL} origin main"
 expect_case BLOCK "$TMPROOT/feat-repo" "git push origin \\${NL} refs/heads/*:refs/heads/*"
 expect_case ALLOW "$TMPROOT/feat-repo" "git push -u \\${NL} origin task/x"
 
+# ── PI-36: the trailing "destructive git on shared history" grep matched `.*` across an
+# UNQUOTED command boundary, so a force-push to a task branch was blocked whenever a LATER
+# segment happened to name main/master for its own reason (a `gh pr create --base main`
+# right after the push it accompanies). Class covered by construction, not by the one example
+# in the task: every separator the classifier's segments() recognises as a boundary, crossed
+# with every shape a later segment can carry "main"/"master" in. Mutation-provable: reverting
+# guard.sh to keep the flat grep on line 374 turns every ALLOW row below red.
+PI36_SEPS=('&&' '||' ';' '|' '|&')
+PI36_CONTEXTS=(
+  'gh pr create --base main --title x --body y'
+  'POCKET_IT_USER_MERGE=1 gh pr merge 9 --auto --squash --base master'
+  '# reminder: never push main directly'
+  'echo keep main and master protected'
+  'gh pr comment 4 --body "the base is main"'
+  'BASE=main; echo "push to $BASE stays blocked elsewhere"'
+)
+for sep in "${PI36_SEPS[@]}"; do
+  for ctx in "${PI36_CONTEXTS[@]}"; do
+    expect_case ALLOW "$TMPROOT/feat-repo" "git push --force-with-lease origin task/foo $sep $ctx"
+  done
+done
+# The sixth separator in the class — an unquoted newline — crossed with the same contexts.
+for ctx in "${PI36_CONTEXTS[@]}"; do
+  expect_case ALLOW "$TMPROOT/feat-repo" "git push --force-with-lease origin task/foo${NL}$ctx"
+done
+
+# AC2 — two named force forms the flat grep also matched but the existing suite never named
+# on their own: --force-with-lease and --force-if-includes, blocked when they truly reach base.
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --force-with-lease origin main"
+expect_case BLOCK "$TMPROOT/feat-repo" "git push --force-if-includes origin master"
+
+# Symmetric control: the fix must not become an over-correction. When the push segment itself
+# really does force-reach the base branch, a later segment naming a task branch (or nothing
+# base-related at all) must not launder it into ALLOW — reaching base is decided per segment,
+# not erased by what a neighbouring segment contains either.
+for sep in "${PI36_SEPS[@]}"; do
+  expect_case BLOCK "$TMPROOT/feat-repo" "git push --force-with-lease origin main $sep gh pr create --base task/x --title x --body y"
+done
+
 exit $fail

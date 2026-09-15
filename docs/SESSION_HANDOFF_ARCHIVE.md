@@ -145,3 +145,5 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-28 PR #58 needs work — overlay in sessione principale, non eseguibile — cause: first-round
 - 2026-09-13 PI-28 PR #58 round 2 pushed afb6287 — 8 findings closed, overlay now Mode: overlay reviewer
 - 2026-09-13 PI-28 PR #58 needs work round 2 — union non confinata, falso GREEN — cause: example-not-class
+- 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
+- 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
