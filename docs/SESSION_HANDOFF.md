@@ -49,8 +49,11 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - lsof +D <dir>: exit status is not reliable for 'anything open under here' — measured exit 1 even when it printed a matching process, whenever the open file/cwd sits in a subdirectory of the queried path rather than at it exactly. Check the actual listing output (non-empty), never the exit code.
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 - doctor.sh sed-range markers (per una mutazione eseguibile): un em dash sulla stessa riga dell'indirizzo /BEGIN/,/END/ fa fallire silenziosamente l'intero range sotto BSD sed (macOS, confermato anche con LC_ALL=C) — marker su riga pulita, prosa con em dash sulla riga dopo.
+- verify.sh's RED can be a pre-existing defect on the base, unrelated to the PR's own diff, not just a regression the PR introduced: PI-37 (PR #74, 2026-09-15) touched only bin/doctor.sh, bin/doctor.test.sh and run-wave/SKILL.md, yet failed on retro-due.test.sh's own R4F1 self-check because a malformed handoff log line had landed on main from an unrelated merge (fixed in PI-39, #77). The reviewer named it correctly (cause: base-moved) only by hand re-running R4F1 against a clean checkout of origin/main — a manual step that still cost a full needs-work round. Proposed, not yet built: verify.sh re-runs any newly-red assertion against a clean worktree of the base branch's tip before reporting; if that assertion is already red there, it reports 'RED — pre-existing on base (cause: base-moved)' distinctly from an own-diff RED, so developer, reviewer and orchestrator see the distinction without re-diagnosing by hand each time.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
+- 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
 - 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
 - 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
 - 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
@@ -90,5 +93,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-29 PR #60 needs work (delta 5) — test path not resolved, verify RED — cause: other: test path logical vs pwd -P, earlier rounds measured only outside /tmp
 - 2026-09-13 PI-29 round 5 fix pushed — no printed command ever pushes; save is local-only, publishing left to a person — 88 tests green
 - 2026-09-13 PI-29 PR #60 needs work (delta 4) — rescue push republishes removed secret — cause: example-not-class
-- 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
-- 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
