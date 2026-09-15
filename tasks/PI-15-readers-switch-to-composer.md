@@ -14,7 +14,7 @@
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§5.2, §9.1, §12 PI-15)
 **Contract**: none
 **Branch**: task/pi-15-fragment-writer
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/71
 
 ## Goal
 Ogni punto che oggi legge `docs/SESSION_HANDOFF.md` direttamente (con `awk`, `grep`, `cat`, `head`, `tail` o una menzione prescrittiva del file) passa a `handoff.sh facts` / `show` / `recent` / `grep`, cioè al compositore introdotto in PI-14. **Nessuna chiamata di scrittura cambia**: `log` e `fact` restano quelli di oggi, scrivono ancora nel vecchio file. Questo task è l'ordine «prima i lettori, poi gli scrittori» del §9.1 del TAD: finché le scritture non passano ai frammenti (PI-16), tutto quello che il compositore mostra viene ancora dal vecchio file, quindi nessuna installazione intermedia lascia un lettore cieco.
