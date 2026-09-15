@@ -48,5 +48,5 @@ Casi nuovi in `.claude/hooks/guard.test.sh`, uno per dimensione delle classi di 
 - Se il classificatore Python copre già tutto ciò che serve, la soluzione giusta può essere **cancellare** la riga 374 e lasciar decidere lui — ma solo dopo aver provato con i test che ogni forma di AC2 resta bloccata. Una riga in meno vale più di una regex più lunga.
 - Verifica che la tua correzione non reintroduca il difetto: il test deve fallire sulla versione vecchia del file, non solo passare sulla nuova.
 - `timeout` e `gtimeout` non esistono su macOS: lancia i comandi in primo piano.
-- Misura lo sforzo in minuti d'orologio (`date +%s` nel primo e nell'ultimo comando) e riporta la riga `Effort: N min elapsed (budget 45 min) — agent-<id>`.
+- Misura lo sforzo in minuti d'orologio (`date +%s` nel primo e nell'ultimo comando) e riporta la riga `Effort: N min elapsed (budget 45 min) — wt:{basename di `$PWD`}`.
 - Il repo è pubblico: nessun riferimento a progetti dell'utente.
