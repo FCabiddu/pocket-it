@@ -283,7 +283,8 @@ rm -rf "$S20"
 # section is a hard boundary, so it cannot leak a false positive or hide a real one
 S21=$(mkrepo)
 mkdir -p "$S21/docs"
-cat > "$S21/docs/SESSION_HANDOFF.md" <<'EOF'
+HF21="$S21/docs/SESSION_HANDOFF.md"
+cat > "$HF21" <<'EOF'
 # Session handoff
 
 ## Fatti che non scadono

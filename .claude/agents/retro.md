@@ -22,8 +22,8 @@ When the input is `Signals:` lines: the tasks named in them (the `<task>` field 
 ```bash
 cat .pocket-it.json 2>/dev/null
 python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days {N} . 2>&1 | tail -40     # sessions, agents by type, runaways, failure signatures
-grep -E "^- .*(BUDGET|STALL) " docs/SESSION_HANDOFF.md                                    # over-budget-but-progressing vs stuck
-awk '/^## Fatti/{f=1;next} /^## /{f=0} f' docs/SESSION_HANDOFF.md                         # what agents already learned
+bash ~/.claude/agents/pocket-it/bin/handoff.sh grep "BUDGET|STALL"                        # over-budget-but-progressing vs stuck
+bash ~/.claude/agents/pocket-it/bin/handoff.sh facts                                      # what agents already learned
 gh pr list --state all --limit 100 --search "{scope}" --json number,title,mergedAt,labels,headRefName   # skip this line for a Signals: run — see above
 ```
 

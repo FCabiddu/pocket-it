@@ -1,6 +1,6 @@
 # PI-15 — I lettori passano al compositore
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
@@ -13,8 +13,8 @@
 **Files**: bin/status.sh:37-40, .claude/agents/shared/implementing-common.md:39, .claude/agents/developer.md:32, .claude/agents/reviewer.md:19, .claude/agents/retro.md:23-24, .claude/agents/implementation-planner.md:56, .claude/agents/shared/lessons.md:3, .claude/skills/run-wave/SKILL.md:50
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§5.2, §9.1, §12 PI-15)
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-15-fragment-writer
+**PR**: https://github.com/FCabiddu/pocket-it/pull/71
 
 ## Goal
 Ogni punto che oggi legge `docs/SESSION_HANDOFF.md` direttamente (con `awk`, `grep`, `cat`, `head`, `tail` o una menzione prescrittiva del file) passa a `handoff.sh facts` / `show` / `recent` / `grep`, cioè al compositore introdotto in PI-14. **Nessuna chiamata di scrittura cambia**: `log` e `fact` restano quelli di oggi, scrivono ancora nel vecchio file. Questo task è l'ordine «prima i lettori, poi gli scrittori» del §9.1 del TAD: finché le scritture non passano ai frammenti (PI-16), tutto quello che il compositore mostra viene ancora dal vecchio file, quindi nessuna installazione intermedia lascia un lettore cieco.
