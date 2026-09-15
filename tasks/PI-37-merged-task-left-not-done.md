@@ -1,6 +1,6 @@
 # PI-37 — Un task mergiato che resta «Needs Work» torna a proporsi come lavoro pronto
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -14,7 +14,7 @@
 **TAD**: none — convenzioni di `bin/doctor.sh` e `bin/next-wave.sh` (gli script decidono, il modello lancia)
 **Contract**: `doctor.sh` continua a uscire 1 sugli errori e 0 con soli warning; il nuovo controllo è un **warning**, non un errore, perché non impedisce un lancio.
 **Branch**: task/pi-37-merged-task-left-not-done
-**PR**: —
+**PR**: https://github.com/FCabiddu/pocket-it/pull/74
 
 ## Goal
 Caso reale, pocket-it, 15/09/2026. `tasks/PI-29-doctor-detects-rewritten-base.md` diceva `**Status**: Needs Work` mentre la sua PR #60 era **mergiata** dal 13/09. Conseguenza: `next-wave.sh` lo elencava fra i due task «ready», cioè offriva come lavoro da lanciare un task già chiuso. Chi non controlla la PR ci lancia sopra un developer.

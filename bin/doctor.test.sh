@@ -584,4 +584,116 @@ echo "$OUT_MUT_FAKE" | sed 's/^/      | /'
 ok "mutation (round-2 text-based classify), same fake git: degrades to a warn — proves the test is not vacuous" \
   '[[ $rc_mut_fake -eq 0 ]] && ! grep -q "ERROR base branch" <<<"$OUT_MUT_FAKE" && grep -q "warn  could not verify base branch" <<<"$OUT_MUT_FAKE"'
 
+# --- repo 14: a merged PR left on a non-Done task (PI-37) — real case: PI-29's PR #60, merged 13/09,
+# **Status** left "Needs Work" by an earlier review round and never set back to Done; reconstructed
+# here as a fixture since the real file was hand-fixed on 15/09 and no longer shows the defect.
+# `gh` is entirely simulated below — a fake binary put in front of the real one on PATH answers
+# `gh auth status` and `gh pr list --state merged` from a fixed, in-memory table, never a real
+# network call. Class covered: status (the full non-final set + one non-canonical value) x PR
+# outcome (merged / open / closed-without-merge / absent-in-three-spellings).
+task_pr(){ # task_pr <path> <status> <pr-field> — task file with a PR field, otherwise well-formed
+  mkdir -p "$(dirname "$1")"
+  printf '# %s\n\n**Status**: %s\n**Label**: DevOps\n**Files**: `x`\n**TAD**: none\n**PR**: %s\n\n## Acceptance criteria\n- ok\n' \
+    "$(basename "$1" .md)" "$2" "$3" > "$1"
+}
+FAKEGH="$S/fakegh"; mkdir -p "$FAKEGH"
+cat > "$FAKEGH/gh" <<'GHEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "auth" && "$2" == "status" ]]; then exit 0; fi
+if [[ "$1" == "pr" && "$2" == "list" ]]; then printf '[{"number":60},{"number":42}]'; exit 0; fi
+exit 1
+GHEOF
+chmod +x "$FAKEGH/gh"
+
+R14="$S/repo14"
+q git init -q -b main "$R14"
+task_pr "$R14/tasks/PI-900-todo-merged.md"          "Todo"         "https://github.com/x/y/pull/60"        # AC1/AC2: non-final status, merged -> warn
+task_pr "$R14/tasks/PI-901-inprogress-merged.md"    "In Progress"  "https://github.com/x/y/pull/60"        # AC2: same, another non-final status
+task_pr "$R14/tasks/PI-902-needswork-merged.md"     "Needs Work"   "https://github.com/x/y/pull/60"        # AC2: the real PI-29 shape
+task_pr "$R14/tasks/PI-903-wip-merged.md"           "WIP"          "https://github.com/x/y/pull/60"        # AC2: non-canonical status, still not Done
+task_pr "$R14/tasks/PI-904-done-merged.md"          "Done"         "https://github.com/x/y/pull/42"        # AC2: Done + merged -> no warn
+task_pr "$R14/tasks/PI-905-needswork-open.md"       "Needs Work"   "https://github.com/x/y/pull/99"        # AC2: PR open (99 not in the merged table) -> no warn
+task_pr "$R14/tasks/PI-906-needswork-closed.md"     "Needs Work"   "#77 (chiusa senza merge)"               # AC2: PR closed without merge -> no warn
+task_pr "$R14/tasks/PI-907-needswork-dash.md"       "Needs Work"   "—"                                      # AC2: PR absent, dash -> no warn
+task_pr "$R14/tasks/PI-908-needswork-empty.md"      "Needs Work"   ""                                       # AC2: PR absent, empty -> no warn
+task_pr "$R14/tasks/PI-909-needswork-none.md"       "Needs Work"   "none"                                   # AC2: PR absent, "none" -> no warn
+q git -C "$R14" add -A; q git -C "$R14" commit -qm board
+
+OUT=$(cd "$R14" && PATH="$FAKEGH:$PATH" bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC1/AC2 Todo + merged: warns, names file, status and PR number"       'has "warn  tasks/PI-900-todo-merged.md: PR #60 is merged but **Status** is '"'"'Todo'"'"' — set it to Done"'
+ok "AC2 In Progress + merged: warns"                                      'has "warn  tasks/PI-901-inprogress-merged.md: PR #60 is merged but **Status** is '"'"'In Progress'"'"'"'
+ok "AC2 Needs Work + merged: warns (the real PI-29 shape)"                 'has "warn  tasks/PI-902-needswork-merged.md: PR #60 is merged but **Status** is '"'"'Needs Work'"'"'"'
+ok "AC2 non-canonical status (WIP) + merged: warns"                       'has "warn  tasks/PI-903-wip-merged.md: PR #60 is merged but **Status** is '"'"'WIP'"'"'"'
+ok "AC2 Done + merged: no warn"                                           '! has "PI-904-done-merged.md: PR"'
+ok "AC2 PR open (not in merged table): no warn"                           '! has "PI-905-needswork-open.md: PR"'
+ok "AC2 PR closed without merge: no warn"                                 '! has "PI-906-needswork-closed.md: PR"'
+ok "AC2 PR absent (dash): no warn"                                        '! has "PI-907-needswork-dash.md: PR"'
+ok "AC2 PR absent (empty): no warn"                                       '! has "PI-908-needswork-empty.md: PR"'
+ok "AC2 PR absent (\"none\"): no warn"                                    '! has "PI-909-needswork-none.md: PR"'
+ok "warning count: the 4 merged+non-Done fixtures plus the missing-config warning, nothing else" 'has "doctor: 0 error(s), 5 warning(s), 10 task file(s)"'
+ok "AC1 exit stays 0 (a warning never fails doctor)"                      '[[ $rc -eq 0 ]]'
+
+# AC4: doctor is read-only — a second run changes nothing on disk
+BEFORE14=$(cd "$R14" && git status --porcelain)
+(cd "$R14" && PATH="$FAKEGH:$PATH" bash "$SCRIPT") >/dev/null
+AFTER14=$(cd "$R14" && git status --porcelain)
+ok "AC4 two runs back to back: git status --porcelain unchanged, no task file touched" '[[ "$BEFORE14" == "$AFTER14" ]]'
+
+# AC3a: no `gh` reachable at all (a PATH holding only what doctor.sh itself needs, no gh anywhere on it)
+# — silent skip, no warning, no error, and the rest of doctor.sh keeps working normally.
+NOGH_PATH="/usr/bin:/bin"
+OUT_NOGH=$(cd "$R14" && PATH="$NOGH_PATH" bash "$SCRIPT"); rc_nogh=$?
+ok "AC3a no gh on PATH: none of the merged-PR warnings fire"              '! grep -q "PR #60 is merged" <<<"$OUT_NOGH"'
+ok "AC3a no gh on PATH: no ERROR from this check either"                  '! grep -q "ERROR.*PR #" <<<"$OUT_NOGH"'
+ok "AC3a no gh on PATH: exit still 0 (nothing else broke)"                '[[ $rc_nogh -eq 0 ]]'
+
+# AC3b: gh present but unauthenticated / no permission / no network — `gh auth status` fails fast.
+FAKEGH_NOAUTH="$S/fakegh-noauth"; mkdir -p "$FAKEGH_NOAUTH"
+cat > "$FAKEGH_NOAUTH/gh" <<'GHEOF'
+#!/usr/bin/env bash
+exit 1
+GHEOF
+chmod +x "$FAKEGH_NOAUTH/gh"
+OUT_NOAUTH=$(cd "$R14" && PATH="$FAKEGH_NOAUTH:$PATH" bash "$SCRIPT"); rc_noauth=$?
+ok "AC3b gh auth status fails: no merged-PR warning, silent skip"         '! grep -q "PR #60 is merged" <<<"$OUT_NOAUTH"'
+ok "AC3b gh auth status fails: exit still 0"                              '[[ $rc_noauth -eq 0 ]]'
+
+# AC3c: `gh auth status` present but never answers (network hangs) — this is the "no long wait"
+# clause of AC3: the check must not depend on any wait longer than its own timeout. `exec sleep`
+# replaces the fake gh process itself (no child left behind once Python's own subprocess timeout
+# kills it), so the bound below is exactly the timeout the check applies, not an approximation.
+FAKEGH_HANG="$S/fakegh-hang"; mkdir -p "$FAKEGH_HANG"
+cat > "$FAKEGH_HANG/gh" <<'GHEOF'
+#!/usr/bin/env bash
+if [[ "$1" == "auth" && "$2" == "status" ]]; then exec sleep 6; fi
+exit 1
+GHEOF
+chmod +x "$FAKEGH_HANG/gh"
+T0=$(date +%s)
+OUT_HANG=$(cd "$R14" && PATH="$FAKEGH_HANG:$PATH" bash "$SCRIPT"); rc_hang=$?
+T1=$(date +%s)
+ok "AC3c gh auth status hangs: doctor still returns well under the 6s hang (bounded by its own timeout)" \
+  '(( T1 - T0 < 5 ))'
+ok "AC3c gh auth status hangs: no merged-PR warning, silent skip"        '! grep -q "PR #60 is merged" <<<"$OUT_HANG"'
+ok "AC3c gh auth status hangs: exit still 0"                             '[[ $rc_hang -eq 0 ]]'
+
+# --- mutation: remove the PI-37 check (the block between its own markers) and watch AC1/AC2's
+# positive cases go red — proves the tests above are not vacuous. Restored automatically: this runs
+# against a throwaway copy, $SCRIPT itself is never touched.
+MUT_PI37=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-pi37.XXXXXX")
+sed '/# PI-37 CHECK BEGIN/,/# PI-37 CHECK END/d' "$SCRIPT" > "$MUT_PI37"
+OUT_MUT_PI37=$(cd "$R14" && PATH="$FAKEGH:$PATH" bash "$MUT_PI37"); rc_mut_pi37=$?
+rm -f "$MUT_PI37"
+echo "$OUT_MUT_PI37" | sed 's/^/      | /'
+ok "mutation: check removed, AC1/AC2 positive cases (Todo/In Progress/Needs Work/WIP + merged) all go red" \
+  '! grep -q "PR #60 is merged" <<<"$OUT_MUT_PI37" && [[ $rc_mut_pi37 -eq 0 ]]'
+
+# AC5: run-wave/SKILL.md Step 5 (the step right after `gh pr merge`) carries the same instruction
+# quickfix/SKILL.md's own close step already has — checked statically, not by running the skill
+# (it is markdown for an agent to read, not a script).
+RUNWAVE_SKILL="$(cd .. && pwd -P)/.claude/skills/run-wave/SKILL.md"
+ok "AC5 run-wave Step 5 checks the merged PR's task file says Status: Done, and fixes it if not" \
+  'grep -A2 "gh pr merge {n} --squash --delete-branch" "$RUNWAVE_SKILL" | grep -q "make sure .tasks/{ID}-\*\.md. says .\*\*Status\*\*: Done. (set it if the developer left it otherwise"'
+
 exit $fail
