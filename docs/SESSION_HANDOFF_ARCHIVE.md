@@ -155,3 +155,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-14 PR #63 needs work (delta 2) — argomenti in più accettati con exit 0 — cause: example-not-class
 - 2026-09-13 PI-14 PR #63 approved (delta 3) — merge: orchestrator
 - 2026-09-13 PI-29 PR draft — doctor.sh flags a rewritten/deleted base branch — 20 tests
+- 2026-09-13 PI-29 PR #60 needs work — deleted-branch match breaks under locale
