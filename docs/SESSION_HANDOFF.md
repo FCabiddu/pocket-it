@@ -51,6 +51,11 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh sed-range markers (per una mutazione eseguibile): un em dash sulla stessa riga dell'indirizzo /BEGIN/,/END/ fa fallire silenziosamente l'intero range sotto BSD sed (macOS, confermato anche con LC_ALL=C) — marker su riga pulita, prosa con em dash sulla riga dopo.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
+- 2026-09-15 2026-09-15 PI-15 PR #71 needs work — AC1 dichiara zero occorrenze del grep ma non e' vero; causa di primo giro: bin/status.test.sh vuole la stessa indirezione per variabile gia' applicata a retro-due.test.sh. Secondo giro lanciato
+- 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
+- 2026-09-15 retro-mark 2026-09-15 effort-agent-id
+- 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
 - 2026-09-15 PI-37 PR draft — doctor warns merged-PR non-Done task, run-wave Step 5 fixes Status — 111 tests
 - 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
 - 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
@@ -87,7 +92,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
 - 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
 - 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
-- 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
-- 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
-- 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
-- 2026-09-13 PI-28 PR #58 round 3 pushed abc7f4b — 4 findings closed, union scoped and merge-landed check added
