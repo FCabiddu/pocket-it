@@ -50,6 +50,8 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
+- 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
 - 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
 - 2026-09-15 PI-38 PR #76 needs work — AC1 unmet: remote branch deferred one run — cause: first-round
 - 2026-09-15 PI-15 mergiato su main (#71) — i lettori passano al composer di handoff.sh; PI-16 e PI-17 si sbloccano
@@ -88,6 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-29 PR #60 needs work (delta 4) — rescue push republishes removed secret — cause: example-not-class
 - 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
 - 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
-- 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
-- 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
-- 2026-09-13 PI-29 round 2 fix pushed — locale-proof deletion check + --accept-base — 10 new tests

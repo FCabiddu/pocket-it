@@ -156,3 +156,6 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-14 PR #63 approved (delta 3) — merge: orchestrator
 - 2026-09-13 PI-29 PR draft — doctor.sh flags a rewritten/deleted base branch — 20 tests
 - 2026-09-13 PI-29 PR #60 needs work — deleted-branch match breaks under locale
+- 2026-09-13 PI-29 round 2 fix pushed — locale-proof deletion check + --accept-base — 10 new tests
+- 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
+- 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
