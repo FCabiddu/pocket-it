@@ -50,6 +50,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 PI-15 mergiato su main (#71) — i lettori passano al composer di handoff.sh; PI-16 e PI-17 si sbloccano
 - 2026-09-15 PI-15 PR #71 approved (delta round 2) — AC1 grep verified 0/exit1, two-directional probe by reviewer, status.test.sh 16/16, verify GREEN — merge: orchestrator
 - 2026-09-15 PI-37 PR #74 needs work — verify.sh RED on retro-due R4F1, pre-existing on main — cause: base-moved
 - 2026-09-15 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
@@ -89,8 +90,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
 - 2026-09-13 PI-29 round 2 fix pushed — locale-proof deletion check + --accept-base — 10 new tests
 - 2026-09-13 PI-29 PR #60 needs work — deleted-branch match breaks under locale
-- 2026-09-13 PI-29 PR draft — doctor.sh flags a rewritten/deleted base branch — 20 tests
-- 2026-09-13 PI-14 PR #63 approved (delta 3) — merge: orchestrator
-- 2026-09-13 PI-14 PR #63 needs work (delta 2) — argomenti in più accettati con exit 0 — cause: example-not-class
-- 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
-- 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
