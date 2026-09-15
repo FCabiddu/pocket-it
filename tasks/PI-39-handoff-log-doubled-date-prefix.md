@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni esistenti degli script in bin/
 **Contract**: none
 **Branch**: task/pi-39-handoff-log-doubled-date-prefix
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/77
 
 ## Goal
 `bin/handoff.sh log "<messaggio>"` antepone sempre `- $(date +%Y-%m-%d) ` al messaggio (riga 274). Se chi chiama passa un messaggio che comincia **già** con una data ISO, la riga nasce con la data doppia: su `main` ci sono oggi due righe così, scritte dal commit `f70db11`, per esempio
