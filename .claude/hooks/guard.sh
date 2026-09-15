@@ -370,6 +370,23 @@ grep -qE '(^|[;&|[:space:]])(pkill|killall)\b' <<<"$CMD" && block "pkill/killall
 grep -qE 'gh[[:space:]]+variable[[:space:]]+set[[:space:]]+APP_STATUS.*prod' <<<"$CMD" && block "APP_STATUS → prod" "Turning hosted CI on is the user's call (initialising it to dev is fine)."
 # Sleep-and-poll chains are blocked by the harness anyway; fail fast with a hint.
 grep -qE '^[[:space:]]*(cd [^;&]+ (&&|;) *)?sleep[[:space:]]+[0-9]+[[:space:]]*(&&|;)' <<<"$CMD" && block "sleep N && …" "Use 'gh pr checks N --watch' or a bounded until-loop (sleep inside a loop body is fine)."
-# Destructive git on shared history.
-grep -qE 'git[[:space:]]+push[[:space:]]+.*(--force|-f)\b.*(main|master)' <<<"$CMD" && block "force-push to main" "Never rewrite main."
+# PI-36: destructive git on shared history was a second, flat grep here. Its `.*` read across
+# an unquoted command boundary (&&, ;, |, a newline), so `git push --force-with-lease origin
+# task/x && gh pr create --base main …` was blocked: `main` belongs to the *next* command
+# (`gh pr create --base main`), not to the push. Removed rather than patched: the push
+# classifier above already segments on the same boundaries the flat grep could not respect
+# (BOUNDARY_KEYWORDS, `segments()`) and already computes `BLOCK_FORCE` for every force/
+# destructive form on a per-segment basis, so this line duplicated it, imperfectly, once
+# per whole command instead of once per segment.
+# FORCE-CHECK THREAT MODEL — adversary: a cooperative agent force-pushing, deleting, or
+# mirroring/pruning the base branch by mistake, or routing around review with
+# --force-with-lease/--force-if-includes. Must block: any push *segment* (as `segments()`
+# above delimits it) whose refspec(s) would replace or remove main/master's history on the
+# remote — `-f`/`--force*`, a leading `+` on the refspec, `-d`/`--delete`, `--mirror`/
+# `--prune`, an empty-source refspec, `--all` combined with force — and does so regardless of
+# what unrelated segments elsewhere in the same command line contain, authorized or not (see
+# line 68 above: the audit prefix never authorizes a force/destructive push to the base).
+# Deliberately NOT covered here: everything the file-level threat model at the top already
+# excludes (a shell string/eval, a wrapper, quoting tricks, config/env indirection) — those
+# are left to server-side branch protection, never chased with another regex.
 exit 0
