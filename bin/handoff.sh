@@ -271,7 +271,20 @@ fi
 sed -i.bak -E "s/max [0-9]+ righe:/max $CAP righe:/" "$F" && rm -f "$F.bak"
 case "$cmd" in
   log)
-    line="- $(date +%Y-%m-%d) $*"
+    # PI-39: a caller can pass a message that already starts with an ISO date (its own or someone
+    # else's) — the log line must never carry that date AND the one this script prepends. Strip every
+    # leading "YYYY-MM-DD " run first (a caller can double it, e.g. a copy-pasted "date id" prefix), then
+    # the limit case where the whole remaining message IS just a date with nothing after it (no trailing
+    # space to strip against). Only a LEADING date is touched: one anchored at the start (^), never a
+    # date elsewhere in the free text (AC2).
+    msg="$*"
+    while [[ "$msg" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\  ]]; do
+      msg="${msg:11}"
+    done
+    if [[ "$msg" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+      msg=""
+    fi
+    line="- $(date +%Y-%m-%d)${msg:+ $msg}"
     python3 - "$F" "$ARCHIVE" "$LOGCAP" "$line" <<'PY'
 import sys,os
 p,archive,logcap,line=sys.argv[1],sys.argv[2],int(sys.argv[3]),sys.argv[4]
