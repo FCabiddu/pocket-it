@@ -38,5 +38,5 @@ Casi nuovi in `bin/doctor.test.sh` per AC1, AC2 (un positivo e un negativo per o
 - Non allargare lo scope: niente controlli nuovi su `next-wave.sh`, che legge lo stato dal file ed è corretto così com'è. Il difetto è il file, non il lettore.
 - L'oracolo è il comportamento dichiarato qui, non `doctor.sh` com'è oggi.
 - `timeout` e `gtimeout` non esistono su macOS: comandi in primo piano.
-- Misura lo sforzo in minuti d'orologio (`date +%s` nel primo e nell'ultimo comando) e riporta `Effort: N min elapsed (budget 90 min) — agent-<id>`.
+- Misura lo sforzo in minuti d'orologio (`date +%s` nel primo e nell'ultimo comando) e riporta `Effort: N min elapsed (budget 90 min) — wt:{basename di `$PWD`}`.
 - Il repo è pubblico: nessun riferimento a progetti dell'utente.
