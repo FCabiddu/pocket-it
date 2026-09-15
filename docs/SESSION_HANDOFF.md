@@ -48,12 +48,32 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - bash: 'cmd &' from a non-interactive, job-control-off shell starts with SIGINT pre-ignored — a trap … INT inside it never fires (SIGTERM unaffected); a test harness that signals a backgrounded script needs 'set -m' before the & to get realistic (foreground-equivalent) signal delivery.
 - lsof +D <dir>: exit status is not reliable for 'anything open under here' — measured exit 1 even when it printed a matching process, whenever the open file/cwd sits in a subdirectory of the queried path rather than at it exactly. Check the actual listing output (non-empty), never the exit code.
 - A throwaway path an agent doc prescribes must be a deterministic literal (e.g. .claude/worktrees/reviewer-conflict-pr{N}) whenever its creation and its removal can fall in different Bash tool calls — never $$, date +%s or a $WT variable: each call is a fresh shell (PI-34 rounds 1-2, found on reviewer.md:73 then again on :39). A cleanup that removes such a scratch must require a clean git status and HEAD contained in a ref, not only 'no process has it open' (lsof cannot see an agent between tool calls).
+- doctor.sh sed-range markers (per una mutazione eseguibile): un em dash sulla stessa riga dell'indirizzo /BEGIN/,/END/ fa fallire silenziosamente l'intero range sotto BSD sed (macOS, confermato anche con LC_ALL=C) — marker su riga pulita, prosa con em dash sulla riga dopo.
+- verify.sh's RED can be a pre-existing defect on the base, unrelated to the PR's own diff, not just a regression the PR introduced: PI-37 (PR #74, 2026-09-15) touched only bin/doctor.sh, bin/doctor.test.sh and run-wave/SKILL.md, yet failed on retro-due.test.sh's own R4F1 self-check because a malformed handoff log line had landed on main from an unrelated merge (fixed in PI-39, #77). The reviewer named it correctly (cause: base-moved) only by hand re-running R4F1 against a clean checkout of origin/main — a manual step that still cost a full needs-work round. Proposed, not yet built: verify.sh re-runs any newly-red assertion against a clean worktree of the base branch's tip before reporting; if that assertion is already red there, it reports 'RED — pre-existing on base (cause: base-moved)' distinctly from an own-diff RED, so developer, reviewer and orchestrator see the distinction without re-diagnosing by hand each time.
 - cleanup-merged.sh reaps remote branches of merged PRs (PI-38) via PR head-vs-tip match, never ancestry (squash breaks ancestry); a branch's own worktree removal and its remote-branch reap can land one run apart (same-run snapshot), never within the same run
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
 - 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
+- 2026-09-15 PI-37 mergiato su main (#74) — un task la cui PR e' stata mergiata non resta piu' in stato diverso da Done
+- 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
+- 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
+- 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
+- 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
+- 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
+- 2026-09-15 PI-38 PR #76 needs work — AC1 unmet: remote branch deferred one run — cause: first-round
+- 2026-09-15 PI-15 mergiato su main (#71) — i lettori passano al composer di handoff.sh; PI-16 e PI-17 si sbloccano
+- 2026-09-15 PI-15 PR #71 approved (delta round 2) — AC1 grep verified 0/exit1, two-directional probe by reviewer, status.test.sh 16/16, verify GREEN — merge: orchestrator
+- 2026-09-15 PI-37 PR #74 needs work — verify.sh RED on retro-due R4F1, pre-existing on main — cause: base-moved
+- 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
+- 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
+- 2026-09-15 PI-15 PR #71 round 2 fix pushed — AC1 grep false-green in bin/status.test.sh (needed same variable indirection as retro-due.test.sh), fixed and re-verified 0 matches, still needs-work label off for reviewer to re-check
+- 2026-09-15 PI-15 PR #71 needs work — AC1 dichiara zero occorrenze del grep ma non e' vero; causa di primo giro: bin/status.test.sh vuole la stessa indirezione per variabile gia' applicata a retro-due.test.sh. Secondo giro lanciato
+- 2026-09-15 PI-15 PR #71 needs work — AC1 grep not actually empty, status.test.sh matches
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
+- 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
+- 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
+- 2026-09-15 PI-37 PR draft — doctor warns merged-PR non-Done task, run-wave Step 5 fixes Status — 111 tests
 - 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
 - 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
 - 2026-09-14 PI-35 PR #66 needs work (delta 3) — forma (delta) non riconosciuta — cause: example-not-class
@@ -73,21 +93,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 retro-mark 2026-09-13 flow-errors
 - 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
 - 2026-09-13 PI-29 PR #60 approved (delta 6) — pwd -P paths, suite green via symlink and verify.sh — merge: orchestrator
-- 2026-09-13 PI-29 round 6 fix pushed — test paths resolved with pwd -P, symlink-proof — 88 tests green from a symlinked dir too
-- 2026-09-13 PI-29 PR #60 needs work (delta 5) — test path not resolved, verify RED — cause: other: test path logical vs pwd -P, earlier rounds measured only outside /tmp
-- 2026-09-13 PI-29 round 5 fix pushed — no printed command ever pushes; save is local-only, publishing left to a person — 88 tests green
-- 2026-09-13 PI-29 PR #60 needs work (delta 4) — rescue push republishes removed secret — cause: example-not-class
-- 2026-09-13 PI-29 round 4 fix pushed — recovery only pushes rescue-<sha12>, never refs/heads/<base> — 80 tests green
-- 2026-09-13 PI-29 PR #60 needs work (delta 3) — recovery pushes merge onto base — cause: other: reviewer round-2 fix wrong
-- 2026-09-13 PI-29 round 3 fix pushed — executable commands + deleted-base accept msg — 63/63 tests
-- 2026-09-13 PI-29 PR #60 needs work (delta 2) — recovery leaves doctor red, accept path relative — cause: other
-- 2026-09-13 PI-29 round 2 fix pushed — locale-proof deletion check + --accept-base — 10 new tests
-- 2026-09-13 PI-29 PR #60 needs work — deleted-branch match breaks under locale
-- 2026-09-13 PI-29 PR draft — doctor.sh flags a rewritten/deleted base branch — 20 tests
-- 2026-09-13 PI-14 PR #63 approved (delta 3) — merge: orchestrator
-- 2026-09-13 PI-14 PR #63 needs work (delta 2) — argomenti in più accettati con exit 0 — cause: example-not-class
-- 2026-09-13 PI-14 PR #63 needs work — AC5/AC3/AC4 clauses not guarded by tests, splitlines truncates lines — cause: first-round
-- 2026-09-13 PI-14 PR draft — read-only composer for facts/show/recent/grep — 17 tests
-- 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
-- 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
-- 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action

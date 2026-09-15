@@ -151,6 +151,45 @@ ok "PI-8 F1 — a later rotation's line lands below the earlier batch (entry 7 a
 ok "PI-8 F1 — the oldest entry ever archived is still at the very top" '[[ "$(archfirst6)" == *"entry 1" ]]'
 rm -rf "$S6"
 
+# --- PI-39: `log` normalises a message that already starts with an ISO date, so the line never carries
+# two dates (main's own history had exactly this: a caller passed a message already starting with a
+# date, doubling it). Case table per AC1, one date dimension each, not a single example: prefix equal to
+# today, prefix different from today, a repeated double prefix, and the limit case of a message that IS
+# just a date with nothing else in it. AC2: a date NOT at the very start of the message is left
+# untouched — only a LEADING one is ever stripped.
+S19=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test19.XXXXXX")
+git init -q "$S19" >/dev/null
+F19="$S19/docs/SESSION_HANDOFF.md"
+TODAY=$(date +%Y-%m-%d)
+lastlog19(){ awk '/^## Log/{f=1;next} f && /^- /{print;exit}' "$F19"; }
+
+(cd "$S19" && bash "$SCRIPT" log "$TODAY testo uno" >/dev/null 2>&1)
+ok "PI-39 AC1 — prefix equal to today's date is stripped, one date left" \
+   '[[ "$(lastlog19)" == "- $TODAY testo uno" ]]'
+
+(cd "$S19" && bash "$SCRIPT" log "2020-01-01 testo due" >/dev/null 2>&1)
+ok "PI-39 AC1 — prefix different from today is stripped, not kept alongside today's" \
+   '[[ "$(lastlog19)" == "- $TODAY testo due" ]]'
+
+(cd "$S19" && bash "$SCRIPT" log "2026-09-01 2026-09-02 testo tre" >/dev/null 2>&1)
+ok "PI-39 AC1 — a repeated double date prefix is stripped entirely, not just the first" \
+   '[[ "$(lastlog19)" == "- $TODAY testo tre" ]]'
+
+(cd "$S19" && bash "$SCRIPT" log "2026-09-01" >/dev/null 2>&1)
+ok "PI-39 AC1 — limit case: the message IS just a date, line still carries a single date" \
+   '[[ "$(lastlog19)" == "- $TODAY" ]]'
+
+(cd "$S19" && bash "$SCRIPT" log "PI-40 PR #80 approved — regressione del 2026-09-01" >/dev/null 2>&1)
+ok "PI-39 AC2 — a date NOT at the start of the message is left untouched" \
+   '[[ "$(lastlog19)" == "- $TODAY PI-40 PR #80 approved — regressione del 2026-09-01" ]]'
+rm -rf "$S19"
+
+# --- PI-39 AC3: no line in THIS project's own handoff/archive ever carries two consecutive ISO dates —
+# an invariant on the real data, checked against BOTH files (rotation can move a line from one to the
+# other), so the two doubled-date lines this task found and fixed on main cannot silently come back.
+ok "PI-39 AC3 — no doubled-date log line in docs/SESSION_HANDOFF.md or its archive" \
+   '! grep -qE "^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{4}-[0-9]{2}-[0-9]{2} " ../docs/SESSION_HANDOFF.md ../docs/SESSION_HANDOFF_ARCHIVE.md 2>/dev/null'
+
 # --- PI-8 review finding 2 — LOGCAP must be the only place the 40 lives; nothing else repeats it by hand.
 # Case A: the file created from scratch (no docs/SESSION_HANDOFF.md at all) must show the live LOGCAP in
 # its "## Log" header, and the heredoc must actually have interpolated it (not leaked "$LOGCAP" as text).
