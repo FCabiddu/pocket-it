@@ -45,11 +45,19 @@
 # nothing retries either. Independently of the worktree/local-branch handling above, a separate pass (below the
 # main loop) reads every merged PR once and deletes any remote branch — one with no worktree currently checked
 # out for it — whose current tip equals that PR's own head: never by ancestry (squash breaks it by construction,
-# AC3), never a branch with commits pushed since (its tip then differs from every merged PR's head, so it is
-# kept), never a protected/base branch. A branch with an open PR, a closed-unmerged PR, or no PR at all never
-# appears in the merged list and is left alone. A branch still checked out in one of this repo's own worktrees is
-# left entirely to this same run's worktree loop (never removed out from under a live worktree) and picked up by
-# this pass on a later run once it no longer is. `gh` missing, `gh pr list` failing, or the delete push failing
+# AC3), never a protected/base branch, and never a branch with commits pushed since — but that last guarantee is
+# only as good as the single `g fetch --prune -q origin` near the top of this script (its own failure discarded,
+# exit code unchecked): `refs/remotes/origin/*` is read here exactly as that fetch last left it, so a push that
+# lands on origin after it and before this pass's own `push --delete` (the whole length of the worktree loop
+# above) is judged on a tip this script has not seen yet and can be deleted. Outside this script's own model —
+# left to whoever pushes to a branch a merge has already closed — not a bug to fix here. A branch with an open PR,
+# a closed-unmerged PR, or no PR at all never
+# appears in the merged list and is left alone. This pass reads which branches are still checked out only after
+# the worktree loop above has run, so a branch whose worktree that same loop just removed as merged is reaped
+# right here, in this same run — the remote delete only ever touches a remote ref, never a live worktree's own
+# checkout, local branch or files, so nothing about a worktree still present is disturbed either way. A branch
+# still checked out in one of this repo's own worktrees when this pass runs is left alone entirely and picked up
+# by this pass on a later run once it no longer is. `gh` missing, `gh pr list` failing, or the delete push failing
 # (no network, no permission) skips that step or that one branch in silence — one report line, no error, exit 0;
 # the rest of the cleanup (worktrees, local branches) is unaffected.
 # Exit 0 always (2 on usage error). Safe to run repeatedly.
@@ -225,15 +233,17 @@ drop_branch(){ # $1 branch
 reap_remote_branches(){
   command -v gh >/dev/null 2>&1 || { echo "remote branch cleanup skipped (gh not available)"; return 0; }
   g remote get-url origin >/dev/null 2>&1 || { echo "remote branch cleanup skipped (no origin)"; return 0; }
-  local prs rc active e b rline name rsha found pname poid
+  local prs rc active wline rline name rsha found pname poid
   prs=$(cd "$MAIN" && gh pr list --state merged --limit 1000 --json headRefName,headRefOid \
         --jq '.[] | "\(.headRefName)\t\(.headRefOid)"' 2>/dev/null); rc=$?
   (( rc == 0 )) || { echo "remote branch cleanup skipped (gh pr list failed, exit $rc)"; return 0; }
+  # Read fresh, not from $entries (that snapshot predates the worktree loop above): a branch whose worktree
+  # this same run just removed as merged must not be counted active here, or its remote never gets reaped
+  # on the very run that made it eligible (PI-38 F1) — it would wait one more run for no reason.
   active=" "
-  for e in "${entries[@]}"; do
-    IFS="$SEP" read -r _ _ b _ _ <<<"$e"
-    [[ -n "$b" ]] && active="$active $b "
-  done
+  while IFS= read -r wline; do
+    case "$wline" in "branch "*) active="$active ${wline#branch refs/heads/} ";; esac
+  done < <(g worktree list --porcelain)
   while IFS= read -r rline; do
     [[ -z "$rline" ]] && continue
     name="${rline%% *}"; rsha="${rline#* }"

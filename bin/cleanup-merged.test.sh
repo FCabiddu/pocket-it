@@ -180,21 +180,22 @@ ok "detached worktree outside /tmp kept" "has 'kept .*/detached \(detached\)' &&
 ok "old detached scratch under /tmp removed" "has 'removed worktree .*pocket-it-cleanup-test-$$ \(detached scratch older than 24 h\)' && [[ ! -d $SCRATCH_WT ]]"
 ok "missing on disk, merged: pruned and branch deleted" "has 'pruned worktree .*task-gone ' && ! branch_exists task/gone"
 ok "missing on disk, no commits of its own: pruned, branch kept" "has 'pruned worktree .*task-gonefresh' && branch_exists task/gonefresh"
-ok "summary line" "has '^cleanup-merged: 11 worktrees removed, 9 branches deleted, 0 remote branches deleted, 27 kept, freed [0-9.]+ MB$'"
+ok "summary line" "has '^cleanup-merged: 11 worktrees removed, 9 branches deleted, 2 remote branches deleted, 27 kept, freed [0-9.]+ MB$'"
 ok "main checkout untouched" "[[ -d $M && \$(git -C $M branch --show-current) == main ]]"
-# PI-38 AC1 precondition: while task-revmerged/task-squashremote's own worktree is still checked out, this same
-# run leaves their remote branches untouched (never removed out from under a live worktree) — the bug's exact
-# starting condition: a merged PR whose remote branch is still on origin.
-ok "PI-38 precondition: revmerged's remote branch still on origin right after its own worktree is gone" "remote_exists task/revmerged"
-ok "PI-38 precondition: squashremote's remote branch still on origin right after its own worktree is gone" "remote_exists task/squashremote"
-# 4. run again from main: the former current worktree goes, nothing else changes (idempotent). This run also
-# reaps the two remote branches above — no worktree references them any more since run 3 removed those — via
-# the independent PI-38 pass, proving AC1 without a dedicated fixture of its own.
+# PI-38 F1: task-revmerged/task-squashremote's own worktree is removed by the ordinary loop in THIS same run
+# (both are PR-merged), and the reap pass below re-reads which worktrees are still checked out only after that
+# loop has run — so their remote branches are no longer shielded and are reaped in this same run too, not
+# deferred to the next one (the bug this task exists to fix: a merged PR whose remote branch stayed on origin
+# because it lagged one whole run behind its own worktree's removal).
+ok "PI-38 F1: revmerged's remote branch reaped in the same run its own worktree is removed" "has 'deleted remote branch task/revmerged \(merged\)' && ! remote_exists task/revmerged"
+ok "PI-38 F1: squashremote's remote branch reaped in the same run its own worktree is removed" "has 'deleted remote branch task/squashremote \(merged\)' && ! remote_exists task/squashremote"
+# 4. run again from main: the former current worktree goes, nothing else changes (idempotent); revmerged and
+# squashremote's remote branches are already gone (reaped in run 3 above) and are not mentioned again, and
+# nothing forged tries to re-delete them.
 OUT=$(cd "$M" && bash "$SCRIPT")
 ok "former current worktree removed on the next run" "has 'removed worktree .*agent-current \(merged into origin/main\)' && ! branch_exists task/current"
-ok "PI-38 AC1: a merged squash-PR's remote branch, no worktree left, is deleted on this later run" "has 'deleted remote branch task/revmerged \(merged\)' && ! remote_exists task/revmerged"
-ok "PI-38 AC1: same for the plain squash-merged one" "has 'deleted remote branch task/squashremote \(merged\)' && ! remote_exists task/squashremote"
-ok "second run summary" "has '^cleanup-merged: 1 worktrees removed, 1 branches deleted, 2 remote branches deleted, 26 kept'"
+ok "second run does not re-touch what run 3 already reaped" "! has 'remote branch task/revmerged' && ! has 'remote branch task/squashremote'"
+ok "second run summary" "has '^cleanup-merged: 1 worktrees removed, 1 branches deleted, 0 remote branches deleted, 26 kept'"
 OUT=$(cd "$M" && bash "$SCRIPT")
 ok "third run is a no-op" "has '^cleanup-merged: 0 worktrees removed, 0 branches deleted, 0 remote branches deleted, 26 kept, freed 0.0 MB$'"
 # 5. --all also cleans the merged epic branch, and still keeps everything with work in it
@@ -365,7 +366,14 @@ done
 #    Isolated repo and bare origin of its own — never the real remote, never a real network call (same fake
 #    gh as above, driven by $PRS). AC1 (a merged PR's live remote branch is reaped) and the "currently checked
 #    out anywhere" exclusion are already proven above (task/revmerged, task/squashremote); this section covers
-#    the rest by construction, one dimension per fixture, positive and negative.
+#    the rest by construction, one dimension per fixture, positive and negative. The "is a worktree still
+#    checked out on this branch" axis (what shields a remote ref from the reap pass) takes 5 values — no
+#    worktree at all, one removed by this same run as merged, one kept dirty, one kept locked and not merged,
+#    one kept in use / git status failing. Dims 1, 2, 3 and 4 each get their own fixture below (r8/squashed,
+#    r8/checkedout, r8/dirtykept, r8/lockedkept); dim 5 needs none of its own — the active list this pass reads
+#    is built from `git worktree list --porcelain` alone, never from whether that worktree's own `git status`
+#    succeeded, so a worktree kept for that reason (task-badstatus, earlier in this file) is shielded by the
+#    same mechanism dims 2-4 already prove, not by a separate one.
 R8="$S/r8"; ORIGIN8="$S/origin8.git"
 q git init -q --bare "$ORIGIN8"
 q git init -q -b main "$R8"
@@ -424,20 +432,39 @@ pr8 r8/afterpr 103b
 OUT=$(cd "$R8" && bash "$SCRIPT")
 ok "PI-38 AC2 positive counterpart: r8/afterpr is reaped once a PR record matches its current tip" "has 'deleted remote branch r8/afterpr \(merged\)' && ! remote_exists r8/afterpr \"$R8\""
 
-# Standalone echo of the same-run race the two revmerged/squashremote fixtures above prove: r8/checkedout's own
-# worktree is merged by PR too, so the ordinary per-worktree loop removes IT (and only its local branch) in run
-# 1 — the reap pass, working off the worktree-list snapshot taken before that removal, still counts it as
-# active this same run and never touches its remote ref in the same pass. Only once no worktree references it
-# any more (its own removal took care of that here) does the independent reap pass delete the remote ref, on
-# the next run — the two passes never race each other, on an isolated repo of this section's own.
+# Standalone echo of the same-run scenario the two revmerged/squashremote fixtures above prove, on an isolated
+# repo of this section's own: r8/checkedout's own worktree is merged by PR too, so the ordinary per-worktree
+# loop removes IT (and its local branch) in this run — and because the reap pass below re-reads which
+# worktrees are still checked out only after that loop has run (F1's fix), its remote ref is reaped in this
+# same run too, never deferred to a later one.
 mkr8 r8/checkedout
 pr8 r8/checkedout 104
 R8WT="$S/r8wt-checkedout"; q git -C "$R8" worktree add -q "$R8WT" r8/checkedout
 OUT=$(cd "$R8" && bash "$SCRIPT")
-ok "PI-38 AC1/active: its remote ref is not touched in the same run its own worktree gets removed" "! has 'remote branch r8/checkedout' && remote_exists r8/checkedout \"$R8\""
-q git -C "$R8" worktree remove --force "$R8WT"
+ok "PI-38 AC1/active dim 2 (worktree just removed as merged): worktree and local branch gone" "has 'removed worktree .*r8wt-checkedout \(PR #104 merged\)' && [[ ! -d \"$R8WT\" ]] && ! git -C \"$R8\" rev-parse -q --verify refs/heads/r8/checkedout >/dev/null 2>&1"
+ok "PI-38 AC1/active dim 2: its remote ref is reaped in that very same run, not deferred" "has 'deleted remote branch r8/checkedout \(merged\)' && ! remote_exists r8/checkedout \"$R8\""
+
+# AC1/active dim 3: worktree kept, dirty. Still checked out (however untidy), so it stays in the fresh active
+# list read after the loop, and its remote ref is left alone even though a PR record matches its current tip
+# exactly — the shield is "a worktree still has it checked out", not "was it judged merged".
+mkr8 r8/dirtykept
+pr8 r8/dirtykept 105
+R8WTDIRTY="$S/r8wt-dirtykept"; q git -C "$R8" worktree add -q "$R8WTDIRTY" r8/dirtykept
+echo untracked > "$R8WTDIRTY/untracked"
 OUT=$(cd "$R8" && bash "$SCRIPT")
-ok "PI-38 AC1/active: the same branch's remote ref is reaped on the next run, once no worktree is left" "has 'deleted remote branch r8/checkedout \(merged\)' && ! remote_exists r8/checkedout \"$R8\""
+ok "PI-38 AC1/active dim 3: worktree kept dirty, and its remote ref stays despite a matching PR record" "has 'kept .*r8wt-dirtykept \(dirty\)' && [[ -d \"$R8WTDIRTY\" ]] && ! has 'remote branch r8/dirtykept' && remote_exists r8/dirtykept \"$R8\""
+q git -C "$R8" worktree remove --force "$R8WTDIRTY"
+
+# AC1/active dim 4: worktree kept, locked (a plain, non-pocket-it lock is never judged for merge status at all,
+# PI-31) — kept unconditionally, still in the active list, and its remote ref stays too despite the same
+# matching-tip PR record that alone would otherwise get it reaped.
+mkr8 r8/lockedkept
+pr8 r8/lockedkept 106
+R8WTLOCK="$S/r8wt-lockedkept"; q git -C "$R8" worktree add -q "$R8WTLOCK" r8/lockedkept
+q git -C "$R8" worktree lock "$R8WTLOCK"
+OUT=$(cd "$R8" && bash "$SCRIPT")
+ok "PI-38 AC1/active dim 4: worktree kept locked (foreign lock, not judged), remote ref stays despite a matching PR" "has 'kept .*r8wt-lockedkept \(.*not a pocket-it lock' && [[ -d \"$R8WTLOCK\" ]] && ! has 'remote branch r8/lockedkept' && remote_exists r8/lockedkept \"$R8\""
+q git -C "$R8" worktree unlock "$R8WTLOCK" >/dev/null 2>&1; q git -C "$R8" worktree remove --force "$R8WTLOCK"
 
 # AC4 dimension 1: gh entirely absent — remote cleanup skips silently, exit 0, local worktree/branch cleanup
 # (which needs no gh here: a plain --no-ff merge is decided by ancestry alone) proceeds unaffected.
