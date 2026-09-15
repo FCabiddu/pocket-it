@@ -1,6 +1,6 @@
 # PI-36 — La guardia sui force-push legge oltre il confine di comando e blocca un push legittimo
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni del file (il classificatore dei push in Python più in alto nello stesso file segmenta già per confine di comando)
 **Contract**: uscita 0 = consentito, uscita 2 = bloccato con messaggio su stderr. Invariato.
 **Branch**: task/pi-36-guard-force-push-boundary
-**PR**: —
+**PR**: https://github.com/FCabiddu/pocket-it/pull/70
 
 ## Goal
 L'ultima riga di `guard.sh` è un `grep` piatto:
@@ -35,10 +35,10 @@ Il push è su `task/foo`, non su `main`; `--base main` appartiene a `gh pr creat
 Il danno da evitare è **riscrivere la storia del ramo base**, non la presenza della parola `main` in una riga. Il file contiene già il pezzo che sa distinguerlo: il classificatore Python più in alto segmenta il comando sui confini (`; & && || | |& ( )`), riconosce i refspec, `+ref`, `-f/--force*`, le cancellazioni e `--mirror/--prune/--all`, e sa quali segmenti hanno `push` come sottocomando git.
 
 ## Acceptance criteria
-- [ ] AC1 — Given un comando in cui il segmento del `git push` non tocca il ramo base, when la guardia lo valuta, then l'uscita è 0, **qualunque cosa contengano gli altri segmenti**. La classe da coprire, non gli esempi: per ogni separatore di comando (`&&`, `||`, `;`, `|`, `|&`, newline) e per ogni modo in cui `main`/`master` può comparire dopo il push (`gh pr create --base main`, `gh pr merge … --base master`, un commento, un `echo`, un argomento `--body` che nomina main, una variabile `$BASE`), il push su un branch di task resta consentito.
-- [ ] AC2 — Given un force-push che raggiunge davvero il ramo base, when la guardia lo valuta, then l'uscita è 2 con il messaggio attuale. Copri l'intera classe di forme che oggi il classificatore Python già conosce: `-f`, `--force`, `--force-with-lease`, `--force-if-includes`, il `+` davanti al refspec, `HEAD:main`, `main`, `refs/heads/main`, il refspec corrispondente (`git push -f origin :`), `--all`/`--mirror` con force, e il caso in cui il branch corrente **è** la base e il refspec è implicito.
-- [ ] AC3 — Given le altre guardie del file (push alla base senza prefisso, `gh pr merge` senza prefisso, `pkill/killall`, `APP_STATUS → prod`, `sleep N && …`), when si lancia la suite esistente, then nessuna cambia comportamento: `bash .claude/hooks/guard.test.sh` e `bash .claude/hooks/guard.heredoc.test.sh` restano verdi senza modifiche ai casi già presenti.
-- [ ] AC4 — Given la nuova logica, when si legge il file, then il controllo sul force dichiara il suo modello di minaccia in un commento: chi è l'avversario (un agente che riscrive la base per errore o per aggirare una review), cosa deve impedire (qualsiasi scrittura che rimpiazza o cancella la storia del ramo base su un remoto), e cosa esplicitamente **non** copre.
+- [x] AC1 — Given un comando in cui il segmento del `git push` non tocca il ramo base, when la guardia lo valuta, then l'uscita è 0, **qualunque cosa contengano gli altri segmenti**. La classe da coprire, non gli esempi: per ogni separatore di comando (`&&`, `||`, `;`, `|`, `|&`, newline) e per ogni modo in cui `main`/`master` può comparire dopo il push (`gh pr create --base main`, `gh pr merge … --base master`, un commento, un `echo`, un argomento `--body` che nomina main, una variabile `$BASE`), il push su un branch di task resta consentito.
+- [x] AC2 — Given un force-push che raggiunge davvero il ramo base, when la guardia lo valuta, then l'uscita è 2 con il messaggio attuale. Copri l'intera classe di forme che oggi il classificatore Python già conosce: `-f`, `--force`, `--force-with-lease`, `--force-if-includes`, il `+` davanti al refspec, `HEAD:main`, `main`, `refs/heads/main`, il refspec corrispondente (`git push -f origin :`), `--all`/`--mirror` con force, e il caso in cui il branch corrente **è** la base e il refspec è implicito.
+- [x] AC3 — Given le altre guardie del file (push alla base senza prefisso, `gh pr merge` senza prefisso, `pkill/killall`, `APP_STATUS → prod`, `sleep N && …`), when si lancia la suite esistente, then nessuna cambia comportamento: `bash .claude/hooks/guard.test.sh` e `bash .claude/hooks/guard.heredoc.test.sh` restano verdi senza modifiche ai casi già presenti.
+- [x] AC4 — Given la nuova logica, when si legge il file, then il controllo sul force dichiara il suo modello di minaccia in un commento: chi è l'avversario (un agente che riscrive la base per errore o per aggirare una review), cosa deve impedire (qualsiasi scrittura che rimpiazza o cancella la storia del ramo base su un remoto), e cosa esplicitamente **non** copre.
 
 ## Tests expected
 Casi nuovi in `.claude/hooks/guard.test.sh`, uno per dimensione delle classi di AC1 e AC2 — non un caso per esempio citato nel Goal. Almeno una **mutazione eseguita**: togli la segmentazione per confine di comando e mostra che i casi di AC1 diventano rossi; rimettila. Niente test di integrazione.
