@@ -361,4 +361,124 @@ for sh in "${SHELLS[@]}"; do
   check "PI-31 r3 foreign lock: printed git command runs as printed in $sh from / and releases the lock" eval 'is_locked "$FP" && run_from_elsewhere "$sh" "$CMD" && ! is_locked "$FP"'
   q git -C "$R7" worktree lock --reason 'manual "hold"' "$FP"
 done
+# 8. PI-38 — dedicated fixtures for the remote-branch reaper (AC1, AC2 full matrix, AC3, AC4, AC5 mutation).
+#    Isolated repo and bare origin of its own — never the real remote, never a real network call (same fake
+#    gh as above, driven by $PRS). AC1 (a merged PR's live remote branch is reaped) and the "currently checked
+#    out anywhere" exclusion are already proven above (task/revmerged, task/squashremote); this section covers
+#    the rest by construction, one dimension per fixture, positive and negative.
+R8="$S/r8"; ORIGIN8="$S/origin8.git"
+q git init -q --bare "$ORIGIN8"
+q git init -q -b main "$R8"
+echo base > "$R8/f"; q git -C "$R8" add f; q git -C "$R8" commit -qm base
+q git -C "$R8" remote add origin "$ORIGIN8"; q git -C "$R8" push -q -u origin main
+pr8(){ echo "$2 $(git -C "$R8" rev-parse "${3:-$1}")" >> "$PRS/${1//\//__}"; }   # $1 branch, $2 PR number, $3 head ref/sha (default: branch tip)
+mkr8(){ # $1 branch → new branch off main, one commit of its own, pushed to origin8, never merged locally (ancestry stays false)
+  local t="$S/r8-tmp-${1//\//-}"
+  q git -C "$R8" branch "$1" main
+  q git -C "$R8" worktree add -q "$t" "$1"
+  commit "$t" "$1"
+  q git -C "$t" push -q origin "$1"
+  q git -C "$R8" worktree remove --force "$t"; }
+addcommit8(){ # $1 branch → one more commit on it, pushed (moves the remote tip past any already-recorded PR head)
+  local t="$S/r8-tmp2-${1//\//-}"
+  q git -C "$R8" worktree add -q "$t" "$1"
+  commit "$t" "more work"
+  q git -C "$t" push -q origin "$1"
+  q git -C "$R8" worktree remove --force "$t"; }
+
+# AC3 (and AC1's ordinary case): squash-merged, so its own commits are provably NOT ancestors of main, yet its
+# remote branch is reaped — the oracle is the PR's own head, never `git merge-base --is-ancestor`.
+mkr8 r8/squashed
+q git -C "$R8" merge -q --squash r8/squashed; q git -C "$R8" commit -qm "squash r8/squashed"; q git -C "$R8" push -q origin main
+pr8 r8/squashed 101
+ok "PI-38 AC3 setup: r8/squashed's own tip is NOT an ancestor of main (squash breaks ancestry by construction)" "! git -C \"$R8\" merge-base --is-ancestor r8/squashed main"
+
+# AC2 negative dimension: no matching merged-PR record at all — covers three real-world causes (an open PR, a
+# closed-without-merge PR, no PR ever opened) that all collapse to the identical signal this script can see:
+# absence from `gh pr list --state merged`. Kept in all three.
+mkr8 r8/openpr        # stands in for: PR open, not merged
+mkr8 r8/closedunmerged  # stands in for: PR closed without merging
+mkr8 r8/nopr          # stands in for: no PR at all
+
+# AC2 negative dimension: protected/base branch, even with a merged-PR record that (falsely) matches its tip —
+# still never touched.
+pr8 main 102
+
+# AC2 negative dimension: commits pushed after the PR merged — remote tip has moved past the recorded head.
+mkr8 r8/afterpr
+pr8 r8/afterpr 103
+addcommit8 r8/afterpr
+
+OUT=$(cd "$R8" && bash "$SCRIPT")
+ok "PI-38 AC1/AC3 positive: squash-merged branch with a matching PR head is reaped, not by ancestry" "has 'deleted remote branch r8/squashed \(merged\)' && ! remote_exists r8/squashed \"$R8\""
+ok "PI-38 AC2 negative: branch standing in for an open PR is kept" "! has 'remote branch r8/openpr' && remote_exists r8/openpr \"$R8\""
+ok "PI-38 AC2 negative: branch standing in for a closed-without-merge PR is kept" "! has 'remote branch r8/closedunmerged' && remote_exists r8/closedunmerged \"$R8\""
+ok "PI-38 AC2 negative: branch with no PR at all is kept" "! has 'remote branch r8/nopr' && remote_exists r8/nopr \"$R8\""
+ok "PI-38 AC2 negative: main is never reaped even with a forged matching PR record" "! has 'remote branch main' && remote_exists main \"$R8\""
+ok "PI-38 AC2 negative: commits pushed after the PR merged keep the branch (tip no longer matches the PR head)" "! has 'remote branch r8/afterpr' && remote_exists r8/afterpr \"$R8\""
+
+# AC2 positive counterpart, reusing r8/afterpr's dimension: once no further commits are pushed after a fresh PR
+# record taken at its (now final) tip, the same branch is reaped on the very next run — proving the negative
+# above is about the tip mismatch specifically, not about r8/afterpr being special.
+pr8 r8/afterpr 103b
+OUT=$(cd "$R8" && bash "$SCRIPT")
+ok "PI-38 AC2 positive counterpart: r8/afterpr is reaped once a PR record matches its current tip" "has 'deleted remote branch r8/afterpr \(merged\)' && ! remote_exists r8/afterpr \"$R8\""
+
+# Standalone echo of the same-run race the two revmerged/squashremote fixtures above prove: r8/checkedout's own
+# worktree is merged by PR too, so the ordinary per-worktree loop removes IT (and only its local branch) in run
+# 1 — the reap pass, working off the worktree-list snapshot taken before that removal, still counts it as
+# active this same run and never touches its remote ref in the same pass. Only once no worktree references it
+# any more (its own removal took care of that here) does the independent reap pass delete the remote ref, on
+# the next run — the two passes never race each other, on an isolated repo of this section's own.
+mkr8 r8/checkedout
+pr8 r8/checkedout 104
+R8WT="$S/r8wt-checkedout"; q git -C "$R8" worktree add -q "$R8WT" r8/checkedout
+OUT=$(cd "$R8" && bash "$SCRIPT")
+ok "PI-38 AC1/active: its remote ref is not touched in the same run its own worktree gets removed" "! has 'remote branch r8/checkedout' && remote_exists r8/checkedout \"$R8\""
+q git -C "$R8" worktree remove --force "$R8WT"
+OUT=$(cd "$R8" && bash "$SCRIPT")
+ok "PI-38 AC1/active: the same branch's remote ref is reaped on the next run, once no worktree is left" "has 'deleted remote branch r8/checkedout \(merged\)' && ! remote_exists r8/checkedout \"$R8\""
+
+# AC4 dimension 1: gh entirely absent — remote cleanup skips silently, exit 0, local worktree/branch cleanup
+# (which needs no gh here: a plain --no-ff merge is decided by ancestry alone) proceeds unaffected.
+mkr8 r8/localgh1
+q git -C "$R8" worktree add -q -b task/localgh1wt "$S/r8wt-localgh1" main
+commit "$S/r8wt-localgh1" task/localgh1wt
+q git -C "$R8" merge -q --no-ff task/localgh1wt -m "merge task/localgh1wt"
+q git -C "$R8" push -q origin main
+pr8 r8/localgh1 105   # would match if gh could answer — the point is that with gh absent, it never gets the chance to
+OUT=$(cd "$R8" && PATH="$NOGH_PATH" bash "$SCRIPT"); rc=$?
+ok "PI-38 AC4 gh absent: remote cleanup skipped in silence, exit 0" "[[ $rc -eq 0 ]] && has 'remote branch cleanup skipped \(gh not available\)' && ! has 'remote branch r8/'"
+ok "PI-38 AC4 gh absent: remote branch left alone despite a matching PR record" "remote_exists r8/localgh1 \"$R8\""
+ok "PI-38 AC4 gh absent: local worktree cleanup (no gh needed, ancestry alone) still happens" "has 'removed worktree .*r8wt-localgh1 \(merged into (origin/)?main\)' && [[ ! -d \"$S/r8wt-localgh1\" ]]"
+
+# AC4 dimension 2: gh present but `gh pr list` fails (stands in for no network) — same guarantees.
+q git -C "$R8" worktree add -q -b task/localgh2wt "$S/r8wt-localgh2" main
+commit "$S/r8wt-localgh2" task/localgh2wt
+q git -C "$R8" merge -q --no-ff task/localgh2wt -m "merge task/localgh2wt"
+q git -C "$R8" push -q origin main
+OUT=$(cd "$R8" && GH_FAIL=1 bash "$SCRIPT"); rc=$?
+ok "PI-38 AC4 gh pr list failing (no network): remote cleanup skipped in silence, exit 0" "[[ $rc -eq 0 ]] && has 'remote branch cleanup skipped \(gh pr list failed, exit 4\)' && ! has 'remote branch r8/'"
+ok "PI-38 AC4 gh pr list failing: remote branch left alone" "remote_exists r8/localgh1 \"$R8\""
+ok "PI-38 AC4 gh pr list failing: local worktree cleanup still happens" "has 'removed worktree .*r8wt-localgh2 \(merged into (origin/)?main\)' && [[ ! -d \"$S/r8wt-localgh2\" ]]"
+
+# AC4 dimension 3: gh works, but the push that deletes the remote ref fails (stands in for no write permission /
+# no network to origin itself) — the branch is kept, one report line, exit 0, no hang; nothing else is aborted.
+chmod -R a-w "$ORIGIN8"
+OUT=$(cd "$R8" && bash "$SCRIPT"); rc=$?
+chmod -R u+w "$ORIGIN8"
+ok "PI-38 AC4 push-delete failing: reported and kept, exit 0, script not aborted" "[[ $rc -eq 0 ]] && has 'kept remote branch r8/localgh1 \(delete failed: no permission or network\)'"
+ok "PI-38 AC4 push-delete failing: remote branch really still there" "remote_exists r8/localgh1 \"$R8\""
+
+# AC5 — mutation: remove the PR-state match itself (not just skip it) so every non-active, non-protected
+# remote branch is treated as matched, regardless of any merged PR — the negative AC2 cases must now start
+# getting wrongly deleted.
+sed 's/^    found=""$/    found=1/' "$SCRIPT" > "$S/mutant8.sh"
+ok "PI-38 AC5 mutant really differs from the script (the PR-state match is really gone)" "grep -q '    found=1$' \"$S/mutant8.sh\" && ! grep -q '    found=\"\"$' \"$S/mutant8.sh\" && ! cmp -s \"$SCRIPT\" \"$S/mutant8.sh\""
+OUT=$(cd "$R8" && bash "$S/mutant8.sh")
+ok "PI-38 AC5 mutant wrongly deletes the open-PR stand-in (AC2 negative broken)" "has 'deleted remote branch r8/openpr \(merged\)' && ! remote_exists r8/openpr \"$R8\""
+ok "PI-38 AC5 mutant wrongly deletes the closed-unmerged stand-in (AC2 negative broken)" "has 'deleted remote branch r8/closedunmerged \(merged\)' && ! remote_exists r8/closedunmerged \"$R8\""
+ok "PI-38 AC5 mutant wrongly deletes the no-PR-at-all stand-in (AC2 negative broken)" "has 'deleted remote branch r8/nopr \(merged\)' && ! remote_exists r8/nopr \"$R8\""
+ok "PI-38 AC5 mutant still leaves main alone (protected() is a separate, still-intact guard)" "! has 'remote branch main' && remote_exists main \"$R8\""
+
 exit $fail
