@@ -1,6 +1,6 @@
 # PI-15 — I lettori passano al compositore
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
@@ -13,7 +13,7 @@
 **Files**: bin/status.sh:37-40, .claude/agents/shared/implementing-common.md:39, .claude/agents/developer.md:32, .claude/agents/reviewer.md:19, .claude/agents/retro.md:23-24, .claude/agents/implementation-planner.md:56, .claude/agents/shared/lessons.md:3, .claude/skills/run-wave/SKILL.md:50
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§5.2, §9.1, §12 PI-15)
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-15-fragment-writer
 **PR**: 
 
 ## Goal

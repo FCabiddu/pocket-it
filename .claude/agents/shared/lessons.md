@@ -1,6 +1,6 @@
 # Lessons — method, independent of the stack
 
-The third layer of memory. Project truths live in each project's `docs/SESSION_HANDOFF.md` facts; stack rules live in each project's `best-practices/`; **this file holds what we learned about how to work**, valid on every project. Read at Step 0 by developer, qa-engineer, reviewer and implementation-planner, together with the shared rules. Written by `retro` (a PR on this repo that it merges itself — text only) and by humans.
+The third layer of memory. Project truths live in each project's facts (read via `handoff.sh facts`); stack rules live in each project's `best-practices/`; **this file holds what we learned about how to work**, valid on every project. Read at Step 0 by developer, qa-engineer, reviewer and implementation-planner, together with the shared rules. Written by `retro` (a PR on this repo that it merges itself — text only) and by humans.
 
 Rules of the file: one lesson = one line, in the fixed form below; ≤ 40 lessons; a lesson enters as `provisional` and becomes `confirmed` when a later retro sees it hold on a second project or epic, or is removed if it does not; a `confirmed` lesson that keeps mattering is promoted to a rule in `implementing-common.md` / the orchestrator's CLAUDE.md and deleted from here. Nothing in this file names a client or a project — write "project A".
 
