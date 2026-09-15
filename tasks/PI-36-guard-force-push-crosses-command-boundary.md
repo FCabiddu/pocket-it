@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni del file (il classificatore dei push in Python più in alto nello stesso file segmenta già per confine di comando)
 **Contract**: uscita 0 = consentito, uscita 2 = bloccato con messaggio su stderr. Invariato.
 **Branch**: task/pi-36-guard-force-push-boundary
-**PR**: —
+**PR**: https://github.com/FCabiddu/pocket-it/pull/70
 
 ## Goal
 L'ultima riga di `guard.sh` è un `grep` piatto:
