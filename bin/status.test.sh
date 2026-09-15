@@ -49,7 +49,8 @@ ok "AC3 — no memory: no docs/ created, git status unchanged" "[[ ! -d \"$N/doc
 # awk extraction produced (the oracle: the same awk this repo ran before the task, not status.sh's own code).
 F="$S/withmem"; q git init -q -b main "$F"; echo base > "$F/f"; q git -C "$F" add f; q git -C "$F" commit -qm base
 mkdir -p "$F/docs"
-cat > "$F/docs/SESSION_HANDOFF.md" <<'EOF'
+HF="$F/docs/SESSION_HANDOFF.md"
+cat > "$HF" <<'EOF'
 # Session handoff
 
 ## Fatti che non scadono
@@ -62,8 +63,8 @@ cat > "$F/docs/SESSION_HANDOFF.md" <<'EOF'
 - 2026-08-30 event three
 - 2026-08-29 event four
 EOF
-exp_facts=$(awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /{print "  "$0}' "$F/docs/SESSION_HANDOFF.md" | head -8)
-exp_log=$(awk '/^## Log/{f=1;next} f && /^- /{print "  "$0}' "$F/docs/SESSION_HANDOFF.md" | head -4)
+exp_facts=$(awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /{print "  "$0}' "$HF" | head -8)
+exp_log=$(awk '/^## Log/{f=1;next} f && /^- /{print "  "$0}' "$HF" | head -4)
 out_mem=$(cd "$F" && bash "$SCRIPT" 2>/dev/null)
 got_facts=$(sed -n '/^handoff facts:/,/^handoff log/p' <<<"$out_mem" | sed '1d;$d')
 got_log=$(sed -n '/^handoff log (last 4):/,$p' <<<"$out_mem" | sed '1d')
@@ -71,8 +72,8 @@ ok "AC2 — facts line identical to the pre-task raw-awk extraction" "[[ \"\$got
 ok "AC2 — log (last 4) line identical to the pre-task raw-awk extraction" "[[ \"\$got_log\" == \"\$exp_log\" ]]"
 
 # Forward-compat: memory made only of a fragment under docs/handoff/** (no frozen file at all, the PI-16
-# shape) is still detected as memory, never "nessuna memoria" — a status.sh reverted to checking only
-# `-f docs/SESSION_HANDOFF.md` goes red here.
+# shape) is still detected as memory, never "nessuna memoria" — a status.sh reverted to testing only
+# for the frozen file's existence goes red here.
 G="$S/fragonly"; q git init -q -b main "$G"; echo base > "$G/f"; q git -C "$G" add f; q git -C "$G" commit -qm base
 mkdir -p "$G/docs/handoff/2026-09"
 cat > "$G/docs/handoff/2026-09/20260901T000000Z-x-a1a1.md" <<'EOF'
