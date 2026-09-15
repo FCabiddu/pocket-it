@@ -51,6 +51,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - cleanup-merged.sh reaps remote branches of merged PRs (PI-38) via PR head-vs-tip match, never ancestry (squash breaks ancestry); a branch's own worktree removal and its remote-branch reap can land one run apart (same-run snapshot), never within the same run
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
 - 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
 - 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
@@ -90,4 +91,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-28 PR #58 approved round 5 delta — nessun commit nuovo, albero con #57 verde — merge: orchestrator
 - 2026-09-13 PI-28 PR #58 delta round 4 — 0 findings, BLOCKED/RED flow rerun — labels held until #57, merge after #57
 - 2026-09-13 PI-28 PR #58 round 4 pushed 6040988 — BLOCKED outcome split from RED, own run-wave action
-- 2026-09-13 PI-28 PR #58 needs work round 3 — RED confonde albero non costruibile — cause: other: esito verificato senza azione di run-wave
