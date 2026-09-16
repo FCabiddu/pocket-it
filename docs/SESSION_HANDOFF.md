@@ -56,6 +56,9 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-16 PI-40 PR #81 fix ripresa — nessun argomento a log o fact può scrivere un'intestazione: collasso a un record prima dello strip data, fixture avvelenate generate dalle scritture vere, 238 asserzioni
+- 2026-09-16 PI-41 PR #83 needs work — a branch's own red attributed to the base — cause: first-round
+- 2026-09-16 PI-42 PR #82 needs work — en-dash range citations checked only endpoints — cause: first-round
+- 2026-09-16 PI-40 PR #81 needs work — writer can still inject a heading from its own argument — cause: first-round
 - 2026-09-16 PI-40 PR draft — handoff.sh trova le sezioni dalla loro intestazione a inizio riga, non da un marcatore citato dentro un fatto — 42 test nuovi
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
@@ -92,6 +95,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-14 PI-34 PR #64 needs work (delta 3) — scratch con commit non pushato rimossa — cause: other: condizione (c) elencata non applicata
 - 2026-09-13 PI-34 PR #64 giro 3 fix pushed — trap prima del fetch, scratch mai rimossa sporca, reviewer.md:39 senza $$ — 5 nuovi test, 178 verdi
 - 2026-09-13 PI-34 PR #64 needs work (delta 2) — trap armato dopo il fetch, scratch sporche rimosse — cause: example-not-class
-- 2026-09-13 PI-34 giro 2 fixes pushed — SIGINT/TERM exit codes, conflict-resolution worktree reuse, scratch liveness, git-common-dir — 24 tests
-- 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
-- 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
