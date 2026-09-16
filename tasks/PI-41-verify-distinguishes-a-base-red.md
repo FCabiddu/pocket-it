@@ -1,6 +1,6 @@
 # PI-41 — verify.sh must tell a defect the PR introduced from one it inherited
 
-**Status**: Todo
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
