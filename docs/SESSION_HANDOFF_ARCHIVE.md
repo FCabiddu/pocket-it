@@ -167,3 +167,13 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-29 round 5 fix pushed — no printed command ever pushes; save is local-only, publishing left to a person — 88 tests green
 - 2026-09-13 PI-29 PR #60 approved (delta 6) — pwd -P paths, suite green via symlink and verify.sh — merge: orchestrator
 - 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
+- 2026-09-13 retro-mark 2026-09-13 flow-errors
+- 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
+- 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
+- 2026-09-13 PI-34 giro 2 fixes pushed — SIGINT/TERM exit codes, conflict-resolution worktree reuse, scratch liveness, git-common-dir — 24 tests
+- 2026-09-13 PI-34 PR #64 needs work (delta 2) — trap armato dopo il fetch, scratch sporche rimosse — cause: example-not-class
+- 2026-09-13 PI-34 PR #64 giro 3 fix pushed — trap prima del fetch, scratch mai rimossa sporca, reviewer.md:39 senza $$ — 5 nuovi test, 178 verdi
+- 2026-09-14 PI-34 PR #64 needs work (delta 3) — scratch con commit non pushato rimossa — cause: other: condizione (c) elencata non applicata
+- 2026-09-14 PI-34 PR #64 giro 4 fix pushed — scratch tenuta se HEAD non su remote, nomi scratch a cifre esatte — 2 nuovi test, 180 verdi
+- 2026-09-14 PI-34 PR #64 approved (delta 4) — merge: orchestrator, prima di #66
+- 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests

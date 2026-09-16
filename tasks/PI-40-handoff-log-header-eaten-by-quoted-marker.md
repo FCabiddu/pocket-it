@@ -1,6 +1,6 @@
 # PI-40 — handoff.sh must find its own Log heading, not a `## Log` quoted inside a fact
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/handoff.sh, bin/handoff.test.sh
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/pi-40-handoff-log-header-anchor
+**PR**: https://github.com/FCabiddu/pocket-it/pull/81
 
 ## Goal
 `bin/handoff.sh log` splits the handoff file with `head,sep,tail = s.partition("## Log")` — unanchored, so it
@@ -34,20 +34,24 @@ line written directly under the last fact.
 the same unanchored assumption and fix them in the same shape if they do.
 
 ## Acceptance criteria
-- [ ] AC1 — Given a handoff file whose **facts** section contains the literal `## Log` anywhere inside a fact's
+- [x] AC1 — Given a handoff file whose **facts** section contains the literal `## Log` anywhere inside a fact's
       text (backticked, inline, mid-sentence — the whole class, not the one observed spelling), when
       `handoff.sh log "…"` runs, then the real `## Log` heading is still present exactly once afterwards, the new
       line is under it, and no fact line moved section.
-- [ ] AC2 — Given the same file, when `log` runs N times in a row, then the file is byte-stable in structure:
+- [x] AC2 — Given the same file, when `log` runs N times in a row, then the file is byte-stable in structure:
       heading count stays 1, the fact count never decreases, and no fact ever reaches the archive.
-- [ ] AC3 — Given a handoff file with **no** `## Log` heading at all (a fresh or hand-edited file), when `log`
+- [x] AC3 — Given a handoff file with **no** `## Log` heading at all (a fresh or hand-edited file), when `log`
       runs, then a heading is created once, at the end, and existing dated lines are not re-parented — the
       current create-if-missing behaviour keeps working and is not regressed into by AC1's anchor.
-- [ ] AC4 — Given the archive file, when rotation happens under AC1's conditions, then only genuine log lines
+- [x] AC4 — Given the archive file, when rotation happens under AC1's conditions, then only genuine log lines
       rotate; the invariant "no line is lost, order oldest-at-top" from PI-8 still holds.
-- [ ] AC5 — Given `fact` and `compose` on the same file, when they run, then they classify the two sections the
+- [x] AC5 — Given `fact` and `compose` on the same file, when they run, then they classify the two sections the
       same way `log` does (one definition of where the log starts, used by every reader and the writer — the
       same "one home for a term" rule PI-39 applied to the date anchor).
+- [x] AC6 (dalla review di PR #81, stesso enunciato di danno visto dal lato scrittura) — Given qualunque
+      argomento a `log` o a `fact`, di qualunque forma, when la scrittura avviene, then nessuna intestazione
+      è aggiunta o tolta e nessuna riga già presente è cancellata: ciò che una scrittura appende è un record
+      solo, quindi un marcatore può finire nel file unicamente a metà riga, come dato.
 
 ## Tests expected
 One test per criterion in `bin/handoff.test.sh`, each on a disposable file built inside the test, including the
