@@ -324,6 +324,17 @@ out33m=$(cd "$S33" && bash bin/retro-due-old.sh 2>&1); rc33m=$?
 ok "PI-16 × retro-due — sibling: with the old case-pattern detector the same memory reads as empty" \
    '[[ "$rc33m" -eq 0 ]] && [[ "$out33m" == "retro-due: nothing" ]]'
 
+# The two files travel together: bin/handoff.sh is nothing without bin/handoff_sections.py, and an
+# install that carries only one of them must say so and write nothing, not half-write a fragment with a
+# traceback for a confirmation.
+S34=$(mkrepo)
+mkdir -p "$S34/bin"
+cp "$SCRIPT" "$S34/bin/"
+out34=$(cd "$S34" && bash bin/handoff.sh log "riga con la libreria mancante" 2>&1); rc34=$?
+ok "PI-16 — without bin/handoff_sections.py the script refuses (exit 1) and names the missing file" \
+   '[[ "$rc34" -eq 1 ]] && [[ "$out34" == *"handoff_sections.py"* ]]'
+ok "PI-16 — and it wrote nothing at all" '[[ ! -e "$S34/docs" ]]'
+
 # =================================================================================================
 # PI-16 AC1 — NON-CONTENTION, the four-branch scenario of TAD §11.2. Two task branches write memory
 # (log + fact + retract), two chore branches write one line each on the base, one task branch is merged
