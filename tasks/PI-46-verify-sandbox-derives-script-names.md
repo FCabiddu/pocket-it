@@ -1,6 +1,6 @@
 # PI-46 — Derive package-script names in the verify sandbox, and name the borrowed-node_modules limit
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/verify.sh, bin/verify.test.sh
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/pi-46-verify-sandbox-script-names
+**PR**: 88
 
 ## Goal
 Two loose ends left open by PI-41, both about a check that can pass while proving nothing.
