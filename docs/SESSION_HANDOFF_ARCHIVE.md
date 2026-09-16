@@ -187,3 +187,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 PI-37 PR draft — doctor warns merged-PR non-Done task, run-wave Step 5 fixes Status — 111 tests
 - 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
 - 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
+- 2026-09-15 retro-mark 2026-09-15 effort-agent-id
