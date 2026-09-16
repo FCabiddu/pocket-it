@@ -30,6 +30,90 @@ fail=0
 ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 has(){ grep -qF "$1" <<<"$OUT"; }
 
+# --- PI-45: the gate every self-mutation in this file must pass ---------------------------------
+# Threat model. Each "mutation ...: proves the test is not vacuous" block below builds a patched copy
+# of doctor.sh by matching source text, runs that copy, and asserts on what it printed. The text it
+# matches can be gone, edited in place or doubled -- most often because bin/doctor.sh was modified
+# outside this run, which is exactly what a reviewer does to prove this suite is not vacuous. When
+# that happens the patched copy must never reach the downstream assertion: that assertion would then
+# report a real-looking regression against a check that never ran -- a test failure naming the wrong
+# test, which is the damage PI-45 exists to close. Covered here: the mutation did not apply, applied
+# to a different span than its address assumes, or produced a fragment instead of a script.
+# Deliberately left to the assertions themselves: a mutation that lands exactly where it was aimed
+# but whose intent has gone stale. Left to doctor.sh's own checks: any defect in doctor.sh.
+#
+# The rule, and why the obvious check is not it. "The marker text is in the output" is evidence a
+# TRUNCATION also satisfies. `sed '/A/,/B/c\...'` whose B no longer matches does not fail: the range
+# opens at A, never closes, and runs to end of file -- sed prints the replacement and drops every
+# line after A. Measured on this file's own _classify_base block, with one trailing comment appended
+# to the closing anchor in bin/doctor.sh and nothing else touched: 446 lines in, 74 out, the `PY`
+# heredoc terminator gone, the marker present in all of it, and `bash -n` on that fragment still
+# exiting 0. A doubled opening anchor does the same thing one range later; a doubled closing anchor
+# closes the range early, over a span the block never meant. So no block may conclude "applied" from
+# its own output alone. Every block declares the anchors its address uses, they are counted in the
+# SOURCE before sed runs (src_anchors), the address is then built from those same strings (sed_lit,
+# so the line counted and the line matched cannot drift apart), and what came out is checked to
+# still be a whole script (mutant_whole). Both layers, at every site: the count catches the doubled
+# anchor that produces a perfectly whole file over the wrong span, and mutant_whole catches the
+# runaway of a future block whose author forgets to declare an anchor at all.
+MUT_WHY=""   # why the last gate refused -- quoted verbatim in that block's own named failure
+sed_lit(){ # sed_lit <literal> -- BRE-escape <literal> so /^<it>$/ matches exactly that line and
+           # nothing else. Used to build every address from the same string src_anchors counted.
+  printf '%s' "$1" | sed 's|[][\.*^$/]|\\&|g'
+}
+src_anchors(){ # src_anchors <file> <line|substr> <count> <anchor>... -- 0 iff every <anchor> occurs
+  # exactly <count> times in <file>, matched the way sed matches the address built from it: `line`
+  # for /^...$/ (whole line, grep -x, so a comment appended to that line does NOT count -- the
+  # substring match a plain grep -F does would accept it and let the range run away), `substr` for
+  # /.../ (anywhere on the line). A range address declares BOTH of its anchors here, or the gate is
+  # only guessing which lines the range will actually span.
+  local f="$1" mode="$2" want="$3"; shift 3
+  local a n
+  for a in "$@"; do
+    if [[ "$mode" == line ]]; then n=$(grep -cxF -- "$a" "$f"); else n=$(grep -cF -- "$a" "$f"); fi
+    if [[ "$n" != "$want" ]]; then
+      MUT_WHY="anchor found $n times, not $want, in the captured bin/doctor.sh: ${a:0:60}"
+      return 1
+    fi
+  done
+  MUT_WHY=""
+}
+mutant_whole(){ # mutant_whole <file> -- <file> is still a whole doctor.sh and not a fragment: it
+  # parses as bash, the python heredoc it opens is closed by its own delimiter, and that python
+  # still compiles. Anchor-independent on purpose -- being whole is the property a runaway range
+  # destroys whatever anchors it used, so this also covers an address whose anchors nobody declared.
+  local f="$1" why
+  if ! bash -n "$f" 2>/dev/null; then MUT_WHY="the patched copy no longer parses as bash"; return 1; fi
+  why=$(python3 - "$f" <<'MWEOF'
+import re, sys
+lines = open(sys.argv[1], errors="ignore").read().splitlines(True)
+start = delim = None
+for i, line in enumerate(lines):
+    m = re.match(r"^python3 .*<<'([A-Za-z_][A-Za-z0-9_]*)'\s*$", line)
+    if m:
+        start, delim = i + 1, m.group(1); break
+if start is None:
+    print("the patched copy no longer opens a python heredoc at all"); sys.exit(1)
+end = None
+for j in range(start, len(lines)):
+    if lines[j].rstrip("\n") == delim:
+        end = j; break
+if end is None:
+    print("the patched copy is a fragment: its python heredoc is never closed by %s" % delim); sys.exit(1)
+try:
+    compile("".join(lines[start:end]), "<mutant>", "exec")
+except SyntaxError as e:
+    print("the patched copy's python no longer compiles: line %s: %s" % (e.lineno, e.msg)); sys.exit(1)
+MWEOF
+  ) || { MUT_WHY="$why"; return 1; }
+  MUT_WHY=""
+}
+mutation_applied(){ # mutation_applied <mutant> <marker> -- the only way a block below may conclude
+  # the mutation applied: the marker landed AND what carries it is still a whole script.
+  if ! grep -qF -- "$2" "$1"; then MUT_WHY="the mutation marker never landed in the patched copy"; return 1; fi
+  mutant_whole "$1"
+}
+
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 q(){ "$@" >/dev/null 2>&1; }
 task(){ # task <path> <status> — minimal well-formed task file (no missing-field warnings of its own)
@@ -377,19 +461,26 @@ ok "--accept-base: doctor is quiet on the very next run (rewrite no longer flagg
 WORK10MB="$S/repo10-work-mutB"; clone_rewritten "$WORK10MB"
 OUT_FOR_MB=$(cd "$WORK10MB" && bash "$SCRIPT")
 MUT_ACCEPT=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
-sed '/^accept_cmd = f"bash {shlex.quote(doctor_abs)} --accept-base"$/c\
-accept_cmd = "bash bin/doctor.sh --accept-base"  # MUTATED round-2 form for PI-29 round-3 proof' "$SCRIPT_SRC" > "$MUT_ACCEPT"
-# PI-45 AC2: the sed address is a verbatim line match — if the source moved, sed passes the input
-# through unchanged and every downstream assertion below would be judging the UNMUTATED script, not
-# a mutation, and blame a check that never ran. Verify the substitution actually landed first.
-if grep -qF 'MUTATED round-2 form for PI-29 round-3 proof' "$MUT_ACCEPT"; then
+# PI-45: single-line address (site 2 of 6). The anchor is declared once, counted whole-line in the
+# captured source, and the address is then built from that same string — so the line the gate
+# counted and the line sed matches cannot drift apart.
+ACCEPT_ANCHOR='accept_cmd = f"bash {shlex.quote(doctor_abs)} --accept-base"'
+MUT_ACCEPT_OK=0
+if src_anchors "$SCRIPT_SRC" line 1 "$ACCEPT_ANCHOR"; then
+  { printf '/^%s$/c\\\n' "$(sed_lit "$ACCEPT_ANCHOR")"
+    printf '%s\n' 'accept_cmd = "bash bin/doctor.sh --accept-base"  # MUTATED round-2 form for PI-29 round-3 proof'
+  } > "$MUT_ACCEPT.sed"
+  sed -f "$MUT_ACCEPT.sed" "$SCRIPT_SRC" > "$MUT_ACCEPT"; rm -f "$MUT_ACCEPT.sed"
+  mutation_applied "$MUT_ACCEPT" 'MUTATED round-2 form for PI-29 round-3 proof' && MUT_ACCEPT_OK=1
+fi
+if [[ $MUT_ACCEPT_OK -eq 1 ]]; then
   OUT_MA=$(cd "$WORK10MB" && bash "$MUT_ACCEPT"); rc_ma=$?
   ACCEPT_CMD_MA=$(extract_accept_cmd <<<"$OUT_MA")
   ERR_MA=$( ( cd "$WORK10MB" && eval "$ACCEPT_CMD_MA" ) 2>&1 ); rc_ma_run=$?
   ok "mutation B (round-2 accept form): the printed command, run from the project, fails (no bin/doctor.sh there) — proves the test is not vacuous" \
     '[[ $rc_ma_run -ne 0 ]] && grep -qi "no such file" <<<"$ERR_MA"'
 else
-  ok "mutation B (round-2 accept form): cannot self-mutate: source text not found" 'false'
+  ok "mutation B (round-2 accept form): cannot self-mutate: $MUT_WHY" 'false'
 fi
 rm -f "$MUT_ACCEPT"
 
@@ -471,29 +562,33 @@ ok "--accept-base on deleted base, save command: the pocket-it push guard allows
 WORK10DELACCMUT="$S/repo10-del-accept-mutBS"; clone_deleted "$WORK10DELACCMUT"
 BS_BEFORE_MUT=$(cat "$(common "$WORK10DELACCMUT")/pocket-it/base-seen" 2>/dev/null)
 MUT_BS=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
-# PI-45 AC2: each .index() below raises ValueError, uncaught, if its literal is not found — caught
-# here and turned into a clean exit 1 so the shell can tell "did not self-mutate" from "wrote a
-# patched copy", instead of leaving $MUT_BS empty and blaming the base-seen assertion for it.
-if python3 - "$SCRIPT_SRC" > "$MUT_BS" <<'PYEOF'
+# PI-45 (site 3 of 6): the boundaries are located with str.index, which silently takes the FIRST of
+# several — so each is required to occur exactly once, and the reason travels back on stderr to be
+# named in this block's own failure instead of leaving $MUT_BS empty for the base-seen assertion to
+# be blamed for. mutation_applied then confirms what came out is a whole script carrying the marker.
+if MUT_WHY=$(python3 - "$SCRIPT_SRC" 2>&1 >"$MUT_BS" <<'PYEOF'
 import sys
 src = open(sys.argv[1]).read()
-try:
-    idx_accept = src.index("if accept_base:")
-    idx_common = src.index('if common_dir and has_origin:')
-    segment = src[idx_accept:idx_common]
-    marker = "        sys.exit(1)\n"
-    pos = segment.index(marker)  # the FIRST sys.exit(1) inside accept_base closes the "deleted" branch
-except ValueError:
-    sys.exit(1)  # source text not found verbatim — mutation did not apply
+for lit in ("if accept_base:", "if common_dir and has_origin:"):
+    n = src.count(lit)
+    if n != 1:  # a doubled boundary would silently move the segment, not fail
+        sys.stderr.write("boundary %r occurs %d times in bin/doctor.sh, not once" % (lit, n)); sys.exit(1)
+idx_accept = src.index("if accept_base:")
+idx_common = src.index("if common_dir and has_origin:")
+segment = src[idx_accept:idx_common]
+marker = "        sys.exit(1)\n"
+if marker not in segment:
+    sys.stderr.write("the first sys.exit(1) inside accept_base is no longer there"); sys.exit(1)
+pos = segment.index(marker)  # the FIRST sys.exit(1) inside accept_base closes the "deleted" branch
 mutated_segment = segment[:pos] + '        _save_seen(seen_file, {**seen, base: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"})  # MUTATED round-5 proof\n' + segment[pos:]
 sys.stdout.write(src[:idx_accept] + mutated_segment + src[idx_common:])
 PYEOF
-then
+) && mutation_applied "$MUT_BS" 'MUTATED round-5 proof'; then
   OUT_MUT_BS=$(cd "$WORK10DELACCMUT" && bash "$MUT_BS" --accept-base); rc_mut_bs=$?
   ok "mutation (accept-base on deleted base silently updates base-seen): base-seen check catches it — proves it is not vacuous" \
     '[[ "$(cat "$(common "$WORK10DELACCMUT")/pocket-it/base-seen" 2>/dev/null)" != "$BS_BEFORE_MUT" ]]'
 else
-  ok "mutation (accept-base on deleted base silently updates base-seen): cannot self-mutate: source text not found" 'false'
+  ok "mutation (accept-base on deleted base silently updates base-seen): cannot self-mutate: $MUT_WHY" 'false'
 fi
 rm -f "$MUT_BS"
 
@@ -593,8 +688,19 @@ ok "round 3, under a git that never speaks English on this message: deleted base
   '[[ $rc_fake -eq 1 ]] && grep -q "ERROR base branch .main. no longer exists" <<<"$OUT_FAKE"'
 
 MUT_LOCALE=$(mktemp "${TMPDIR:-/tmp}/doctor-mut.XXXXXX")
-cat > "$MUT_LOCALE.sed" <<'SEDEOF'
-/^def _classify_base(base, env):$/,/^    return "unreachable", (stderr\.splitlines()\[-1\] if stderr else "no network")$/c\
+# PI-45 (site 4 of 6) — the only RANGE address in this file, and the one the first review round
+# caught: with the closing anchor edited by one trailing comment in bin/doctor.sh, this range ran to
+# end of file and handed the assertion below a 74-line fragment that still contained the marker, so
+# the marker grep said "applied" and the failure came out as "degrades to a warn", naming a check
+# that never ran. Both anchors are therefore declared here, counted whole-line and exactly once in
+# the captured source BEFORE sed is allowed to run, with the address built from those same two
+# strings; mutant_whole then rejects any fragment the range could still produce.
+CLASSIFY_OPEN='def _classify_base(base, env):'
+CLASSIFY_CLOSE='    return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")'
+MUT_LOCALE_OK=0
+if src_anchors "$SCRIPT_SRC" line 1 "$CLASSIFY_OPEN" "$CLASSIFY_CLOSE"; then
+  { printf '/^%s$/,/^%s$/c\\\n' "$(sed_lit "$CLASSIFY_OPEN")" "$(sed_lit "$CLASSIFY_CLOSE")"
+    cat <<'SEDEOF'
 def _classify_base(base, env):\
     f = subprocess.run(["git", "fetch", "--quiet", "origin", f"+refs/heads/{base}:refs/remotes/origin/{base}"], capture_output=True, text=True, env=env)  # MUTATED round-2 form\
     if f.returncode == 0: return "ok", None\
@@ -602,17 +708,18 @@ def _classify_base(base, env):\
     if re.search(r"couldn.t find remote ref", stderr, re.I): return "deleted", None\
     return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")
 SEDEOF
-sed -f "$MUT_LOCALE.sed" "$SCRIPT_SRC" > "$MUT_LOCALE"
-rm -f "$MUT_LOCALE.sed"
-# PI-45 AC2: a sed address range that never matches passes its input through unchanged, no error —
-# verify the substitution landed before trusting $MUT_LOCALE's behaviour.
-if grep -qF 'MUTATED round-2 form' "$MUT_LOCALE"; then
+  } > "$MUT_LOCALE.sed"
+  sed -f "$MUT_LOCALE.sed" "$SCRIPT_SRC" > "$MUT_LOCALE"
+  rm -f "$MUT_LOCALE.sed"
+  mutation_applied "$MUT_LOCALE" 'MUTATED round-2 form' && MUT_LOCALE_OK=1
+fi
+if [[ $MUT_LOCALE_OK -eq 1 ]]; then
   OUT_MUT_FAKE=$(cd "$WORK13" && PATH="$FAKEGIT:$PATH" LC_ALL=it_IT.UTF-8 LANGUAGE=it bash "$MUT_LOCALE"); rc_mut_fake=$?
   echo "$OUT_MUT_FAKE" | sed 's/^/      | /'
   ok "mutation (round-2 text-based classify), same fake git: degrades to a warn — proves the test is not vacuous" \
     '[[ $rc_mut_fake -eq 0 ]] && ! grep -q "ERROR base branch" <<<"$OUT_MUT_FAKE" && grep -q "warn  could not verify base branch" <<<"$OUT_MUT_FAKE"'
 else
-  ok "mutation (round-2 text-based classify): cannot self-mutate: source text not found" 'false'
+  ok "mutation (round-2 text-based classify): cannot self-mutate: $MUT_WHY" 'false'
 fi
 rm -f "$MUT_LOCALE"
 
@@ -714,18 +821,28 @@ ok "AC3c gh auth status hangs: exit still 0"                             '[[ $rc
 # positive cases go red — proves the tests above are not vacuous. Restored automatically: this runs
 # against a throwaway copy, $SCRIPT itself is never touched.
 MUT_PI37=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-pi37.XXXXXX")
-# PI-45 AC2: a delete range whose markers are gone deletes nothing and passes the input through
-# unchanged — check both markers are there BEFORE deleting between them, so a missing marker fails
-# this one named check instead of the "check removed" assertion below (which would then wrongly
-# find the still-present check and fail on that basis instead).
-if grep -qF '# PI-37 CHECK BEGIN' "$SCRIPT_SRC" && grep -qF '# PI-37 CHECK END' "$SCRIPT_SRC"; then
-  sed '/# PI-37 CHECK BEGIN/,/# PI-37 CHECK END/d' "$SCRIPT_SRC" > "$MUT_PI37"
+# PI-45 (site 5 of 6): a RANGE address again, this time in `substr` mode — the address is /.../ and
+# not /^...$/, so the gate counts the markers the same way, anywhere on the line. Both are declared
+# and required exactly once before the delete runs (a missing END deletes to end of file; a doubled
+# BEGIN opens a second range that does the same), and the address is built from those same strings.
+PI37_BEGIN='# PI-37 CHECK BEGIN'
+PI37_END='# PI-37 CHECK END'
+MUT_PI37_OK=0
+if src_anchors "$SCRIPT_SRC" substr 1 "$PI37_BEGIN" "$PI37_END"; then
+  sed "/$(sed_lit "$PI37_BEGIN")/,/$(sed_lit "$PI37_END")/d" "$SCRIPT_SRC" > "$MUT_PI37"
+  # this mutation DELETES, so "applied" is the block being gone, not a marker being present
+  if ! mutant_whole "$MUT_PI37"; then :
+  elif grep -qF "$PI37_BEGIN" "$MUT_PI37"; then MUT_WHY="the PI-37 block is still present after the delete"
+  else MUT_PI37_OK=1
+  fi
+fi
+if [[ $MUT_PI37_OK -eq 1 ]]; then
   OUT_MUT_PI37=$(cd "$R14" && PATH="$FAKEGH:$PATH" bash "$MUT_PI37"); rc_mut_pi37=$?
   echo "$OUT_MUT_PI37" | sed 's/^/      | /'
   ok "mutation: check removed, AC1/AC2 positive cases (Todo/In Progress/Needs Work/WIP + merged) all go red" \
     '! grep -q "PR #60 is merged" <<<"$OUT_MUT_PI37" && [[ $rc_mut_pi37 -eq 0 ]]'
 else
-  ok "mutation (PI-37 check removed): cannot self-mutate: source text not found" 'false'
+  ok "mutation (PI-37 check removed): cannot self-mutate: $MUT_WHY" 'false'
 fi
 rm -f "$MUT_PI37"
 
@@ -795,10 +912,11 @@ ok "a subsection citation warning never fails doctor (exit 0)"                  
 # mutation: restore the hardcoded expected/present check this task removes, on the same fixture —
 # proves the AC1/AC4 assertion above is not vacuous (it would go red without the fix).
 MUT_PI42=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-pi42.XXXXXX")
-# PI-45 AC2: turn the assert into a checkable exit code — an AssertionError here left $MUT_PI42
-# empty and made the "hardcoded expected set restored" assertion below fail on that basis, which
-# reads exactly like a real regression in doctor.sh rather than a stale harness literal.
-if python3 - "$SCRIPT_SRC" "$MUT_PI42" <<'PYEOF'
+# PI-45 (site 6 of 6): re.subn already counts, so the cardinality is exact here — what was missing
+# was a reason the shell could name (an AssertionError left $MUT_PI42 empty and made the "hardcoded
+# expected set restored" assertion below fail on that basis, reading exactly like a real regression
+# in doctor.sh) and a check that what came out is still a whole script.
+if MUT_WHY=$(python3 - "$SCRIPT_SRC" "$MUT_PI42" 2>&1 <<'PYEOF'
 import re, sys
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src).read()
@@ -813,16 +931,17 @@ old_bug = (
 )
 mutated, n = re.subn(r"# PI-42 CHECK BEGIN.*?# PI-42 CHECK END\n", lambda m: old_bug, text, flags=re.S)
 if n != 1:
-    sys.exit(1)  # PI-42 CHECK marker block not found — mutation did not apply
+    sys.stderr.write("the PI-42 CHECK marker block occurs %d times in bin/doctor.sh, not once" % n)
+    sys.exit(1)
 open(dst, "w").write(mutated)
 PYEOF
-then
+) && mutation_applied "$MUT_PI42" 'expected = {"5.2","6.2","7.6","8.1","9.3","11.1"}'; then
   OUT_MUT=$(cd "$R15" && bash "$MUT_PI42"); rc_mut=$?
   echo "$OUT_MUT" | sed 's/^/      | /'
   ok "mutation: hardcoded expected set restored -> AC1/AC4's silence on unusual, uncited numbering goes red" \
     'grep -q "subsections referenced by agents missing" <<<"$OUT_MUT"'
 else
-  ok "mutation (PI-42 CHECK marker block restore): cannot self-mutate: source text not found" 'false'
+  ok "mutation (PI-42 CHECK marker block restore): cannot self-mutate: $MUT_WHY" 'false'
 fi
 rm -f "$MUT_PI42"
 
@@ -1052,10 +1171,11 @@ ok "F2 class-table repo: exactly one warning (the unrecognised qualifier), the f
 # everything must each still turn some of the assertions above red, and AC5's out-of-order `err`
 # (which never calls _has_section) must keep firing, unaffected, under both.
 mutate_has_section(){ # mutate_has_section <return-value> <out-path> — writes a patched copy of
-  # $SCRIPT_SRC (AC3); returns 1 without writing anything meaningful when the source text is not
-  # found verbatim (AC2), instead of an uncaught python AssertionError that leaves <out-path> a
-  # useless empty file for whichever unrelated check runs it next (AC1).
-  python3 - "$SCRIPT_SRC" "$2" "$1" <<'PYEOF'
+  # $SCRIPT_SRC (AC3); returns 1 with MUT_WHY set when the definition is not there verbatim exactly
+  # once, or when what came out is not a whole script (AC2, PI-45 site 1 of 6) — never an uncaught
+  # AssertionError leaving <out-path> an empty file for five unrelated fixtures to be judged against
+  # in both directions (AC1: that is how nine artifact FAILs were produced).
+  MUT_WHY=$(python3 - "$SCRIPT_SRC" "$2" "$1" 2>&1 >/dev/null <<'PYEOF'
 import re, sys
 src, dst, retval = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(src).read()
@@ -1063,9 +1183,11 @@ old = 'def _has_section(text, sec):\n    if "." in sec: return re.search(rf"^###
 new = f'def _has_section(text, sec):\n    return {retval}\n'
 mutated, n = re.subn(re.escape(old), lambda m: new, text)
 if n != 1:
-    sys.exit(1)  # _has_section definition not found verbatim — mutation did not apply
+    sys.stderr.write("_has_section's definition occurs %d times verbatim in bin/doctor.sh, not once" % n)
+    sys.exit(1)
 open(dst, "w").write(mutated)
 PYEOF
+) || return 1
 }
 MUT_TRUE=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-true.XXXXXX")
 MUT_FALSE=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-false.XXXXXX")
@@ -1078,7 +1200,8 @@ MUT_FALSE=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-false.XXXXXX")
 # _has_section is still caught normally by the direct, unmutated-script checks elsewhere in this
 # file — this section only proves those checks are not vacuous, and skipping it changes nothing
 # about them).
-if mutate_has_section True "$MUT_TRUE" && mutate_has_section False "$MUT_FALSE"; then
+if mutate_has_section True  "$MUT_TRUE"  && mutant_whole "$MUT_TRUE" &&
+   mutate_has_section False "$MUT_FALSE" && mutant_whole "$MUT_FALSE"; then
   # accept-anything (_has_section always True): every "missing section" warning must disappear —
   # AC3 (repo15), the F1 dropped-interior-sections warning (repo17, post-deletion), the bare-top-level
   # and mixed-list "missing" warnings (repo18) all go red. Malformed-range and unrecognised-qualifier
@@ -1119,51 +1242,198 @@ if mutate_has_section True "$MUT_TRUE" && mutate_has_section False "$MUT_FALSE";
   ok "mutation reject-everything: AC5's top-level out-of-order error (repo16) is untouched, still fires" \
     'grep -q "ERROR tech-analysis/PROJECT_TECH_ANALYSIS.md: top-level sections out of order: \[40, 9\]" <<<"$OUT_16F" && [[ $rc_16F -eq 1 ]]'
 else
-  ok "mutation sanity (_has_section accept-anything/reject-everything): cannot self-mutate: source text not found" 'false'
+  ok "mutation sanity (_has_section accept-anything/reject-everything): cannot self-mutate: $MUT_WHY" 'false'
 fi
 rm -f "$MUT_TRUE" "$MUT_FALSE"
+
+# --- PI-45 AC4: the rule, not the call site -----------------------------------------------------
+# One shared gate, six blocks, no second copy that can drift. Counted from this file's own text
+# rather than from a list written by hand, so the day a seventh self-mutation site is added without
+# a gate the count stops matching and this goes red here — instead of waiting for the next reviewer
+# to mutate bin/doctor.sh and be told the wrong test broke. (The two sibling sites in
+# bin/cleanup-merged.test.sh are the same defect class and are tracked separately; this file's own
+# rule is what is enforced here.) The patterns are split mid-string so that these very lines are not
+# counted as sites or as gates.
+MUT_SITES=$(grep -cF '=$(mktemp "${TMPDIR:-/tmp}/doctor-''mut' "$SELF")
+MUT_GATES=$(grep -oF -e 'mutation_applied "$M''UT' -e 'mutant_whole "$M''UT' "$SELF" | grep -c .)
+ok "AC4: every self-mutation site in this file passes through the one shared gate — $MUT_SITES sites declared by their own mktemp, $MUT_GATES gate calls, no site ungated and no copy of the rule" \
+  '[[ "$MUT_SITES" -ge 6 ]] && [[ "$MUT_GATES" -eq "$MUT_SITES" ]]'
+
+# --- PI-45 round 2: the gate itself, over the whole class of anchor losses ----------------------
+# Not a sample of the one case the review executed. The class is every way a text address can stop
+# meaning the span the block assumes: each anchor x {removed, edited in place, doubled}, in both
+# matching modes, plus the intact control. It is exercised on a SYNTHETIC doctor.sh-shaped script
+# with anchors no block in this file uses, because the gate has to hold for the anchors this file
+# does not contain yet. Every row asserts both what the gate says and what the raw sed would have
+# produced without it, so "the old evidence (a marker in the output) is satisfied by a truncation"
+# is demonstrated here, not argued, and so is the one case only the cardinality count catches.
+G="$S/gate"; mkdir -p "$G"
+gate_open='def gate_target(x):'
+gate_close='    return "tail", y'
+gate_src(){ # gate_src <file> — pristine synthetic source: bash wrapper, python heredoc, a
+            # two-anchor region to address, and lines after it whose survival proves no truncation.
+  cat > "$1" <<'GATEEOF'
+#!/usr/bin/env bash
+python3 - <<'PY'
+def alpha(x):
+    return "head"
+def gate_target(x):
+    y = x + 1
+    return "tail", y
+def omega(x):
+    return "after"
+print(alpha(0), gate_target(1), omega(2))
+PY
+GATEEOF
+}
+gate_mutate(){ # gate_mutate <src> <out> — the very shape site 4 uses (range address, c\ replace),
+               # run WITHOUT the gate on purpose so each row can look at the damage it would do.
+  { printf '/^%s$/,/^%s$/c\\\n' "$(sed_lit "$gate_open")" "$(sed_lit "$gate_close")"
+    printf '%s\n' 'def gate_target(x):\' '    return "GATE MUTATED", 0'
+  } > "$2.sed"
+  sed -f "$2.sed" "$1" > "$2"; rm -f "$2.sed"
+}
+gate_case(){ # gate_case <name> <python-edit-expression> — a variant of the pristine source with one
+             # anchor loss applied, plus the raw (ungated) mutant built from it. Prints nothing.
+  gate_src "$G/$1.sh"
+  python3 - "$G/$1.sh" "$2" <<'GPYEOF'
+import sys
+path, edit = sys.argv[1], sys.argv[2]
+text = open(path).read()
+OPEN = "def gate_target(x):\n"
+CLOSE = '    return "tail", y\n'
+if edit == "open-removed":      out = text.replace(OPEN, "", 1)
+elif edit == "open-edited":     out = text.replace(OPEN, OPEN.rstrip("\n") + "  # touched\n", 1)
+elif edit == "open-doubled":    out = text.replace("def omega(x):\n", "def omega(x):\n" + OPEN, 1)
+elif edit == "close-removed":   out = text.replace(CLOSE, "", 1)
+elif edit == "close-edited":    out = text.replace(CLOSE, CLOSE.rstrip("\n") + "  # touched\n", 1)
+elif edit == "close-doubled":   out = text.replace("    y = x + 1\n", "    y = x + 1\n" + CLOSE, 1)
+else: sys.exit("unknown edit")
+assert out != text, "gate fixture stale: %s changed nothing" % edit
+open(path, "w").write(out)
+GPYEOF
+  gate_mutate "$G/$1.sh" "$G/$1.mut.sh"
+}
+
+gate_src "$G/pristine.sh"; gate_mutate "$G/pristine.sh" "$G/pristine.mut.sh"
+ok "gate control: both anchors present exactly once — src_anchors accepts (the sibling that proves the rejections below are not vacuous)" \
+  'src_anchors "$G/pristine.sh" line 1 "$gate_open" "$gate_close"'
+ok "gate control: on that source the range mutation lands, stays a whole script, and keeps every line after the range" \
+  'mutation_applied "$G/pristine.mut.sh" "GATE MUTATED" && grep -qF "def omega(x):" "$G/pristine.mut.sh"'
+
+# the class, one row per anchor x loss. src_anchors must reject every one of them.
+for gcase in open-removed open-edited open-doubled close-removed close-edited close-doubled; do
+  gate_case "$gcase" "$gcase"
+  ok "gate class ($gcase): src_anchors refuses to let the mutation run, and says which anchor and how many times" \
+    '! src_anchors "$G/$gcase.sh" line 1 "$gate_open" "$gate_close" && grep -q "^anchor found [0-9]* times, not 1" <<<"$MUT_WHY"'
+done
+
+# ...and what the ungated sed would have done, per loss — the evidence the old check trusted.
+ok "gate class (close-edited): the ungated sed runs the range to EOF — the marker IS in the output (the old evidence says 'applied') yet everything after the range is gone" \
+  'grep -qF "GATE MUTATED" "$G/close-edited.mut.sh" && ! grep -qF "def omega(x):" "$G/close-edited.mut.sh"'
+ok "gate class (close-edited): mutant_whole catches that truncation on its own, without knowing any anchor" \
+  '! mutant_whole "$G/close-edited.mut.sh" && grep -q "fragment" <<<"$MUT_WHY"'
+ok "gate class (close-removed): same truncation, same independent catch" \
+  'grep -qF "GATE MUTATED" "$G/close-removed.mut.sh" && ! mutant_whole "$G/close-removed.mut.sh"'
+ok "gate class (open-doubled): the second range opens after the first closed and runs to EOF — caught by mutant_whole too" \
+  '! mutant_whole "$G/open-doubled.mut.sh"'
+ok "gate class (open-removed): the range never opens, the marker never lands — mutation_applied refuses" \
+  '! mutation_applied "$G/open-removed.mut.sh" "GATE MUTATED" && grep -q "marker never landed" <<<"$MUT_WHY"'
+ok "gate class (open-edited): a comment appended to the opening anchor is the same loss — /^…$/ no longer matches it" \
+  '! mutation_applied "$G/open-edited.mut.sh" "GATE MUTATED"'
+ok "gate class (close-doubled): the ONLY loss mutant_whole cannot see — the range closes early, the copy is whole and carries the marker, and the span it replaced is not the one the block meant (the real closing line is left behind); the anchor COUNT is what rejects it" \
+  'mutation_applied "$G/close-doubled.mut.sh" "GATE MUTATED" && grep -qxF "    return \"tail\", y" "$G/close-doubled.mut.sh" && ! src_anchors "$G/close-doubled.sh" line 1 "$gate_open" "$gate_close"'
+
+# the two matching modes are not interchangeable: `line` mirrors /^…$/, `substr` mirrors /…/.
+gate_src "$G/modes.sh"
+printf '%s\n' '# MARK BEGIN' 'noise' '# MARK END' >> "$G/modes.sh"
+ok "gate modes: substr accepts a marker pair present once each, the way /…/,/…/d addresses them" \
+  'src_anchors "$G/modes.sh" substr 1 "# MARK BEGIN" "# MARK END"'
+ok "gate modes: substr rejects a missing closing marker (which would delete to end of file)" \
+  '! src_anchors "$G/modes.sh" substr 1 "# MARK BEGIN" "# MARK ABSENT"'
+sed -i.bak 's/^# MARK BEGIN$/# MARK BEGIN  (annotated)/' "$G/modes.sh"; rm -f "$G/modes.sh.bak"
+ok "gate modes: an annotated marker still matches /…/ and substr still accepts it — the gate follows sed, it does not second-guess it" \
+  'src_anchors "$G/modes.sh" substr 1 "# MARK BEGIN" "# MARK END"'
+ok "gate modes: the same annotated line is correctly REJECTED in line mode, because /^…$/ would no longer match it — this is the difference a plain grep -F gate would have missed" \
+  '! src_anchors "$G/modes.sh" line 1 "# MARK BEGIN"'
 
 # --- PI-45 regression: the suite survives bin/doctor.sh having been modified from OUTSIDE this run,
 # before it started (AC1, AC2, AC5) — reproduces the reviewer's own non-vacuity proof that found the
 # defect: 16 FAILs on a mutated bin/doctor.sh, 9 of them artifacts (malformed-range, unrecognised-
-# qualifier, AC5) that never call _has_section at all. Recurses this same file ONCE against the real
-# bin/doctor.sh with only a comment inserted into _has_section's definition line — breaking the exact
-# literal mutate_has_section() searches for, verbatim, while changing nothing about its behaviour, so
-# every OTHER check in the recursed run is a clean control: if any of them goes red too, the isolation
-# does not hold. The swap is on the real file but transient, restored via trap before this process
-# exits either way, and never committed. DOCTOR_TEST_NO_RECURSE stops the child from doing this again.
+# qualifier, AC5) that never call _has_section at all. Each row below recurses this same file once
+# against a bin/doctor.sh carrying ONE external edit that breaks ONE self-mutation site's source
+# text while changing nothing about what doctor.sh does — so every OTHER check in the recursed run
+# is a clean control: if any of them goes red too, the isolation does not hold. The table is the
+# class of losses end to end, not the one case the first review executed: the verbatim literal of a
+# python site, and a range address's closing anchor (the runaway-to-EOF that made the suite name
+# "degrades to a warn", a check that never ran) and its doubled anchors (a whole, marker-bearing
+# copy over the wrong span, which only the anchor count can see). The swap is on the real file but
+# transient, restored between rows and via trap before this process exits either way, and never
+# committed. DOCTOR_TEST_NO_RECURSE stops each child from doing this again.
 if [[ -z "${DOCTOR_TEST_NO_RECURSE:-}" ]]; then
   DOCTOR_BACKUP="$S/.doctor.sh.orig"
   cp "$SCRIPT" "$DOCTOR_BACKUP"
   restore_doctor(){ cp "$DOCTOR_BACKUP" "$SCRIPT"; }
   trap 'restore_doctor; cleanup' EXIT
-  python3 - "$SCRIPT" <<'PYEOF'
+  external_mutation(){ # external_mutation <case> — edit $SCRIPT the way an outside hand would:
+    # behaviour-preserving, one site's anchors only, and loudly stale rather than silently wrong.
+    python3 - "$SCRIPT" "$1" <<'EXTEOF'
 import sys
-p = sys.argv[1]
-text = open(p).read()
-old = 'def _has_section(text, sec):\n    if "." in sec: return re.search(rf"^### {re.escape(sec)}\\b", text, re.M) is not None\n    return re.search(rf"^## {re.escape(sec)}\\.", text, re.M) is not None\n'
-assert old in text, "PI-45 test fixture stale: _has_section body in bin/doctor.sh no longer matches"
-new = old.replace(
-    "def _has_section(text, sec):\n",
-    "def _has_section(text, sec):  # PI-45 test: externally mutated on purpose, breaks mutate_has_section()'s literal\n",
-    1,
-)
-open(p, "w").write(text.replace(old, new, 1))
-PYEOF
-  OUT_SELFMUT=$(DOCTOR_TEST_NO_RECURSE=1 bash "$SELF" 2>&1); rc_selfmut=$?
-  restore_doctor
+path, case = sys.argv[1], sys.argv[2]
+text = open(path).read()
+HAS = 'def _has_section(text, sec):\n    if "." in sec: return re.search(rf"^### {re.escape(sec)}\\b", text, re.M) is not None\n    return re.search(rf"^## {re.escape(sec)}\\.", text, re.M) is not None\n'
+OPEN = "def _classify_base(base, env):\n"
+CLOSE = '    return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")\n'
+def need(lit):
+    if text.count(lit) != 1:
+        sys.stderr.write("PI-45 recursion fixture stale: %r occurs %d times in bin/doctor.sh\n"
+                         % (lit[:48], text.count(lit)))
+        sys.exit(1)
+if case == "has_section_literal":
+    need(HAS)
+    out = text.replace(HAS, HAS.replace(
+        "def _has_section(text, sec):\n",
+        "def _has_section(text, sec):  # PI-45 test: externally mutated on purpose, breaks the verbatim literal\n", 1), 1)
+elif case == "classify_close_anchor":
+    need(CLOSE)
+    out = text.replace(CLOSE, CLOSE.rstrip("\n") + "  # PI-45 test: externally edited, closing anchor of a range address\n", 1)
+elif case == "classify_anchors_doubled":
+    need(OPEN); need(CLOSE)
+    i = text.index(OPEN); j = text.index(CLOSE, i) + len(CLOSE)
+    out = text[:j] + text[i:j] + text[j:]   # an identical second definition: same behaviour, both anchors now doubled
+else:
+    sys.stderr.write("PI-45 recursion: unknown case %s\n" % case); sys.exit(1)
+open(path, "w").write(out)
+EXTEOF
+  }
+  while IFS='|' read -r rcase rexpect rwhat; do
+    [[ -z "$rcase" ]] && continue
+    restore_doctor
+    if ! external_mutation "$rcase"; then
+      ok "PI-45 recursion ($rcase): bin/doctor.sh still matches this fixture's source text" 'false'
+      continue
+    fi
+    OUT_SELFMUT=$(DOCTOR_TEST_NO_RECURSE=1 bash "$SELF" 2>&1)
+    restore_doctor
+    FAIL_LINES=$(grep '^FAIL' <<<"$OUT_SELFMUT")
+    ok "AC2 ($rcase — $rwhat): the harness reports its own named, isolated self-mutation error" \
+      'grep -qF "$rexpect" <<<"$FAIL_LINES"'
+    ok "AC1 ($rcase): that is the ONLY FAIL line in the whole recursed run — no unrelated check is blamed for it" \
+      '[[ "$(grep -c . <<<"$FAIL_LINES")" -eq 1 ]]'
+    ok "AC1 ($rcase): repo18's own direct malformed-range check, wholly unrelated to the broken site, still passes" \
+      'grep -qF "ok    range whose ends sit at different depth is malformed, warned by its own text, not checked" <<<"$OUT_SELFMUT"'
+    ok "AC1 ($rcase): repo19's own direct unrecognised-qualifier check, wholly unrelated to the broken site, still passes" \
+      'grep -qF "ok    unrecognised qualifier word never silently falls back to the project TAD, even when the section exists there" <<<"$OUT_SELFMUT"'
+    ok "AC1/AC5 ($rcase): repo16's own direct top-level-order check still passes — isolation is not blanket silence" \
+      'grep -qF "ok    AC5 top-level sections out of order: still an ERROR, unchanged wording" <<<"$OUT_SELFMUT"'
+    ok "AC1/AC5 ($rcase): the un-mutated deleted-base check, which runs the externally edited script itself, still passes — the edit really is behaviour-preserving, so any FAIL above would have been the harness's own" \
+      'grep -qF "ok    round 3, under a git that never speaks English on this message: deleted base still an ERROR" <<<"$OUT_SELFMUT"'
+  done <<'RCASES'
+has_section_literal|FAIL  mutation sanity (_has_section accept-anything/reject-everything): cannot self-mutate: |site 1's verbatim definition broken by an appended comment
+classify_close_anchor|FAIL  mutation (round-2 text-based classify): cannot self-mutate: |site 4's range CLOSING anchor edited, the runaway-to-EOF the review caught
+classify_anchors_doubled|FAIL  mutation (round-2 text-based classify): cannot self-mutate: |site 4's range anchors doubled by an identical second definition
+RCASES
   trap cleanup EXIT
-  FAIL_LINES=$(grep '^FAIL' <<<"$OUT_SELFMUT")
-  ok "AC2: bin/doctor.sh mutated externally — the harness reports its own named, isolated self-mutation error" \
-    'grep -qF "FAIL  mutation sanity (_has_section accept-anything/reject-everything): cannot self-mutate: source text not found" <<<"$FAIL_LINES"'
-  ok "AC1: that is the ONLY FAIL line in the whole recursed run — no unrelated check is blamed for it" \
-    '[[ "$(grep -c . <<<"$FAIL_LINES")" -eq 1 ]]'
-  ok "AC1: repo18's own direct malformed-range check, wholly unrelated to _has_section, still passes under the externally mutated script" \
-    'grep -qF "ok    range whose ends sit at different depth is malformed, warned by its own text, not checked" <<<"$OUT_SELFMUT"'
-  ok "AC1: repo19's own direct unrecognised-qualifier check, wholly unrelated to _has_section, still passes under the externally mutated script" \
-    'grep -qF "ok    unrecognised qualifier word never silently falls back to the project TAD, even when the section exists there" <<<"$OUT_SELFMUT"'
-  ok "AC1/AC5: repo16's own direct top-level-order check, wholly unrelated to _has_section, still passes — isolation is not blanket silence" \
-    'grep -qF "ok    AC5 top-level sections out of order: still an ERROR, unchanged wording" <<<"$OUT_SELFMUT"'
 fi
 
 exit $fail
