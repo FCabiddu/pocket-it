@@ -1,6 +1,6 @@
 # PI-41 — verify.sh must tell a defect the PR introduced from one it inherited
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/verify.sh, bin/verify.test.sh
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
+**Branch**: task/pi-41-verify-base-red-attribution
 **PR**:
 
 ## Goal
@@ -29,28 +29,28 @@ on the tip of the base branch, and say which of the two it is. The reviewer must
 on the verdict without re-deriving it.
 
 ## Acceptance criteria
-- [ ] AC1 — Given a branch whose diff introduces a failing check, when `verify.sh` runs, then it
+- [x] AC1 — Given a branch whose diff introduces a failing check, when `verify.sh` runs, then it
       reports the failure as the branch's own and exits with the code that already means "the
       branch is red" today. Nothing about the existing own-diff-red path changes.
-- [ ] AC2 — Given a branch whose checks fail **and** whose failure is already present at the tip
+- [x] AC2 — Given a branch whose checks fail **and** whose failure is already present at the tip
       of `origin/{base}`, when `verify.sh` runs, then the output names that check as pre-existing
       on the base and the overall verdict is distinguishable from AC1's **by a caller that reads
       only the exit code**, not only by a human reading the prose. State in the report which
       encoding you chose and why a reader cannot confuse the two.
-- [ ] AC3 — Given a run where some checks fail on the branch only and others fail on the base
+- [x] AC3 — Given a run where some checks fail on the branch only and others fail on the base
       too, when `verify.sh` runs, then each failing check is attributed individually and the
       overall verdict is the **worse** of the two (a branch that introduces its own defect is not
       excused by also inheriting one).
-- [ ] AC4 — Given any run in which every check passes, when `verify.sh` runs, then no base
+- [x] AC4 — Given any run in which every check passes, when `verify.sh` runs, then no base
       re-check happens at all: the second worktree is never created and the elapsed cost of a
       green run is unchanged. Only checks that actually failed are re-run against the base, at
       most once each.
-- [ ] AC5 — Given the base re-check, when it runs, then it obeys every invariant the existing
+- [x] AC5 — Given the base re-check, when it runs, then it obeys every invariant the existing
       run already obeys — it happens in a throwaway worktree under `<repo>/.claude/worktrees/`
       and never in `/tmp`; the `guard` that refuses to run anything outside that worktree covers
       it too; the signal traps clean up **both** worktrees on INT/TERM/HUP/EXIT, leaving none
       behind. Prove the trap case by sending a real signal mid-run, not by reading the code.
-- [ ] AC6 — Given the base re-check cannot be performed at all (base ref unfetchable, worktree
+- [x] AC6 — Given the base re-check cannot be performed at all (base ref unfetchable, worktree
       creation refused, the check itself erroring in a way distinct from failing), when that
       happens, then `verify.sh` says the attribution is unknown and falls back to today's plain
       red — it never reports "pre-existing on base" on the strength of a re-check that did not
