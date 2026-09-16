@@ -57,6 +57,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Risolvere un conflitto su docs/SESSION_HANDOFF*.md e poi scriverci ancora prima del merge riapre il conflitto: chi risolve non scrive più su quei file, e la riga di log del merge la scrive chi merge, DOPO il merge.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 PI-42 PR #82 merged — doctor.sh verifica le sezioni che la board cita davvero, intervalli e qualificatori inclusi
 - 2026-09-16 PI-42 PR #82 approved — merge: orchestrator
 - 2026-09-16 PI-40 PR #81 merged — handoff.sh: nessun argomento a log o fact può scrivere un'intestazione; conflitto sui due file handoff risolto per sezione due volte
 - 2026-09-16 PI-40 PR #81 approved (delta 1) — one_line collapses before the date strip, 56-combination writer grid, conflict resolved by section — merge: orchestrator
@@ -96,4 +97,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-14 PI-35 round 2 fix pushed — anchored mark/BUDGET/STALL/needs-work, exit-2 contract, no duplicate retro, initial mark above #65 — 57 tests green
 - 2026-09-13 PI-35 PR #66 needs work — il segno si riconosce anche in prosa — cause: first-round
 - 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests
-- 2026-09-14 PI-34 PR #64 approved (delta 4) — merge: orchestrator, prima di #66
