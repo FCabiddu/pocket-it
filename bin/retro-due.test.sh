@@ -298,16 +298,22 @@ ok "R3F1 — a fact mentioning 'cause:'/'needs work' never affects the Log-deriv
    '[[ "$out21" == "RETRO DUE: 1 segnali"* ]] && grep -q "PI-55" <<<"$out21"'
 rm -rf "$S21"
 
-# --- R3F2 (round 3): the needs-work outcome must be the word right after "PR #<n>" itself, in one of its
-# real qualified forms — not merely present somewhere before the next em-dash on the same line. Positive:
-# every real form from the log (implementing-common.md / reviewer.md); negative: "needs work" named in
-# another outcome's own free text (approved/re-review/merged/draft) ---
+# --- R3F2 (round 3) + QF1: the needs-work outcome must be the word right after "PR #<n>" itself, in one
+# of its real qualified forms — not merely present somewhere before the next em-dash on the same line.
+# Positive: every real form from the log (implementing-common.md / reviewer.md); negative: "needs work"
+# named in another outcome's own free text (approved/re-review/merged/draft).
+# Since QF-1 the discriminator is the signal TYPE, not the absence of a line: every line here carries a
+# real "— cause: …" field of its own, so a false form now signals as a plain "cause" (correct — a cause
+# is read off any line, whatever its outcome word) and must never signal as "needs-work-cause", which is
+# what being read as a review ROUND looks like. Absence could not tell "not a round" from "a round with
+# no cause"; the type can, and it keeps the negative load-bearing after the widening.
 S22=$(mkrepo)
 writelog "$S22" \
   "- 2026-09-10 PI-93 PR #93 draft — needs work fixes applied — 3 tests — cause: other: fake93" \
   "- 2026-09-09 PI-92 PR #92 merged after needs work — ok — cause: other: fake92" \
   "- 2026-09-08 PI-91 PR #91 re-review after needs work fixed — ok — cause: other: fake91" \
   "- 2026-09-07 PI-90 PR #90 approved (delta 3, 2 needs work closed) — merge: orchestrator — cause: other: fake90" \
+  "- 2026-09-06 PI-66 PR #66 needs work (delta) — reason — cause: other: r7" \
   "- 2026-09-06 PI-65 PR #65 delta needs work round 2 — reason — cause: other: r6" \
   "- 2026-09-05 PI-64 PR #64 delta needs work — reason — cause: other: r5" \
   "- 2026-09-04 PI-63 PR #63 needs work round 2 delta — reason — cause: other: r4" \
@@ -321,15 +327,33 @@ ok "R3F2 positive — 'PR #n needs work round n'"              'grep -qE "^PI-62
 ok "R3F2 positive — 'PR #n needs work round n delta'"        'grep -qE "^PI-63 — needs-work-cause —" <<<"$out22"'
 ok "R3F2 positive — 'PR #n delta needs work'"                 'grep -qE "^PI-64 — needs-work-cause —" <<<"$out22"'
 ok "R3F2 positive — 'PR #n delta needs work round n'"         'grep -qE "^PI-65 — needs-work-cause —" <<<"$out22"'
-# each false form also carries a real "— cause: …" field of its own, so if it were wrongly read as a
-# review round it would show up as a visible needs-work-cause signal — an absent line alone cannot tell
-# "correctly not a round" apart from "a round with no cause", so this is what makes the negative load-bearing
-ok "R3F2 negative — 'approved (… 2 needs work closed)' is not a review round" '! grep -q "PI-90" <<<"$out22"'
-ok "R3F2 negative — 're-review after needs work fixed' is not a review round" '! grep -q "PI-91" <<<"$out22"'
-ok "R3F2 negative — 'merged after needs work' is not a review round" '! grep -q "PI-92" <<<"$out22"'
-ok "R3F2 negative — a draft line's own 'needs work fixes' mention is not a review round" '! grep -q "PI-93" <<<"$out22"'
-ok "R3F2 — exactly the 6 real forms signal, nothing else" '[[ "$out22" == "RETRO DUE: 6 segnali"* ]]'
+ok "R3F2 positive — 'PR #n needs work (delta)' with no number"  'grep -qE "^PI-66 — needs-work-cause —" <<<"$out22"'
+# each false form also carries a real "— cause: …" field of its own: read as a review round it would be
+# typed "needs-work-cause", read as what it is it is typed "cause". Asserting the TYPE (not the absence
+# of the line) is what keeps these negatives load-bearing now that a cause is read off any line —
+# an absent line alone cannot tell "correctly not a round" apart from "a round with no cause".
+ok "R3F2 negative — 'approved (… 2 needs work closed)' is not a review round" '! grep -qE "^PI-90 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 negative — 're-review after needs work fixed' is not a review round" '! grep -qE "^PI-91 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 negative — 'merged after needs work' is not a review round" '! grep -qE "^PI-92 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 negative — a draft line's own 'needs work fixes' mention is not a review round" '! grep -qE "^PI-93 — needs-work-cause —" <<<"$out22"'
+ok "R3F2/QF1 positive — those same four lines are still signals, by their own cause field" \
+   'grep -qE "^PI-90 — cause —" <<<"$out22" && grep -qE "^PI-91 — cause —" <<<"$out22" && grep -qE "^PI-92 — cause —" <<<"$out22" && grep -qE "^PI-93 — cause —" <<<"$out22"'
+ok "R3F2 — exactly the 7 real forms are read as rounds, the 4 false ones as plain causes, nothing else" \
+   '[[ "$out22" == "RETRO DUE: 11 segnali"* ]] && [[ $(grep -cE "^[A-Za-z0-9.-]+ — needs-work-cause — " <<<"$out22") -eq 7 ]] && [[ $(grep -cE "^[A-Za-z0-9.-]+ — cause — " <<<"$out22") -eq 4 ]]'
 rm -rf "$S22"
+
+# the same false forms, all three on ONE task: read as rounds they would reach the third-round signal.
+# Its sibling — three REAL rounds on one task producing exactly that signal — is the AC2(c) fixture above.
+S22b=$(mkrepo)
+writelog "$S22b" \
+  "- 2026-09-03 PI-95 PR #95 approved (delta 3, 2 needs work closed) — merge: orchestrator — cause: other: f3" \
+  "- 2026-09-02 PI-95 PR #95 re-review after needs work fixed — ok — cause: other: f2" \
+  "- 2026-09-01 PI-95 PR #95 needs-work — a skill's own closing line — cause: other: f1"
+out22b=$(run "$S22b")
+ok "R3F2 — three false forms on one task never reach the third-round signal" '! grep -q "repeat-needs-work" <<<"$out22b"'
+ok "R3F2 — and each of the three is still counted once, as its own cause" \
+   '[[ "$out22b" == "RETRO DUE: 3 segnali"* ]] && [[ $(grep -cE "^[A-Za-z0-9.-]+ — cause — " <<<"$out22b") -eq 3 ]]'
+rm -rf "$S22b"
 
 # --- R4F1 (round 4): the needs-work qualifier forms are derived from THIS project's own real log +
 # archive at test time, never a hand-copied example list again — round 3's own list (copied from the
@@ -373,17 +397,31 @@ instantiate(){ # instantiate ID N DELTA_SUFFIX CAUSE — fills the extracted tem
   line="${line/\{N\}/$n}"
   line="${line/\{ (delta N)\}/$delta}"
   line="${line/\{first finding, six words\}/a short finding description}"
-  line="${line/\{first-round|example-not-class|base-moved|verification-reintroduced|other: …\}/$cause}"
+  # the cause alternation is the only {…} group left at this point, so it is cut generically: a
+  # hand-copied copy of it here went stale the moment the taxonomy gained a value (QF-1), and the
+  # instantiated line then carried the literal placeholder as its cause — which still signalled, so
+  # three of these assertions stayed green on a fixture that no longer tested anything.
+  line="${line%%\{*}$cause"
   printf -- '- 2026-09-01 %s' "$line"
 }
 
-for cause in "example-not-class" "base-moved" "verification-reintroduced" "other: something specific"; do
+# the values come from the template's own alternation too, so a taxonomy value added to reviewer.md is
+# exercised here the day it is declared, and never because this file happens to quote it
+TAXONOMY=$(printf '%s' "$TEMPLATE" | python3 -c 'import sys,re; m=re.search(r"cause: \{([^}]*)\}", sys.stdin.read()); print("\n".join(v.strip() for v in m.group(1).split("|")) if m else "")')
+ok "R4F2 setup — the taxonomy is derived from the template, not quoted here (>= 4 values)" \
+   '[[ $(printf "%s\n" "$TAXONOMY" | grep -c .) -ge 4 ]]'
+
+while IFS= read -r cause; do
+  [ -n "$cause" ] || continue
+  [ "$cause" = "first-round" ] && continue          # its own negative assertion follows the loop
+  case "$cause" in other*) cause="other: something specific";; esac
   Sx=$(mkrepo)
   writelog "$Sx" "$(instantiate PI-80 80 '' "$cause")"
   outx=$(run "$Sx")
-  ok "R4F2 — the template instantiated with cause: $cause is read as a signal" '[[ "$outx" == "RETRO DUE: 1 segnali"* ]]'
+  ok "R4F2 — the template instantiated with cause: $cause is read as a signal" \
+     '[[ "$outx" == "RETRO DUE: 1 segnali"* ]] && grep -qE "^PI-80 — needs-work-cause — " <<<"$outx"'
   rm -rf "$Sx"
-done
+done <<<"$TAXONOMY"
 
 Sfr=$(mkrepo)
 writelog "$Sfr" "$(instantiate PI-81 81 '' "first-round")"
