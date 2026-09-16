@@ -51,8 +51,17 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh sed-range markers (per una mutazione eseguibile): un em dash sulla stessa riga dell'indirizzo /BEGIN/,/END/ fa fallire silenziosamente l'intero range sotto BSD sed (macOS, confermato anche con LC_ALL=C) — marker su riga pulita, prosa con em dash sulla riga dopo.
 - verify.sh's RED can be a pre-existing defect on the base, unrelated to the PR's own diff, not just a regression the PR introduced: PI-37 (PR #74, 2026-09-15) touched only bin/doctor.sh, bin/doctor.test.sh and run-wave/SKILL.md, yet failed on retro-due.test.sh's own R4F1 self-check because a malformed handoff log line had landed on main from an unrelated merge (fixed in PI-39, #77). The reviewer named it correctly (cause: base-moved) only by hand re-running R4F1 against a clean checkout of origin/main — a manual step that still cost a full needs-work round. Proposed, not yet built: verify.sh re-runs any newly-red assertion against a clean worktree of the base branch's tip before reporting; if that assertion is already red there, it reports 'RED — pre-existing on base (cause: base-moved)' distinctly from an own-diff RED, so developer, reviewer and orchestrator see the distinction without re-diagnosing by hand each time.
 - cleanup-merged.sh reaps remote branches of merged PRs (PI-38) via PR head-vs-tip match, never ancestry (squash breaks ancestry); a branch's own worktree removal and its remote-branch reap can land one run apart (same-run snapshot), never within the same run
+- bin/handoff.sh: una sezione si individua SOLO con split_section ("## " a inizio riga, definita una volta in PY_SECTIONS e condivisa da log, fact e dal composer): un fatto che cita `## Log` nel testo è dato, non intestazione. Verificato con la mutazione (tolto ^): 30 asserzioni rosse, 53 con lo script pre-PI-40.
+- handoff.sh: una scrittura appende UN record — one_line() collassa gli a capo del testo del chiamante prima di ogni altra regola, altrimenti l'argomento stesso inietta un'intestazione e i lettori si fermano lì
+- Un fix di review va eseguito anche sulle forme che la regola VICINA protegge, non solo su quelle del finding: la mia correzione PI-40 (collasso degli a capo dopo lo strip data PI-39) chiudeva il finding e riapriva PI-39 — 'log $'2026-01-01\nfoo'' finiva come '- <oggi> 2026-01-01 foo', perche lo strip pretende uno spazio dopo la data e un a capo non lo e. Ordine giusto: normalizzare il testo del chiamante prima di ogni altra regola.
+- Risolvere un conflitto su docs/SESSION_HANDOFF*.md e poi scriverci ancora prima del merge riapre il conflitto: chi risolve non scrive più su quei file, e la riga di log del merge la scrive chi merge, DOPO il merge.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 PI-42 PR #82 approved — merge: orchestrator
+- 2026-09-16 PI-40 PR #81 merged — handoff.sh: nessun argomento a log o fact può scrivere un'intestazione; conflitto sui due file handoff risolto per sezione due volte
+- 2026-09-16 PI-40 PR #81 approved (delta 1) — one_line collapses before the date strip, 56-combination writer grid, conflict resolved by section — merge: orchestrator
+- 2026-09-16 PI-40 PR #81 fix ripresa — nessun argomento a log o fact può scrivere un'intestazione: collasso a un record prima dello strip data, fixture avvelenate generate dalle scritture vere, 238 asserzioni
+- 2026-09-16 PI-40 PR draft — handoff.sh trova le sezioni dalla loro intestazione a inizio riga, non da un marcatore citato dentro un fatto — 42 test nuovi
 - 2026-09-16 PI-41 PR #83 needs work — a branch's own red attributed to the base — cause: first-round
 - 2026-09-16 PI-42 PR #82 needs work — en-dash range citations checked only endpoints — cause: first-round
 - 2026-09-16 PI-40 PR #81 needs work — writer can still inject a heading from its own argument — cause: first-round
@@ -88,8 +97,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-35 PR #66 needs work — il segno si riconosce anche in prosa — cause: first-round
 - 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests
 - 2026-09-14 PI-34 PR #64 approved (delta 4) — merge: orchestrator, prima di #66
-- 2026-09-14 PI-34 PR #64 giro 4 fix pushed — scratch tenuta se HEAD non su remote, nomi scratch a cifre esatte — 2 nuovi test, 180 verdi
-- 2026-09-14 PI-34 PR #64 needs work (delta 3) — scratch con commit non pushato rimossa — cause: other: condizione (c) elencata non applicata
-- 2026-09-13 PI-34 PR #64 giro 3 fix pushed — trap prima del fetch, scratch mai rimossa sporca, reviewer.md:39 senza $$ — 5 nuovi test, 178 verdi
-- 2026-09-13 PI-34 PR #64 needs work (delta 2) — trap armato dopo il fetch, scratch sporche rimosse — cause: example-not-class
-- 2026-09-13 PI-34 giro 2 fixes pushed — SIGINT/TERM exit codes, conflict-resolution worktree reuse, scratch liveness, git-common-dir — 24 tests
