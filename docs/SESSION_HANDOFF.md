@@ -65,6 +65,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - cleanup-merged.sh reap_remote_branches: the skip lines for an active branch (:272), a protected branch (:273) and a branch with no matching merged PR (:278) are bare continues — they leave the remote ref on origin without announcing or counting it, and that is deliberate: a remote ref that was never a deletion candidate is candidate selection, not a keep decision (the same reading AC3 rests on for "already gone is not kept"), and announcing each would print a line per branch on origin. The keep()/kept-count invariant covers local branches and worktrees only, never refs on origin. Measured in the PI-44 delta review with a gh stub over a real bare origin (protected + no-PR remote branches left on origin, summary "0 kept"), 2026-09-17. Do not re-file this as a defect: the PI-44 report classifies these three under "already routes through keep()", which is false — the behaviour is right, that sentence is not.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-17 retro-mark 2026-09-17 signals-2026-09-17
 - 2026-09-17 PI-44 PR #84 approved (delta 1) — prunable keeps announced and counted, invariant proved at two unwritten sites — merge: orchestrator
 - 2026-09-17 PI-46 PR #88 needs work — test sandbox anchored to the script under test — cause: first-round
 - 2026-09-16 retro-mark 2026-09-16 signals-2026-09-16
@@ -104,4 +105,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
 - 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
 - 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
-- 2026-09-15 PI-37 PR draft — doctor warns merged-PR non-Done task, run-wave Step 5 fixes Status — 111 tests
