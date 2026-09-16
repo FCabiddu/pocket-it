@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-45-doctor-test-self-mutation
-**PR**: PENDING
+**PR**: https://github.com/FCabiddu/pocket-it/pull/85
 
 ## Goal
 `mutate_has_section()` (`bin/doctor.test.sh`, ~lines 1006-1020) builds its patched copy by reading
