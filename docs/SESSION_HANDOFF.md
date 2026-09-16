@@ -62,6 +62,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Task file: un elenco di call site nelle ## Notes vince sull invariante scritto negli AC, anche quando l AC dice "vale per ogni percorso, presente e futuro" - PI-44 aveva entrambi e il developer ha corretto l elenco (4 su 5). In questo repo le Notes portano solo starting points, dichiarati tali ("Starting points only, not the boundary of the work"), e il criterio sta negli AC espresso come EFFETTO osservabile (quali branch restano in piedi dopo la corsa), mai come uguaglianza fra due cose che lo script stesso stampa: un percorso muto e membro della classe e nessuna verifica costruita sugli annunci lo vede.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 retro-mark 2026-09-16 signals-2026-09-16
 - 2026-09-16 PI-45 PR #85 needs work — MUT_LOCALE range sed swallows to EOF, marker still found — cause: first-round
 - 2026-09-16 PI-44 PR #84 needs work — prunable branch kept silently, never announced/counted — cause: example-not-class
 - 2026-09-16 PI-41 PR #83 merged — verify.sh distingue il rosso del branch da quello ereditato; lista dei produttori provata rigenerata aggiungendone un ottavo
@@ -101,4 +102,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
 - 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
 - 2026-09-14 PI-35 PR #66 needs work (delta 3) — forma (delta) non riconosciuta — cause: example-not-class
-- 2026-09-14 PI-35 round 3 fix pushed — cause/needs-work read by field position not example, mark verified above #65 — 71 tests green
