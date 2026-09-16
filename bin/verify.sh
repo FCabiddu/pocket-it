@@ -136,9 +136,12 @@ PY
 # told not to re-derive that verdict by hand. It deliberately does not protect against the opposite slip (a
 # genuine base red called the branch's own): that outcome is exit 1, today's plain red, which costs a round
 # and never excuses a defect. So every rule is one-sided: a doubt produces "unknown", never "base".
-# Not covered, deliberately: whether the two failures are the SAME failure (see the per-check note above),
-# and a tool that is missing from this environment on both sides in a way that still exits like a test
-# failure after all four rules below have passed — nothing in an exit code can settle that one.
+# Not covered, deliberately: whether the two failures are the SAME failure (see the per-check note above);
+# a tool that is missing from this environment on both sides in a way that still exits like a test failure
+# after all four rules below have passed; and the branch and base worktrees' shared node_modules — borrowed
+# from the main checkout by both (:111 and :279), so a branch check that writes into it (a generated client,
+# a cache, a compiled artifact) changes what the base re-run reads, and the base can then answer red for a
+# reason that is not its own. Nothing in an exit code can settle any of these three.
 # Four rules, in order of cost: (1) the marker file that made this script choose the command must exist here;
 # (2) every package script the command names must be declared here — a package manager exits 1 for a missing
 # script, indistinguishable from a real failure; (3) the runner must resolve here — an absent module or
