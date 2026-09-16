@@ -54,8 +54,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - bin/handoff.sh: una sezione si individua SOLO con split_section ("## " a inizio riga, definita una volta in PY_SECTIONS e condivisa da log, fact e dal composer): un fatto che cita `## Log` nel testo è dato, non intestazione. Verificato con la mutazione (tolto ^): 30 asserzioni rosse, 53 con lo script pre-PI-40.
 - handoff.sh: una scrittura appende UN record — one_line() collassa gli a capo del testo del chiamante prima di ogni altra regola, altrimenti l'argomento stesso inietta un'intestazione e i lettori si fermano lì
 - Un fix di review va eseguito anche sulle forme che la regola VICINA protegge, non solo su quelle del finding: la mia correzione PI-40 (collasso degli a capo dopo lo strip data PI-39) chiudeva il finding e riapriva PI-39 — 'log $'2026-01-01\nfoo'' finiva come '- <oggi> 2026-01-01 foo', perche lo strip pretende uno spazio dopo la data e un a capo non lo e. Ordine giusto: normalizzare il testo del chiamante prima di ogni altra regola.
+- Risolvere un conflitto su docs/SESSION_HANDOFF*.md e poi scriverci ancora prima del merge riapre il conflitto: chi risolve non scrive più su quei file, e la riga di log del merge la scrive chi merge, DOPO il merge.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 PI-40 PR #81 merged — handoff.sh: nessun argomento a log o fact può scrivere un'intestazione; conflitto sui due file handoff risolto per sezione due volte
 - 2026-09-16 PI-40 PR #81 approved (delta 1) — one_line collapses before the date strip, 56-combination writer grid, conflict resolved by section — merge: orchestrator
 - 2026-09-16 PI-40 PR #81 fix ripresa — nessun argomento a log o fact può scrivere un'intestazione: collasso a un record prima dello strip data, fixture avvelenate generate dalle scritture vere, 238 asserzioni
 - 2026-09-16 PI-40 PR draft — handoff.sh trova le sezioni dalla loro intestazione a inizio riga, non da un marcatore citato dentro un fatto — 42 test nuovi
@@ -95,4 +97,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-14 PI-34 PR #64 approved (delta 4) — merge: orchestrator, prima di #66
 - 2026-09-14 PI-34 PR #64 giro 4 fix pushed — scratch tenuta se HEAD non su remote, nomi scratch a cifre esatte — 2 nuovi test, 180 verdi
 - 2026-09-14 PI-34 PR #64 needs work (delta 3) — scratch con commit non pushato rimossa — cause: other: condizione (c) elencata non applicata
-- 2026-09-13 PI-34 PR #64 giro 3 fix pushed — trap prima del fetch, scratch mai rimossa sporca, reviewer.md:39 senza $$ — 5 nuovi test, 178 verdi
