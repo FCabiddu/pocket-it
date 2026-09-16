@@ -184,3 +184,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-14 PI-35 PR #66 needs work (delta 3) — forma (delta) non riconosciuta — cause: example-not-class
 - 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
 - 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
+- 2026-09-15 PI-37 PR draft — doctor warns merged-PR non-Done task, run-wave Step 5 fixes Status — 111 tests
