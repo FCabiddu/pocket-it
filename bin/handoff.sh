@@ -86,6 +86,19 @@ PY
 # sys.argv is unchanged by this (argv[0] is "-", argv[1:] are the arguments passed here).
 py_run() { { printf '%s\n' "$PY_SECTIONS"; cat; } | python3 - "$@"; }
 
+# PI-40 — one home for "what a writer appends is ONE record, always". The reader's record separator is
+# "\n" and nothing else: split_section anchors "## " right after one, dash_lines splits on one. So a
+# newline inside the caller's own text is the only character that can turn free text into a second line —
+# a heading the caller never meant to write, or a data line that the next write then deletes. Collapsing
+# it here, on the caller's text, is what makes a heading impossible to introduce AS DATA, whatever the
+# argument is and from either writer; the marker itself needs no blacklist, because it can only ever land
+# mid-line. The other line-ish characters (\r \v \f \x1c-\x1e U+0085 U+2028 U+2029) are data for every
+# reader and are left byte for byte, so a line holding one still reads back exactly as written.
+# Applied BEFORE anything else looks at the text, and that order is load-bearing: PI-39's leading-date
+# strip must see the single line the caller meant, or "2026-01-01\nfoo" reaches the file as one line
+# carrying two dates — collapsing after the date is prepended would reintroduce exactly what PI-39 forbids.
+one_line() { local t="${1-}"; printf '%s' "${t//$'\n'/ }"; }
+
 compose() {
   py_run "$ROOT" "$CAP" "$LOGCAP" "$cmd" "$@" <<'PY'
 import sys, os, re, glob, hashlib
@@ -328,7 +341,7 @@ case "$cmd" in
     # the limit case where the whole remaining message IS just a date with nothing after it (no trailing
     # space to strip against). Only a LEADING date is touched: one anchored at the start (^), never a
     # date elsewhere in the free text (AC2).
-    msg="$*"
+    msg=$(one_line "$*")
     while [[ "$msg" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\  ]]; do
       msg="${msg:11}"
     done
@@ -370,7 +383,7 @@ if overflow:
 PY
     echo "handoff: logged — $F";;
   fact)
-    py_run "$F" "$CAP" "$*" <<'PY'
+    py_run "$F" "$CAP" "$(one_line "$*")" <<'PY'
 import sys
 p,CAP,text=sys.argv[1],int(sys.argv[2]),sys.argv[3]; s=read_text(p)
 # PI-40: same single definition as `log` and as the composer — the facts section is found by its

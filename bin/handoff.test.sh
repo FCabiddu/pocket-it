@@ -621,22 +621,26 @@ loglines40(){ awk '/^## Log/{f=1;next} f && /^- /' "$1"; }
 countlines40(){ printf '%s' "$1" | grep -c '^- '; }
 headcount40(){ grep -c '^## Log' "$1"; }
 structure40(){ awk '{print} /^## Log/{exit}' "$1"; }   # the file down to (and including) the Log heading
-mkpoisoned40(){   # $1 = repo dir, $2 = the fact text that quotes a marker, $3.. = log lines, newest first
-  local d="$1" poison="$2"; shift 2
-  [[ "$#" -eq 0 ]] && set -- "2026-01-01 una riga di log che c'era già"
-  mkdir -p "$d/docs"
-  { echo "# Session handoff"
-    echo
-    echo "## Fatti che non scadono"
-    echo "<!-- max 100 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->"
-    echo "- primo fatto, sopra la citazione"
-    printf -- '- %s\n' "$poison"
-    echo "- ultimo fatto, SOTTO la citazione"
-    echo
-    echo "## Log (più recente in alto, ultime 40 righe)"
-    printf -- '- %s\n' "$@"
-  } > "$d/docs/SESSION_HANDOFF.md"
+# The fixture is PRODUCED BY RUNNING THE REAL WRITERS, never printf'd line by line. A hand-composed
+# fixture can only ever hold lines that already look like data ("- …"), so it cannot exhibit what the
+# WRITER is able to put in the file — and that is where the second half of this bug lived: the caller's
+# own text reaching the file with a newline in it, i.e. a "## " at the start of a line, written as data.
+# Generating the fixture puts every shape the writer can produce into it by construction, this round and
+# every future one: change what the writer emits and these fixtures change with it.
+mkpoisoned40(){   # $1 = repo dir, $2 = the fact text that quotes a marker, $3.. = log lines, OLDEST first
+  local d="$1" poison="$2" l; shift 2
+  ( cd "$d" \
+    && bash "$SCRIPT" fact "primo fatto, sopra la citazione" \
+    && bash "$SCRIPT" fact "$poison" \
+    && bash "$SCRIPT" fact "ultimo fatto, SOTTO la citazione" ) >/dev/null 2>&1
+  for l in "$@"; do (cd "$d" && bash "$SCRIPT" log "$l") >/dev/null 2>&1; done
 }
+# The class has two halves. [0..5] the marker quoted INSIDE a line — backticked in a command, inline
+# mid-sentence, first thing in the text, spelled with the heading's own parenthetical, twice in one line,
+# last thing on the line. [6..9] the marker carried by the caller's own NEWLINE, which is the only way it
+# can reach the start of a line: at the head of the text, in the middle, at the end, and a text that is
+# nothing but a newline and a marker. No blacklist of section names — a foreign "## " heading is in the
+# list too, because the reader searches the generic "^## " and would stop at any of them.
 POISONS40=(
   $'regola: controlla con `awk \'/^## Log/{f=1;next} /^## /{f=0}\'` prima di scrivere'
   'la sezione ## Log sta in fondo al file'
@@ -644,6 +648,10 @@ POISONS40=(
   'il file finisce con ## Log (più recente in alto, ultime 40 righe)'
   'due marcatori in una riga: ## Fatti che non scadono e ## Log'
   'vedi ## Log'
+  $'## Log\nun testo che comincia con il marcatore e prosegue'
+  $'un testo con il marcatore in mezzo\n## Fatti che non scadono\ne del testo dopo'
+  $'un testo che finisce con il marcatore\n## Qualunque altra sezione'
+  $'\n## Log'
 )
 
 # AC1 — one disposable repo per member of the class: after a `log`, the heading is still there exactly
@@ -652,7 +660,7 @@ for idx in $(seq 0 $((${#POISONS40[@]} - 1))); do
   poison40="${POISONS40[$idx]}"
   S20=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test20-$idx.XXXXXX")
   git init -q "$S20" >/dev/null
-  mkpoisoned40 "$S20" "$poison40"
+  mkpoisoned40 "$S20" "$poison40" "una riga di log che c'era già"
   F20="$S20/docs/SESSION_HANDOFF.md"
   beforefacts20=$(factlines40 "$F20")
   (cd "$S20" && bash "$SCRIPT" log "PI-40 nuova riga di log" >/dev/null 2>&1)
@@ -677,7 +685,7 @@ done
 # rotates. Checked after EVERY write, not only at the end: the old defect repeated on each run.
 S21=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test21.XXXXXX")
 git init -q "$S21" >/dev/null
-mkpoisoned40 "$S21" "${POISONS40[0]}"
+mkpoisoned40 "$S21" "${POISONS40[0]}" "una riga di log che c'era già"
 F21="$S21/docs/SESSION_HANDOFF.md"
 minfacts21=$(countlines40 "$(factlines40 "$F21")"); headok21=1; factok21=1
 for n in 1 2 3 4 5; do
@@ -723,10 +731,12 @@ rm -rf "$S22"
 # lost, oldest at the top). 45 log lines + a poisoned facts section: one write evicts 6 at once.
 S23=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test23.XXXXXX")
 git init -q "$S23" >/dev/null
-entries23=()
-for i in $(seq 45 -1 1); do entries23+=("2026-01-01 entry $i"); done
-mkpoisoned40 "$S23" "${POISONS40[3]}" "${entries23[@]}"
+mkpoisoned40 "$S23" "${POISONS40[3]}"
 F23="$S23/docs/SESSION_HANDOFF.md"; ARCHIVE23="$S23/docs/SESSION_HANDOFF_ARCHIVE.md"
+# A Log section already past the cap is the single state no writer can produce (it rotates at 40), so
+# these 45 lines are appended by hand, exactly as PI-8 F1 hand-builds its over-cap fixture. Everything a
+# writer CAN produce — the whole facts section, the poisoned line included — came from the writer above.
+for i in $(seq 45 -1 1); do echo "- 2026-01-01 entry $i" >> "$F23"; done
 beforefacts23=$(factlines40 "$F23")
 (cd "$S23" && bash "$SCRIPT" log "entry 46" >/dev/null 2>&1)
 archlines23=$(awk '/^- /' "$ARCHIVE23")
@@ -747,7 +757,7 @@ rm -rf "$S23"
 # writers. Same poisoned file, read by the composer and written by `fact`.
 S24=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test24.XXXXXX")
 git init -q "$S24" >/dev/null
-mkpoisoned40 "$S24" "${POISONS40[0]}"
+mkpoisoned40 "$S24" "${POISONS40[0]}" "una riga di log che c'era già"
 F24="$S24/docs/SESSION_HANDOFF.md"
 awkfacts24=$(factlines40 "$F24"); awklog24=$(loglines40 "$F24")
 composed24=$(cd "$S24" && bash "$SCRIPT" facts)
@@ -787,6 +797,113 @@ ok "PI-40 AC5 mirror — the new fact is readable as a fact (the heading was cre
 ok "PI-40 AC5 mirror — the two log lines are still log lines, byte-identical, and the fact is not one" \
    '[[ "$recent25" == "$awklog25" ]]'
 rm -rf "$S25"
+
+# --- PI-40, the same damage from the other side: the WRITERS must not be able to inject a heading.
+# Anchoring the reader was half the invariant. A heading also gets into a file by being WRITTEN as data:
+# neither writer guaranteed that the line it appends is one line, so any caller text holding a newline
+# followed by "## " put a real heading in the file — after which every reader (rightly) stops there, the
+# lines below it are invisible for ever and the next write deletes them. The invariant is therefore stated
+# on the writers, not on a list of spellings: no argument to `log` or to `fact`, of any shape, may add or
+# remove a heading, or delete a line that was already in the file.
+# The grid below is that sentence, executed. Dimensions: (a) both writers; (b) the marker — the generic
+# "^## " the reader searches, so a foreign section name and a plain "##" are in the list and no section
+# name is special; (c) where the caller's newline puts it — head, middle, tail of the text, or a text that
+# is nothing but a newline and a marker. The oracles are the file's own heading lines and data lines, plus
+# the composer, never the code under test. Two of the five checks are the non-vacuity siblings of the
+# other three: the write really happened (one line more) and the caller's marker really reached the file
+# (as data, on a "- " line) — so "no heading was added" cannot pass by the write having done nothing.
+MARK40=( '## Log' '## Fatti che non scadono' '## Qualunque cosa' '## Log archiviato' '### sottosezione' '##' '   ## indentata' )
+TPL40=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test40tpl.XXXXXX")
+git init -q "$TPL40" >/dev/null
+( cd "$TPL40" && bash "$SCRIPT" fact "un fatto che deve sopravvivere" \
+  && bash "$SCRIPT" log "keeper uno" && bash "$SCRIPT" log "keeper due" ) >/dev/null 2>&1
+badhead40=""; badlost40=""; badcount40=""; badcomp40=""; badtext40=""; n40=0
+for writer40 in log fact; do
+  for mi40 in $(seq 0 $((${#MARK40[@]} - 1))); do
+    for shape40 in testa mezzo coda solo; do
+      marker40="${MARK40[$mi40]}"
+      case "$shape40" in
+        testa) text40=$(printf '%s\ntesto dopo il marcatore' "$marker40");;
+        mezzo) text40=$(printf 'testo prima\n%s\ntesto dopo' "$marker40");;
+        coda)  text40=$(printf 'testo prima del marcatore\n%s' "$marker40");;
+        solo)  text40=$(printf '\n%s' "$marker40");;
+      esac
+      D40=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test40.XXXXXX"); git init -q "$D40" >/dev/null
+      mkdir -p "$D40/docs"; cp "$TPL40/docs/SESSION_HANDOFF.md" "$D40/docs/"
+      F40="$D40/docs/SESSION_HANDOFF.md"; case40="$writer40/$mi40/$shape40"; n40=$((n40 + 1))
+      headb40=$(grep '^## ' "$F40"); grep '^- ' "$F40" > "$D40/before.txt"; nb40=$(grep -c '^- ' "$F40")
+      nbt40=$(wc -l < "$F40" | tr -d ' ')   # PHYSICAL lines too: an injected heading is not a "- " line,
+                                            # so counting only data lines would miss the very damage here
+      (cd "$D40" && bash "$SCRIPT" "$writer40" "$text40") >/dev/null 2>&1
+      grep '^- ' "$F40" > "$D40/after.txt"
+      exprec40=2; expfac40=1
+      if [[ "$writer40" == log ]]; then exprec40=3; else expfac40=2; fi
+      [[ "$(grep '^## ' "$F40")" == "$headb40" ]] || badhead40="$badhead40 $case40"
+      [[ "$(grep -vxF -f "$D40/after.txt" "$D40/before.txt" | grep -c .)" -eq 0 ]] || badlost40="$badlost40 $case40"
+      [[ "$(grep -c '^- ' "$F40")" -eq $((nb40 + 1)) ]] \
+        && [[ "$(wc -l < "$F40" | tr -d ' ')" -eq $((nbt40 + 1)) ]] \
+        || badcount40="$badcount40 $case40"
+      [[ "$( (cd "$D40" && bash "$SCRIPT" recent --all) | grep -c '^- ')" -eq "$exprec40" ]] \
+        && [[ "$( (cd "$D40" && bash "$SCRIPT" facts) | grep -c '^- ')" -eq "$expfac40" ]] \
+        || badcomp40="$badcomp40 $case40"
+      [[ "$(grep -F -- "$marker40" "$F40" | grep -c '^- ')" -ge 1 ]] || badtext40="$badtext40 $case40"
+      rm -rf "$D40"
+    done
+  done
+done
+rm -rf "$TPL40"
+ok "PI-40 F1 — over all $n40 writer×marcatore×posizione combinations, the set of heading lines is identical before and after the write${badhead40:+ (rotte:$badhead40)}" \
+   '[[ -z "$badhead40" ]]'
+ok "PI-40 F1 — over all $n40, not one line that was already in the file is missing afterwards${badlost40:+ (rotte:$badlost40)}" \
+   '[[ -z "$badlost40" ]]'
+ok "PI-40 F1 — over all $n40, the file grew by exactly one data line AND by exactly one physical line: what the caller passed is one record, never two${badcount40:+ (rotte:$badcount40)}" \
+   '[[ -z "$badcount40" ]]'
+ok "PI-40 F1 — over all $n40, the composer still reads every line back (facts and recent --all counts exact)${badcomp40:+ (rotte:$badcomp40)}" \
+   '[[ -z "$badcomp40" ]]'
+ok "PI-40 F1 — sibling, so none of the above can pass vacuously: in all $n40 the caller's marker IS in the file, as data on a '- ' line${badtext40:+ (rotte:$badtext40)}" \
+   '[[ -z "$badtext40" ]]'
+
+# The three reproductions from the review, each named, on a file built by the writers themselves.
+R40=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test40r.XXXXXX"); git init -q "$R40" >/dev/null
+( cd "$R40" && bash "$SCRIPT" log "prima riga" && bash "$SCRIPT" log "seconda riga" ) >/dev/null 2>&1
+FR40="$R40/docs/SESSION_HANDOFF.md"
+(cd "$R40" && bash "$SCRIPT" log $'una riga\n## Qualunque cosa\nfine') >/dev/null 2>&1
+ok "PI-40 F1 — after a log carrying a FOREIGN heading, recent --all still returns the two earlier lines plus the new one" \
+   '[[ "$( (cd "$R40" && bash "$SCRIPT" recent --all) | grep -c "^- ")" -eq 3 ]]'
+ok "PI-40 F1 — sibling: that same text is in the file, whole, on one line" \
+   '[[ "$(grep -c "^- .*una riga ## Qualunque cosa fine$" "$FR40")" -eq 1 ]]'
+(cd "$R40" && bash "$SCRIPT" fact $'un fatto\n## Log\ncoda del fatto') >/dev/null 2>&1
+ok "PI-40 F1 — after a fact carrying the Log heading, the file still has exactly one '## Log'" \
+   '[[ "$(headcount40 "$FR40")" -eq 1 ]]'
+(cd "$R40" && bash "$SCRIPT" log "la riga successiva alla citazione") >/dev/null 2>&1
+ok "PI-40 F1 — and the next log line lands in the Log section without deleting the fact below the quote" \
+   '[[ "$( (cd "$R40" && bash "$SCRIPT" recent --all) | grep -c "^- ")" -eq 4 ]] && [[ "$( (cd "$R40" && bash "$SCRIPT" facts) | grep -c "^- ")" -eq 1 ]]'
+# PI-39 still holds, and the ORDER of the two rules is what makes it hold: the newline is collapsed on the
+# caller's text BEFORE the leading-date strip looks at it. Collapsing after the date is prepended would
+# turn "2026-01-01\nfoo" into a line carrying two dates — exactly what PI-39 exists to prevent.
+(cd "$R40" && bash "$SCRIPT" log $'2026-01-01\nfoo') >/dev/null 2>&1
+ok "PI-40 F1 + PI-39 — a caller date followed by a newline is still stripped: one date on the line" \
+   '[[ "$(loglines40 "$FR40" | head -1)" == "- $(date +%Y-%m-%d) foo" ]]'
+ok "PI-40 F1 + PI-39 — no line in the file carries two consecutive ISO dates" \
+   '! grep -qE "^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{4}-[0-9]{2}-[0-9]{2}" "$FR40"'
+ok "PI-40 F1 — ADR-2 holds on the poisoned file: reading it changes nothing on disk" \
+   'cp "$FR40" "$FR40.snap" && (cd "$R40" && bash "$SCRIPT" facts >/dev/null && bash "$SCRIPT" recent --all >/dev/null && bash "$SCRIPT" show >/dev/null) 2>/dev/null; cmp -s "$FR40" "$FR40.snap"'
+rm -rf "$R40"
+
+# The rotating write must not be able to put a heading in the ARCHIVE either: what rotates is read back
+# out of the Log section, so a heading written as data there would be carried over on the next overflow.
+A40=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test40a.XXXXXX"); git init -q "$A40" >/dev/null
+mkpoisoned40 "$A40" "${POISONS40[6]}"
+FA40="$A40/docs/SESSION_HANDOFF.md"; ARCA40="$A40/docs/SESSION_HANDOFF_ARCHIVE.md"
+for i in $(seq 45 -1 1); do echo "- 2026-01-01 entry $i" >> "$FA40"; done
+(cd "$A40" && bash "$SCRIPT" log $'riga che fa ruotare\n## Log\ncoda') >/dev/null 2>&1
+ok "PI-40 F1 — after a rotating write with a poisoned argument, the archive holds exactly one heading: its own" \
+   '[[ "$(grep -c "^## " "$ARCA40")" -eq 1 ]]'
+ok "PI-40 F1 — sibling: 6 lines really did rotate into that archive" \
+   '[[ "$(grep -c "^- " "$ARCA40")" -eq 6 ]]'
+ok "PI-40 F1 — and the handoff file still has one Log heading and its three facts" \
+   '[[ "$(headcount40 "$FA40")" -eq 1 ]] && [[ "$(countlines40 "$(factlines40 "$FA40")")" -eq 3 ]]'
+rm -rf "$A40"
 
 # AC1/AC2, writer side: the 10 characters str.splitlines() breaks on but awk (RS="\n") does not. A fact
 # or a log line may legitimately hold any of them as DATA; reading the file with universal-newline
