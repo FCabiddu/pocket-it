@@ -338,8 +338,14 @@ for e in "${entries[@]}"; do
   case " $flags " in *" locked "*) locked_entry "$p" "$sha" "$branch" "$lockr"; continue;; esac
   case " $flags " in *" prunable "*)
     echo "pruned worktree $p (missing on disk)"; removed=$((removed+1)); (( DRY )) || g worktree prune >/dev/null 2>&1
-    [[ -n "$branch" ]] && ( protected "$branch" && (( ! ALL )) ) && continue
-    [[ -n "$branch" ]] && decide "$sha" "$branch" >/dev/null && drop_branch "$branch"; continue;; esac
+    # PI-44: the worktree is already gone (pruned above); what is decided here is only whether ITS BRANCH is
+    # also deleted or kept — and every branch a `continue` here leaves in place must still go through keep(),
+    # mirroring the ordinary loop's own `why=$(decide …) || { keep …; continue; }` a few lines down, or a
+    # branch survives while nothing announces or counts it (the defect this whole task exists to close).
+    [[ -z "$branch" ]] && continue
+    protected "$branch" && (( ! ALL )) && { keep "branch $branch" "protected"; continue; }
+    if why=$(decide "$sha" "$branch"); then drop_branch "$branch"; else keep "branch $branch" "$why"; fi
+    continue;; esac
   case " $flags " in *" detached "*)
     P="$(abs "$p")"
     if is_scratch_new "$P"; then

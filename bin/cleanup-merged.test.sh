@@ -40,6 +40,30 @@ kept_equals_summary(){
   total=$(grep -oE '[0-9]+ kept' <<<"$OUT" | tail -1 | grep -oE '^[0-9]+')
   [[ -n "$total" ]] && [[ "$lines" == "$total" ]]
 }
+# PI-44 review round 2 — kept_equals_summary is blind to a path that keeps a branch by printing NOTHING at
+# all: both sides of that equality simply stay the same, so a silent keep passes it (the review's actual
+# finding: the "prunable" branch's protected/decide-fails cases). This check is derived from real git state,
+# never from a list of the script's call sites: it takes a BEFORE snapshot of `git worktree list --porcelain`
+# (path, branch), and after the run, for every entry whose PATH is no longer a worktree at all (removed or
+# pruned — read from git itself), requires its branch — if it still exists — to be named in a "kept branch"
+# line, or — if it no longer exists — in a "deleted branch" line. A future path that drops a worktree entry
+# without deciding its branch out loud, on any line, anywhere, is caught here, not only the two this task
+# fixes.
+snapshot_wt(){ git -C "$1" worktree list --porcelain | awk '/^worktree /{p=$2} /^branch /{b=$2; sub("^refs/heads/","",b); print p"\t"b} /^detached/{p=""}'; }
+no_branch_silently_kept(){ # $1 repo, $2 file holding the BEFORE snapshot (from snapshot_wt, before the run)
+  local repo="$1" path branch after
+  after=$(snapshot_wt "$repo")
+  while IFS=$'\t' read -r path branch; do
+    [[ -z "$path" || -z "$branch" ]] && continue
+    grep -qF "$path"$'\t' <<<"$after" && continue   # worktree entry still there — nothing orphaned to decide
+    if git -C "$repo" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
+      grep -qE "kept branch ${branch//\//\\/} " <<<"$OUT" || { echo "SILENT KEEP: $branch ($path)" >&2; return 1; }
+    else
+      grep -qE "deleted branch ${branch//\//\\/}\$" <<<"$OUT" || { echo "SILENT DELETE-UNANNOUNCED: $branch ($path)" >&2; return 1; }
+    fi
+  done < "$2"
+  return 0
+}
 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 q(){ "$@" >/dev/null 2>&1; }
@@ -119,6 +143,7 @@ mk task/badstatus   "$WT/task-badstatus";    q git -C "$M" merge -q --no-ff task
 printf 'not an index' > "$(git -C "$WT/task-badstatus" rev-parse --git-path index)"
 mk task/locked      "$WT/agent-locked";      q git -C "$M" merge -q --no-ff task/locked -m "merge task/locked"; q git -C "$M" worktree lock "$WT/agent-locked"
 mk epic/e1          "$OLD/epic-e1";          q git -C "$M" merge -q --no-ff epic/e1 -m "merge epic/e1"
+fresh epic/e3       "$WT/epic-e3"                                               # PI-44: protected branch, missing on disk below — the OTHER silent path in the "prunable" case
 fresh task/fromepic "$WT/task-fromepic" epic/e1                                 # no commits of its own on an epic base
 mk task/gone        "$WT/task-gone";         q git -C "$M" merge -q --no-ff task/gone -m "merge task/gone"
 mk task/current     "$WT/agent-current";     q git -C "$M" merge -q --no-ff task/current -m "merge task/current"
@@ -129,7 +154,7 @@ q git -C "$M" branch -c main task/copied; q git -C "$M" worktree add -q "$WT/tas
 q git -C "$WT/task-pulled" merge -q --ff-only main; q git -C "$WT/task-freshrebased" rebase -q main
 q git -C "$M" worktree add -q --detach "$WT/detached" main
 q git -C "$M" worktree add -q --detach "$SCRATCH_WT" main; touch -t 202001010000 "$SCRATCH_WT"
-rm -rf "$WT/task-gone" "$WT/task-gonefresh"
+rm -rf "$WT/task-gone" "$WT/task-gonefresh" "$WT/epic-e3"
 
 NOOWN='no commits of its own \(created from'
 # 1. usage error
@@ -141,14 +166,21 @@ ok "dry-run announces the merged worktree" "has 'would remove worktree .*agent-m
 ok "dry-run announces the squash-merged worktree via PR" "has 'would remove worktree .*/squash \(PR #7 merged\)'"
 ok "dry-run announces the worktree.sh-style squash-merged worktree via PR (AC6)" "has 'would remove worktree .*/task-viaworktree \(PR #8 merged\)'"
 ok "dry-run never announces a worktree with no commits of its own (AC1)" "! has 'would remove worktree .*task-(atbase|behind|fromepic|reused|fromgoneepic|fromfix|fromsha|pulled|resetback|freshrebased|noreflog|copied|renamed|revempty|revnopr)'"
-ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 12 worktrees would be removed, 10 branches would be deleted, 0 remote branches would be deleted, 26 kept'"
+ok "PI-44 dry-run: a protected branch missing on disk is announced kept, not silently left in place" "has 'pruned worktree .*epic-e3 \(missing on disk\)' && has 'kept branch epic/e3 \(protected\)' && branch_exists epic/e3"
+ok "PI-44 dry-run: a non-eligible branch missing on disk is announced kept, not silently left in place" "has 'pruned worktree .*task-gonefresh \(missing on disk\)' && has \"kept branch task/gonefresh \($NOOWN main\)\)\" && branch_exists task/gonefresh"
+ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 13 worktrees would be removed, 10 branches would be deleted, 0 remote branches would be deleted, 28 kept'"
 ok "AC1+AC4 dry-run summary's kept count equals the kept lines actually printed" 'kept_equals_summary'
 ok "dry-run leaves the directories" "[[ -d $WT/agent-merged && -d $OLD/squash && -d $WT/task-viaworktree && -d $SCRATCH_WT ]]"
 ok "dry-run leaves the branches" "branch_exists task/merged && branch_exists task/squash && branch_exists task/viaworktree && branch_exists task/gone"
 # 3. real run from a non-main worktree whose own branch is merged
+BEFORE_M="$S/before_m.txt"; snapshot_wt "$M" > "$BEFORE_M"
 OUT=$(cd "$WT/agent-current" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | sed 's/^/      | /'
 ok "exit 0" "[[ $rc -eq 0 ]]"
+# PI-44 review round 2 — derived from real git worktree-list state before/after this run, not from a list of
+# the script's call sites: every worktree entry this run made disappear (removed or pruned) must have its
+# branch named in a "kept branch" or "deleted branch" line, or a future silent path is missed here too.
+ok "PI-44 no worktree entry this run made disappear leaves its branch undecided in silence" "no_branch_silently_kept \"$M\" \"$BEFORE_M\""
 ok "current worktree kept" "has 'kept .*agent-current \(current worktree\)' && [[ -d $WT/agent-current ]]"
 ok "AC1 worktree at the base tip with no commits of its own kept, with the reason" "has 'kept .*task-atbase \($NOOWN main\)\)' && [[ -d $WT/task-atbase ]] && branch_exists task/atbase"
 ok "AC1 worktree left behind by an advancing base kept, with the reason" "has 'kept .*task-behind \($NOOWN main\)\)' && [[ -d $WT/task-behind ]] && branch_exists task/behind"
@@ -189,8 +221,9 @@ ok "epic worktree kept without --all" "has 'kept .*epic-e1 \(protected branch ep
 ok "detached worktree outside /tmp kept" "has 'kept .*/detached \(detached\)' && [[ -d $WT/detached ]]"
 ok "old detached scratch under /tmp removed" "has 'removed worktree .*pocket-it-cleanup-test-$$ \(detached scratch older than 24 h\)' && [[ ! -d $SCRATCH_WT ]]"
 ok "missing on disk, merged: pruned and branch deleted" "has 'pruned worktree .*task-gone ' && ! branch_exists task/gone"
-ok "missing on disk, no commits of its own: pruned, branch kept" "has 'pruned worktree .*task-gonefresh' && branch_exists task/gonefresh"
-ok "summary line" "has '^cleanup-merged: 11 worktrees removed, 9 branches deleted, 2 remote branches deleted, 27 kept, freed [0-9.]+ MB$'"
+ok "PI-44 missing on disk, no commits of its own: pruned, branch kept AND ANNOUNCED (not silently)" "has 'pruned worktree .*task-gonefresh' && has \"kept branch task/gonefresh \($NOOWN main\)\)\" && branch_exists task/gonefresh"
+ok "PI-44 missing on disk, protected branch: pruned, branch kept AND ANNOUNCED (not silently)" "has 'pruned worktree .*epic-e3 \(missing on disk\)' && has 'kept branch epic/e3 \(protected\)' && branch_exists epic/e3"
+ok "summary line" "has '^cleanup-merged: 12 worktrees removed, 9 branches deleted, 2 remote branches deleted, 29 kept, freed [0-9.]+ MB$'"
 ok "AC1 summary's kept count equals the kept lines actually printed" 'kept_equals_summary'
 ok "main checkout untouched" "[[ -d $M && \$(git -C $M branch --show-current) == main ]]"
 # PI-38 F1: task-revmerged/task-squashremote's own worktree is removed by the ordinary loop in THIS same run
@@ -581,6 +614,25 @@ OUT=$(cd "$R9" && bash "$S/mutant9.sh")
 chmod u+w "$R9/.git/refs/heads/task"
 ok "PI-44 AC1 mutant: the raw echo still announces it (this is what the fix removed, not the message)" "has 'kept branch task/r9merged2 \(delete failed\)'"
 ok "PI-44 AC1 mutant: the invariant catches the regression — kept count no longer equals the lines printed" "! kept_equals_summary"
+
+# PI-44 review round 2 — the actual finding: kept_equals_summary is fooled by a path that keeps a branch by
+# printing NOTHING, since it only compares two things $OUT prints and a silent path grows neither. Revert
+# the "prunable" branch's decide-fails keep() call back to its exact pre-fix silence (a no-op instead of
+# `keep`) on a dedicated repo, and show the difference between the two checks directly: kept_equals_summary
+# stays GREEN over this exact silence, while no_branch_silently_kept (derived from real git worktree-list
+# state, not from a list of the script's call sites) catches it.
+R10="$S/r10"
+q git init -q -b main "$R10"
+echo base > "$R10/f"; q git -C "$R10" add f; q git -C "$R10" commit -qm base
+q git -C "$R10" worktree add -q -b task/r10silent "$S/r10wt" main   # no commits of its own: decide() fails, branch would be kept
+BEFORE_R10="$S/before_r10.txt"; snapshot_wt "$R10" > "$BEFORE_R10"
+rm -rf "$S/r10wt"
+sed 's/else keep "branch $branch" "$why"; fi/else :; fi/' "$SCRIPT" > "$S/mutant10.sh"
+ok "PI-44 round 2 mutant really differs from the script (the prunable decide-fails keep() call really gone)" "grep -q 'else :; fi' \"$S/mutant10.sh\" && ! cmp -s \"$SCRIPT\" \"$S/mutant10.sh\""
+OUT=$(cd "$R10" && bash "$S/mutant10.sh")
+ok "PI-44 round 2 mutant: branch still exists — nothing was actually removed, only left undecided" "git -C \"$R10\" rev-parse --verify -q refs/heads/task/r10silent >/dev/null"
+ok "PI-44 round 2 mutant: kept_equals_summary alone is fooled — it stays green over a silent keep" "kept_equals_summary"
+ok "PI-44 round 2 mutant: no_branch_silently_kept catches it where kept_equals_summary could not" "! no_branch_silently_kept \"$R10\" \"$BEFORE_R10\""
 
 # AC5 — mutation: remove the PR-state match itself (not just skip it) so every non-active, non-protected
 # remote branch is treated as matched, regardless of any merged PR — the negative AC2 cases must now start
