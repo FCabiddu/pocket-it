@@ -797,4 +797,268 @@ ok "AC5 top-level sections out of order: still an ERROR, unchanged wording" \
   'has "ERROR tech-analysis/PROJECT_TECH_ANALYSIS.md: top-level sections out of order: [40, 9]"'
 ok "AC5 out-of-order TAD: doctor exits 1"           '[[ $rc -eq 1 ]]'
 
+
+# --- repo 17: F1 regression — the real board's own range spelling (tasks/PI-14's **TAD** line,
+# extracted from the file itself, not hand-typed) must expand every interior section, not just the
+# two endpoints. Reproduces the reviewer's live finding on this repo's own board. ---
+REAL_TAD_LINE=$(sed -n 's/^\*\*TAD\*\*: //p' ../tasks/PI-14-handoff-read-only-composer.md)
+ok "F1 fixture: PI-14's real **TAD** line was extracted from the file, not hand-typed" \
+  '[[ -n "$REAL_TAD_LINE" ]]'
+R17="$S/repo17"
+q git init -q -b main "$R17"
+mkdir -p "$R17/tech-analysis"
+cat > "$R17/tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md" <<'EOF'
+## 2. Architettura
+### 2.1 Stile
+Text.
+### 2.4 Decisioni
+Text.
+
+## 4. Struttura
+### 4.1 Disposizione
+Text.
+### 4.2 Formato
+Text.
+### 4.3 Ordinamento
+Text.
+### 4.4 Ritenzione
+Text.
+
+## 5. Contratto
+### 5.1 Convenzioni
+Text.
+### 5.2 Comandi
+Text.
+### 5.3 Costo
+Text.
+
+## 8. Script
+### 8.1 Struttura
+Text.
+
+## 11. Test
+### 11.1 Piramide
+Text.
+### 11.2 Ambiente
+Text.
+### 11.3 Porte
+Text.
+
+## 12. Task
+Text.
+EOF
+tad_task "$R17/tasks/PI-14-real-spelling.md" "$REAL_TAD_LINE"
+q git -C "$R17" add -A; q git -C "$R17" commit -qm board
+OUT=$(cd "$R17" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "F1 real-spelling citation, every ranged section present: silent" '! has "PI-14-real-spelling"'
+ok "F1 real-spelling citation: doctor exits 0"                        '[[ $rc -eq 0 ]]'
+
+# same repo, now delete two interior sections of the en-dash ranges (§4.2, §4.3 inside §4.1–§4.4) —
+# exactly the reviewer's own reproduction. The old endpoints-only read of a range never noticed they
+# were gone; the fix must expand the range and catch both.
+python3 - "$R17/tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md" <<'PYEOF'
+import sys
+p = sys.argv[1]
+text = open(p).read()
+for heading in ("### 4.2 Formato\nText.\n", "### 4.3 Ordinamento\nText.\n"):
+    assert heading in text, f"fixture setup drifted: {heading!r} not found"
+    text = text.replace(heading, "")
+open(p, "w").write(text)
+PYEOF
+OUT=$(cd "$R17" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "F1 fixed: a range's dropped interior sections (§4.2, §4.3) are now caught, not silently skipped" \
+  'has "cites tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md §4.2 — no such section" && has "cites tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md §4.3 — no such section"'
+ok "F1 fixed: only the two dropped sections warn, the rest of the same range stays silent" \
+  '[[ $(grep -c "^warn.*: cites " <<<"$OUT") -eq 2 ]]'
+
+# --- repo 18: F1 class coverage — every separator/shape the grammar promises, invented numbers ---
+R18="$S/repo18"
+q git init -q -b main "$R18"
+mkdir -p "$R18/tech-analysis"
+cat > "$R18/tech-analysis/PROJECT_TECH_ANALYSIS.md" <<'EOF'
+## 20. Hyphen range
+### 20.1 A
+Text.
+### 20.2 B
+Text.
+### 20.3 C
+Text.
+
+## 21. Em dash range
+### 21.1 A
+Text.
+### 21.2 B
+Text.
+
+## 22. To-word range
+### 22.1 A
+Text.
+### 22.2 B
+Text.
+### 22.3 C
+Text.
+
+## 23. Second section mark omitted
+### 23.1 A
+Text.
+### 23.2 B
+Text.
+### 23.3 C
+Text.
+
+## 24. Single element range
+### 24.1 A
+Text.
+
+## 25. Bare top-level range, interior missing
+Text.
+
+## 27. Bare top-level range, other end
+Text.
+
+## 30. Mixed list and range
+### 30.1 A
+Text.
+### 30.2 B
+Text.
+EOF
+tad_task "$R18/tasks/PI-9401-hyphen.md"          "PROJECT §20.1-§20.3"
+tad_task "$R18/tasks/PI-9402-emdash.md"          "PROJECT §21.1—§21.2"
+tad_task "$R18/tasks/PI-9403-to-word.md"         "PROJECT §22.1 to §22.3"
+tad_task "$R18/tasks/PI-9404-no-second-mark.md"  "PROJECT §23.1-23.3"
+tad_task "$R18/tasks/PI-9405-single-element.md"  "PROJECT §24.1–§24.1"
+tad_task "$R18/tasks/PI-9406-bare-top-missing.md" "PROJECT §25–§27"
+tad_task "$R18/tasks/PI-9407-different-depth.md" "PROJECT §28–§28.2"
+tad_task "$R18/tasks/PI-9408-descending.md"      "PROJECT §29.3–§29.1"
+tad_task "$R18/tasks/PI-9409-mixed-list-range.md" "PROJECT §30.1–§30.2, §31.4"
+tad_task "$R18/tasks/PI-9410-different-top.md"   "PROJECT §34.9–§35.2"
+q git -C "$R18" add -A; q git -C "$R18" commit -qm board
+OUT=$(cd "$R18" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "hyphen range, every section present: silent"            '! has "PI-9401"'
+ok "em dash range, every section present: silent"           '! has "PI-9402"'
+ok "\"to\"-word range, every section present: silent"       '! has "PI-9403"'
+ok "range with second § omitted, every section present: silent" '! has "PI-9404"'
+ok "single-element range (a-a), section present: silent"    '! has "PI-9405"'
+ok "bare top-level range, interior (§26) missing: exactly one warning naming §26" \
+  'has "warn  tasks/PI-9406-bare-top-missing.md: cites PROJECT §26 — no such section in tech-analysis/PROJECT_TECH_ANALYSIS.md"'
+ok "range whose ends sit at different depth is malformed, warned by its own text, not checked" \
+  "has \"warn  tasks/PI-9407-different-depth.md: cites PROJECT range '§28–§28.2' — malformed\""
+ok "descending range is malformed, warned by its own text, not checked"                        \
+  "has \"warn  tasks/PI-9408-descending.md: cites PROJECT range '§29.3–§29.1' — malformed\""
+ok "a list mixed with a range: the range half silent, the plain section (§31.4, missing) still warns" \
+  'has "warn  tasks/PI-9409-mixed-list-range.md: cites PROJECT §31.4 — no such section"'
+ok "range naming a different top-level section on each end is malformed"                       \
+  "has \"warn  tasks/PI-9410-different-top.md: cites PROJECT range '§34.9–§35.2' — malformed\""
+ok "malformed-range warnings never also report individual section numbers for that same range" \
+  '! has "cites PROJECT §28" && ! has "cites PROJECT §28.2" && ! has "cites PROJECT §29.3" && ! has "cites PROJECT §29.1" && ! has "cites PROJECT §34.9" && ! has "cites PROJECT §35.2"'
+ok "class-table repo: exactly 5 warnings (2 malformed ranges + 2 different-top/descending-shape malformed + 1 missing section from the mixed list), rest silent" \
+  '[[ $(grep -c "^warn.*: cites " <<<"$OUT") -eq 5 ]]'
+
+# --- repo 19: F2 class coverage — the qualifier word however a person plausibly writes it ---
+R19="$S/repo19"
+q git init -q -b main "$R19"
+mkdir -p "$R19/tech-analysis"
+cat > "$R19/tech-analysis/PROJECT_TECH_ANALYSIS.md" <<'EOF'
+## 51. Mixed case qualifier
+### 51.1 A
+Text.
+
+## 53. Extra whitespace qualifier
+### 53.1 A
+Text.
+
+## 54. Unrecognised qualifier, section happens to exist here
+### 54.1 A
+Text.
+EOF
+cat > "$R19/tech-analysis/WIDGETS_TECH_DELTA.md" <<'EOF'
+## Delta
+### 52.1 A
+Text.
+### 55.1 A
+Text.
+EOF
+tad_task "$R19/tasks/PI-9501-lowercase-delta.md"    "delta §55.1"          # F2's exact live repro: lowercase, section only in the delta
+tad_task "$R19/tasks/PI-9502-mixed-case-project.md" "Project §51.1"
+tad_task "$R19/tasks/PI-9503-colon-delta.md"        "DELTA: §52.1"
+tad_task "$R19/tasks/PI-9504-extra-whitespace.md"   "PROJECT    §53.1"
+tad_task "$R19/tasks/PI-9505-typo-qualifier.md"     "PROJET §54.1"          # section exists in the project TAD — must NOT silently resolve there
+q git -C "$R19" add -A; q git -C "$R19" commit -qm board
+OUT=$(cd "$R19" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "F2 fixed: lowercase 'delta', section only in the delta: silent (not checked against the project TAD)" \
+  '! has "PI-9501" && ! has "cites the project TAD §55.1"'
+ok "mixed-case 'Project' qualifier resolves: silent"        '! has "PI-9502"'
+ok "'DELTA:' with trailing colon resolves against the delta: silent" '! has "PI-9503"'
+ok "extra whitespace between qualifier and § resolves: silent"       '! has "PI-9504"'
+ok "unrecognised qualifier word never silently falls back to the project TAD, even when the section exists there" \
+  "has \"warn  tasks/PI-9505-typo-qualifier.md: cites §54.1 with an unrecognised qualifier 'PROJET' (expected PROJECT, DELTA, or a document path) — not resolved\""
+ok "F2 class-table repo: exactly one warning (the unrecognised qualifier), the four real spellings silent" \
+  '[[ $(grep -c "^warn.*: cites " <<<"$OUT") -eq 1 ]]'
+
+# --- mutation sanity, both directions, run across every PI-42 fixture above plus AC5's repo16 ---
+# Mirrors the reviewer's own manual check: patching _has_section to accept-anything or reject-
+# everything must each still turn some of the assertions above red, and AC5's out-of-order `err`
+# (which never calls _has_section) must keep firing, unaffected, under both.
+mutate_has_section(){ # mutate_has_section <return-value> <out-path> — writes a patched copy of $SCRIPT
+  python3 - "$SCRIPT" "$2" "$1" <<'PYEOF'
+import re, sys
+src, dst, retval = sys.argv[1], sys.argv[2], sys.argv[3]
+text = open(src).read()
+old = 'def _has_section(text, sec):\n    if "." in sec: return re.search(rf"^### {re.escape(sec)}\\b", text, re.M) is not None\n    return re.search(rf"^## {re.escape(sec)}\\.", text, re.M) is not None\n'
+new = f'def _has_section(text, sec):\n    return {retval}\n'
+mutated, n = re.subn(re.escape(old), lambda m: new, text)
+assert n == 1, "_has_section definition not found verbatim — mutation did not apply"
+open(dst, "w").write(mutated)
+PYEOF
+}
+MUT_TRUE=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-true.XXXXXX")
+MUT_FALSE=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-false.XXXXXX")
+mutate_has_section True  "$MUT_TRUE"
+mutate_has_section False "$MUT_FALSE"
+
+# accept-anything (_has_section always True): every "missing section" warning must disappear —
+# AC3 (repo15), the F1 dropped-interior-sections warning (repo17, post-deletion), the bare-top-level
+# and mixed-list "missing" warnings (repo18) all go red. Malformed-range and unrecognised-qualifier
+# warnings never call _has_section, so they must be unaffected; AC5 must still fire.
+OUT_15T=$(cd "$R15" && bash "$MUT_TRUE"); OUT_17T=$(cd "$R17" && bash "$MUT_TRUE")
+OUT_18T=$(cd "$R18" && bash "$MUT_TRUE"); OUT_19T=$(cd "$R19" && bash "$MUT_TRUE")
+OUT_16T=$(cd "$R16" && bash "$MUT_TRUE"); rc_16T=$?
+ok "mutation accept-anything: AC3's missing-section warning (repo15) goes red"        '! grep -q "cites PROJECT §6.2 — no such section" <<<"$OUT_15T"'
+ok "mutation accept-anything: F1's dropped-interior-section warnings (repo17) go red" '! grep -q "cites tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md §4.2 — no such section" <<<"$OUT_17T"'
+ok "mutation accept-anything: bare-top-level missing-interior warning (repo18, §26) goes red" '! grep -q "cites PROJECT §26 — no such section" <<<"$OUT_18T"'
+ok "mutation accept-anything: mixed-list missing-section warning (repo18, §31.4) goes red" '! grep -q "cites PROJECT §31.4 — no such section" <<<"$OUT_18T"'
+ok "mutation accept-anything: malformed-range warnings (repo18) unaffected, still fire"    'grep -q "range .§28–§28.2. — malformed" <<<"$OUT_18T" && grep -q "range .§29.3–§29.1. — malformed" <<<"$OUT_18T"'
+ok "mutation accept-anything: unrecognised-qualifier warning (repo19) unaffected, still fires" 'grep -q "unrecognised qualifier .PROJET." <<<"$OUT_19T"'
+ok "mutation accept-anything: AC5's top-level out-of-order error (repo16) is untouched, still fires" \
+  'grep -q "ERROR tech-analysis/PROJECT_TECH_ANALYSIS.md: top-level sections out of order: \[40, 9\]" <<<"$OUT_16T" && [[ $rc_16T -eq 1 ]]'
+
+# reject-everything (_has_section always False): every real citation to a section that genuinely
+# exists must now spuriously warn — the silent AC1/AC2 cases (repo15), the real-spelling silent case
+# (repo17, pre-deletion), every silent class-table case (repo18), and every silent qualifier spelling
+# (repo19) all go red. Malformed-range and unrecognised-qualifier warnings are unaffected; AC5 stays.
+OUT_15F=$(cd "$R15" && bash "$MUT_FALSE"); OUT_17_PRE=$(cd "$R17" && git -C "$R17" show HEAD:tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md > /dev/null; true)
+# repo17's tree was mutated (interior sections deleted) after its first run; rebuild a pristine copy for the reject-everything check of the *positive* (should-be-silent) case.
+R17B="$S/repo17b"; q git init -q -b main "$R17B"; mkdir -p "$R17B/tech-analysis"
+git -C "$R17" show HEAD:tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md > "$R17B/tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md"
+git -C "$R17" show HEAD:tasks/PI-14-real-spelling.md > /dev/null 2>&1 && mkdir -p "$R17B/tasks" && git -C "$R17" show HEAD:tasks/PI-14-real-spelling.md > "$R17B/tasks/PI-14-real-spelling.md"
+q git -C "$R17B" add -A; q git -C "$R17B" commit -qm board
+OUT_17BF=$(cd "$R17B" && bash "$MUT_FALSE")
+OUT_18F=$(cd "$R18" && bash "$MUT_FALSE"); OUT_19F=$(cd "$R19" && bash "$MUT_FALSE")
+OUT_16F=$(cd "$R16" && bash "$MUT_FALSE"); rc_16F=$?
+ok "mutation reject-everything: AC1/AC2 silent citations (repo15) go red"                   'grep -q "cites .*§5\.2\|cites DELTA §7\.6" <<<"$OUT_15F"'
+ok "mutation reject-everything: F1 real-spelling silent case (repo17, all sections present) goes red" 'grep -q "cites tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md §2\.1" <<<"$OUT_17BF"'
+ok "mutation reject-everything: class-table silent ranges (repo18: hyphen/em dash/to/no-second-mark/single-element) all go red" \
+  'grep -q "cites PROJECT §20\.1" <<<"$OUT_18F" && grep -q "cites PROJECT §21\.1" <<<"$OUT_18F" && grep -q "cites PROJECT §22\.1" <<<"$OUT_18F" && grep -q "cites PROJECT §23\.1" <<<"$OUT_18F" && grep -q "cites PROJECT §24\.1" <<<"$OUT_18F"'
+ok "mutation reject-everything: F2's four real qualifier spellings (repo19) all go red"     \
+  'grep -q "cites DELTA §55\.1" <<<"$OUT_19F" && grep -q "cites PROJECT §51\.1" <<<"$OUT_19F" && grep -q "cites DELTA §52\.1" <<<"$OUT_19F" && grep -q "cites PROJECT §53\.1" <<<"$OUT_19F"'
+ok "mutation reject-everything: malformed-range and unrecognised-qualifier warnings unaffected, unchanged text" \
+  'grep -q "range .§28–§28.2. — malformed" <<<"$OUT_18F" && grep -q "unrecognised qualifier" <<<"$(cd "$R19" && bash "$MUT_FALSE")"'
+ok "mutation reject-everything: AC5's top-level out-of-order error (repo16) is untouched, still fires" \
+  'grep -q "ERROR tech-analysis/PROJECT_TECH_ANALYSIS.md: top-level sections out of order: \[40, 9\]" <<<"$OUT_16F" && [[ $rc_16F -eq 1 ]]'
+rm -f "$MUT_TRUE" "$MUT_FALSE"
+
 exit $fail
