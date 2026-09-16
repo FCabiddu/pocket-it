@@ -48,6 +48,10 @@ the same unanchored assumption and fix them in the same shape if they do.
 - [x] AC5 — Given `fact` and `compose` on the same file, when they run, then they classify the two sections the
       same way `log` does (one definition of where the log starts, used by every reader and the writer — the
       same "one home for a term" rule PI-39 applied to the date anchor).
+- [x] AC6 (dalla review di PR #81, stesso enunciato di danno visto dal lato scrittura) — Given qualunque
+      argomento a `log` o a `fact`, di qualunque forma, when la scrittura avviene, then nessuna intestazione
+      è aggiunta o tolta e nessuna riga già presente è cancellata: ciò che una scrittura appende è un record
+      solo, quindi un marcatore può finire nel file unicamente a metà riga, come dato.
 
 ## Tests expected
 One test per criterion in `bin/handoff.test.sh`, each on a disposable file built inside the test, including the
