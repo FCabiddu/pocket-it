@@ -219,10 +219,12 @@ ok "PI-8 F2b — the fallback header (no prior '## Log' section) shows the live 
 rm -rf "$S8"
 # Structural guard: the fallback header line in the script itself must build the number from {logcap},
 # never spell it out — this is what actually failed before the fix (line hardcoded "ultime 40 righe").
+# (PI-40 moved the fallback out of `if not sep:` into `if not heading:`; the guard follows the assignment
+# itself, which is the thing that must interpolate.)
 ok "PI-8 F2 — the script's fallback header interpolates {logcap}, it does not hardcode 40" \
-   '! grep -nE "if not sep:.*ultime 40 righe\)" "$SCRIPT"'
+   '! grep -qE "^ *heading=f?\"## Log .*ultime 40 righe\)" "$SCRIPT"'
 ok "PI-8 F2 — and it does spell out the interpolation, so the guard above is not vacuous" \
-   'grep -nE "if not sep:.*\{logcap\} righe\)" "$SCRIPT" >/dev/null'
+   'grep -qE "^ *heading=f\"## Log .*\{logcap\} righe\)" "$SCRIPT"'
 
 # --- PI-9: a successful log/fact call says which file it wrote, so a missing 'cd' into the right
 # worktree is visible in the same output instead of surfacing later as an unexplained change elsewhere.
@@ -604,6 +606,257 @@ while read -r specname lo hi bad; do
   fi
 done <<<"$speclines"
 rm -rf "$S18"
+
+# --- PI-40: the writer must find its OWN headings, never a marker quoted inside free text.
+# Damage to prevent, stated as damage: no section heading and no fact may be deleted, or moved to
+# another section, by the act of writing a line. (The cause was `s.partition("## Log")` — a substring
+# match — so the first fact quoting the marker took the heading's place: the real heading was dropped,
+# it does not start with "- ", and every fact below the quote was rewritten into the log, then rotated.)
+# The class, not the one spelling observed in the wild: the marker backticked inside a command, inline
+# mid-sentence, first thing in the fact's text, spelled with the heading's own parenthetical, twice in
+# one line, and last thing on the line — plus, for `fact`, the mirror case of a log line quoting the
+# facts heading. Oracles are the anchored awk extractions this suite already uses, never the script.
+factlines40(){ awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /' "$1"; }
+loglines40(){ awk '/^## Log/{f=1;next} f && /^- /' "$1"; }
+countlines40(){ printf '%s' "$1" | grep -c '^- '; }
+headcount40(){ grep -c '^## Log' "$1"; }
+structure40(){ awk '{print} /^## Log/{exit}' "$1"; }   # the file down to (and including) the Log heading
+mkpoisoned40(){   # $1 = repo dir, $2 = the fact text that quotes a marker, $3.. = log lines, newest first
+  local d="$1" poison="$2"; shift 2
+  [[ "$#" -eq 0 ]] && set -- "2026-01-01 una riga di log che c'era già"
+  mkdir -p "$d/docs"
+  { echo "# Session handoff"
+    echo
+    echo "## Fatti che non scadono"
+    echo "<!-- max 100 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->"
+    echo "- primo fatto, sopra la citazione"
+    printf -- '- %s\n' "$poison"
+    echo "- ultimo fatto, SOTTO la citazione"
+    echo
+    echo "## Log (più recente in alto, ultime 40 righe)"
+    printf -- '- %s\n' "$@"
+  } > "$d/docs/SESSION_HANDOFF.md"
+}
+POISONS40=(
+  $'regola: controlla con `awk \'/^## Log/{f=1;next} /^## /{f=0}\'` prima di scrivere'
+  'la sezione ## Log sta in fondo al file'
+  '## Log è il marcatore che ogni lettore cerca'
+  'il file finisce con ## Log (più recente in alto, ultime 40 righe)'
+  'due marcatori in una riga: ## Fatti che non scadono e ## Log'
+  'vedi ## Log'
+)
+
+# AC1 — one disposable repo per member of the class: after a `log`, the heading is still there exactly
+# once, the new line is under it, and no fact moved section.
+for idx in $(seq 0 $((${#POISONS40[@]} - 1))); do
+  poison40="${POISONS40[$idx]}"
+  S20=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test20-$idx.XXXXXX")
+  git init -q "$S20" >/dev/null
+  mkpoisoned40 "$S20" "$poison40"
+  F20="$S20/docs/SESSION_HANDOFF.md"
+  beforefacts20=$(factlines40 "$F20")
+  (cd "$S20" && bash "$SCRIPT" log "PI-40 nuova riga di log" >/dev/null 2>&1)
+  afterfacts20=$(factlines40 "$F20")
+  newest20=$(loglines40 "$F20" | head -1)
+  ok "PI-40 AC1 [$idx] — the real '## Log' heading is still present exactly once" \
+     '[[ "$(headcount40 "$F20")" -eq 1 ]]'
+  ok "PI-40 AC1 [$idx] — every fact is byte-identical, the one quoting the marker included" \
+     '[[ "$afterfacts20" == "$beforefacts20" ]]'
+  ok "PI-40 AC1 [$idx] — the fact standing AFTER the quote is still a fact" \
+     'grep -qF "ultimo fatto, SOTTO la citazione" <<<"$afterfacts20"'
+  ok "PI-40 AC1 [$idx] — the new line is the top line of the Log section" \
+     '[[ "$newest20" == *"PI-40 nuova riga di log" ]]'
+  ok "PI-40 AC1 [$idx] — the pre-existing log line is still in the Log section (2 log lines)" \
+     '[[ "$(countlines40 "$(loglines40 "$F20")")" -eq 2 ]]'
+  ok "PI-40 AC1 [$idx] — nothing was rotated: no archive file exists" \
+     '[[ ! -f "$S20/docs/SESSION_HANDOFF_ARCHIVE.md" ]]'
+  rm -rf "$S20"
+done
+
+# AC2 — N writes in a row on the same poisoned file: structure byte-stable, facts never shrink, nothing
+# rotates. Checked after EVERY write, not only at the end: the old defect repeated on each run.
+S21=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test21.XXXXXX")
+git init -q "$S21" >/dev/null
+mkpoisoned40 "$S21" "${POISONS40[0]}"
+F21="$S21/docs/SESSION_HANDOFF.md"
+minfacts21=$(countlines40 "$(factlines40 "$F21")"); headok21=1; factok21=1
+for n in 1 2 3 4 5; do
+  (cd "$S21" && bash "$SCRIPT" log "evento numero $n" >/dev/null 2>&1)
+  [[ "$(headcount40 "$F21")" -eq 1 ]] || headok21=0
+  [[ "$(countlines40 "$(factlines40 "$F21")")" -ge "$minfacts21" ]] || factok21=0
+  [[ "$n" -eq 4 ]] && struct21=$(structure40 "$F21")
+done
+ok "PI-40 AC2 — the heading count stays 1 after each of 5 consecutive writes" '[[ "$headok21" -eq 1 ]]'
+ok "PI-40 AC2 — the fact count never decreases across the 5 writes" '[[ "$factok21" -eq 1 ]]'
+ok "PI-40 AC2 — the file down to the Log heading is byte-identical between two writes" \
+   '[[ "$(structure40 "$F21")" == "$struct21" ]]'
+ok "PI-40 AC2 — no fact ever reached the archive (no archive file at all)" \
+   '[[ ! -f "$S21/docs/SESSION_HANDOFF_ARCHIVE.md" ]]'
+rm -rf "$S21"
+
+# AC3 — a file with NO Log heading at all: the section is created once, at the end, and the dated line
+# that was already there (a fact that reads like a log line) is not re-parented into it.
+S22=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test22.XXXXXX")
+git init -q "$S22" >/dev/null
+mkdir -p "$S22/docs"
+F22="$S22/docs/SESSION_HANDOFF.md"
+cat > "$F22" <<'EOF'
+# Session handoff
+
+## Fatti che non scadono
+- un fatto che cita ## Log dentro il proprio testo
+- 2026-01-01 un fatto che sembra una riga di log ma è un fatto
+EOF
+beforefacts22=$(factlines40 "$F22")
+(cd "$S22" && bash "$SCRIPT" log "prima riga di log in assoluto" >/dev/null 2>&1)
+lastheading22=$(grep '^## ' "$F22" | tail -1)
+ok "PI-40 AC3 — a Log heading is created, exactly once" '[[ "$(headcount40 "$F22")" -eq 1 ]]'
+ok "PI-40 AC3 — it is created at the END (it is the last heading of the file)" \
+   '[[ "$lastheading22" == "## Log"* ]]'
+ok "PI-40 AC3 — both pre-existing facts are untouched, the dated one included" \
+   '[[ "$(factlines40 "$F22")" == "$beforefacts22" ]]'
+ok "PI-40 AC3 — the Log section holds exactly one line: the new one, nothing re-parented" \
+   '[[ "$(countlines40 "$(loglines40 "$F22")")" -eq 1 ]] && [[ "$(loglines40 "$F22")" == *"prima riga di log in assoluto" ]]'
+rm -rf "$S22"
+
+# AC4 — rotation under AC1's conditions: only genuine log lines rotate, PI-8's invariant holds (nothing
+# lost, oldest at the top). 45 log lines + a poisoned facts section: one write evicts 6 at once.
+S23=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test23.XXXXXX")
+git init -q "$S23" >/dev/null
+entries23=()
+for i in $(seq 45 -1 1); do entries23+=("2026-01-01 entry $i"); done
+mkpoisoned40 "$S23" "${POISONS40[3]}" "${entries23[@]}"
+F23="$S23/docs/SESSION_HANDOFF.md"; ARCHIVE23="$S23/docs/SESSION_HANDOFF_ARCHIVE.md"
+beforefacts23=$(factlines40 "$F23")
+(cd "$S23" && bash "$SCRIPT" log "entry 46" >/dev/null 2>&1)
+archlines23=$(awk '/^- /' "$ARCHIVE23")
+ok "PI-40 AC4 — exactly 6 lines rotated (45 + 1 - 40)" '[[ "$(countlines40 "$archlines23")" -eq 6 ]]'
+ok "PI-40 AC4 — every archived line is a genuine log line ('entry N'), none is anything else" \
+   '[[ "$(printf "%s\n" "$archlines23" | grep -c "^- 2026-01-01 entry [0-9]*$")" -eq 6 ]]'
+ok "PI-40 AC4 — no fact reached the archive" \
+   '! grep -qF "ultimo fatto, SOTTO la citazione" "$ARCHIVE23" && ! grep -qF "il file finisce con" "$ARCHIVE23"'
+ok "PI-40 AC4 — sibling of the absence above: those facts ARE still in the handoff file" \
+   'grep -qF "ultimo fatto, SOTTO la citazione" "$F23" && grep -qF "il file finisce con" "$F23"'
+ok "PI-40 AC4 — order oldest-at-top survives (entry 1 first, entry 6 last)" \
+   '[[ "$(printf "%s\n" "$archlines23" | head -1)" == *"entry 1" ]] && [[ "$(printf "%s\n" "$archlines23" | tail -1)" == *"entry 6" ]]'
+ok "PI-40 AC4 — the facts section is byte-identical after the rotating write" \
+   '[[ "$(factlines40 "$F23")" == "$beforefacts23" ]]'
+rm -rf "$S23"
+
+# AC5 — one definition of where each section starts, used by the composer (facts/recent) and by both
+# writers. Same poisoned file, read by the composer and written by `fact`.
+S24=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test24.XXXXXX")
+git init -q "$S24" >/dev/null
+mkpoisoned40 "$S24" "${POISONS40[0]}"
+F24="$S24/docs/SESSION_HANDOFF.md"
+awkfacts24=$(factlines40 "$F24"); awklog24=$(loglines40 "$F24")
+composed24=$(cd "$S24" && bash "$SCRIPT" facts)
+recent24=$(cd "$S24" && bash "$SCRIPT" recent --all)
+ok "PI-40 AC5 — the composer's facts equal the anchored awk extraction, quote included" \
+   '[[ "$composed24" == "$awkfacts24" ]]'
+ok "PI-40 AC5 — the composer's log equals the anchored awk extraction (the quote is not a log line)" \
+   '[[ "$recent24" == "$awklog24" ]]'
+(cd "$S24" && bash "$SCRIPT" fact "un fatto aggiunto dopo la citazione" >/dev/null 2>&1)
+ok "PI-40 AC5 — after a fact write, the facts are the old ones plus the new one, in order" \
+   '[[ "$(factlines40 "$F24")" == "$(printf "%s\n%s" "$awkfacts24" "- un fatto aggiunto dopo la citazione")" ]]'
+ok "PI-40 AC5 — after a fact write, the Log section is byte-identical" '[[ "$(loglines40 "$F24")" == "$awklog24" ]]'
+ok "PI-40 AC5 — after a fact write, each heading still appears exactly once" \
+   '[[ "$(headcount40 "$F24")" -eq 1 ]] && [[ "$(grep -c "^## Fatti che non scadono" "$F24")" -eq 1 ]]'
+rm -rf "$S24"
+
+# AC5, mirror case: a LOG line quoting the FACTS heading, in a file that has no facts heading of its own
+# — the quote must not become the place where the new fact is written, or the fact lands inside the Log
+# section and every reader files it as a log line.
+S25=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test25.XXXXXX")
+git init -q "$S25" >/dev/null
+mkdir -p "$S25/docs"
+F25="$S25/docs/SESSION_HANDOFF.md"
+cat > "$F25" <<'EOF'
+# Session handoff
+
+## Log (più recente in alto, ultime 40 righe)
+- 2026-01-01 i fatti stanno sotto ## Fatti che non scadono
+- 2026-01-01 una seconda riga di log
+EOF
+awklog25=$(loglines40 "$F25")
+(cd "$S25" && bash "$SCRIPT" fact "il fatto nuovo" >/dev/null 2>&1)
+facts25=$(cd "$S25" && bash "$SCRIPT" facts)
+recent25=$(cd "$S25" && bash "$SCRIPT" recent --all)
+ok "PI-40 AC5 mirror — the new fact is readable as a fact (the heading was created for it)" \
+   '[[ "$facts25" == "- il fatto nuovo" ]]'
+ok "PI-40 AC5 mirror — the two log lines are still log lines, byte-identical, and the fact is not one" \
+   '[[ "$recent25" == "$awklog25" ]]'
+rm -rf "$S25"
+
+# AC1/AC2, writer side: the 10 characters str.splitlines() breaks on but awk (RS="\n") does not. A fact
+# or a log line may legitimately hold any of them as DATA; reading the file with universal-newline
+# translation on and writing it back rewrote them, which cut the tail off the line that held one — the
+# same damage as the heading bug, reached by another road. Finding 4 fixed this for the reader only.
+for sepname in CRLF CR VT FF FS GS RS NEL LS PS; do
+  S26=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test26-$sepname.XXXXXX")
+  git init -q "$S26" >/dev/null
+  mkdir -p "$S26/docs"
+  python3 - "$S26/docs/SESSION_HANDOFF.md" "$sepname" <<'PY'
+import sys
+path, name = sys.argv[1], sys.argv[2]
+SEP = {
+    "CRLF": "\r\n", "CR": "\r", "VT": "\x0b", "FF": "\x0c",
+    "FS": "\x1c", "GS": "\x1d", "RS": "\x1e",
+    "NEL": "\x85", "LS": " ", "PS": " ",
+}[name]
+content = ("# Session handoff\n\n"
+           "## Fatti che non scadono\n"
+           f"- fact a{SEP}b\n\n"
+           "## Log (più recente in alto, ultime 40 righe)\n"
+           f"- 2026-09-12 log a{SEP}b\n")
+with open(path, "w", encoding="utf-8", newline="") as f:
+    f.write(content)
+PY
+  F26="$S26/docs/SESSION_HANDOFF.md"
+  beforefacts26=$(factlines40 "$F26"); beforelog26=$(loglines40 "$F26")
+  (cd "$S26" && bash "$SCRIPT" log "una riga nuova" >/dev/null 2>&1)
+  ok "PI-40 writer [$sepname] — the fact holding the separator as data survives a log write, byte for byte" \
+     '[[ "$(factlines40 "$F26")" == "$beforefacts26" ]]'
+  ok "PI-40 writer [$sepname] — the pre-existing log line holding it survives too" \
+     '[[ "$(loglines40 "$F26" | tail -1)" == "$beforelog26" ]]'
+  rm -rf "$S26"
+done
+
+# PI-40 — the cap-comment normalisation is a write over free text too: anchored to the start of the
+# line, so a fact quoting "max 30 righe:" is data and is not rewritten by an unrelated log call.
+S27=$(mktemp -d "${TMPDIR:-/tmp}/handoff-test27.XXXXXX")
+git init -q "$S27" >/dev/null
+mkdir -p "$S27/docs"
+F27="$S27/docs/SESSION_HANDOFF.md"
+cat > "$F27" <<'EOF'
+# Session handoff
+
+## Fatti che non scadono
+<!-- max 30 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->
+- il commento diceva "max 30 righe:" prima che il cap salisse
+
+## Log (più recente in alto, ultime 40 righe)
+EOF
+(cd "$S27" && bash "$SCRIPT" log "un evento qualsiasi" >/dev/null 2>&1)
+ok "PI-40 — the fact quoting the cap comment is left exactly as written" \
+   'grep -qF -- "- il commento diceva \"max 30 righe:\" prima che il cap salisse" "$F27"'
+ok "PI-40 — sibling: the real comment line IS normalised by the same write" \
+   'grep -qF "<!-- max $CAP righe:" "$F27"'
+rm -rf "$S27"
+
+# PI-40 structural — one home for the term: no substring split on a section marker is left anywhere in
+# the script, there is exactly one definition of where a section begins, and every python program in the
+# file is fed through the shared helpers (py_run) instead of a bare `python3 -`.
+ok "PI-40 AC5 — no marker is located by substring partition any more (code lines, not the comments about it)" \
+   '! grep -qE "^[^#]*\.partition\(\"#" "$SCRIPT"'
+ok "PI-40 AC5 — sibling: that same pattern does match the pre-PI-40 form, so the guard is not vacuous" \
+   'printf "%s\n" "head,sep,tail=s.partition(\"## Log\")" | grep -qE "^[^#]*\.partition\(\"#"'
+ok "PI-40 AC5 — exactly one definition of where a section begins" \
+   '[[ "$(grep -c "^def split_section(" "$SCRIPT")" -eq 1 ]]'
+ok "PI-40 AC5 — no python program bypasses the shared helpers" \
+   '[[ "$(grep -cE "^ *python3 - " "$SCRIPT")" -eq 0 ]]'
+ok "PI-40 AC5 — sibling: that same pattern does match a bare invocation, so the guard is not vacuous" \
+   'printf "%s\n" "    python3 - \"\$F\" <<PY" | grep -qE "^ *python3 - "'
 
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"

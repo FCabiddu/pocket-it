@@ -20,8 +20,74 @@ LOGCAP=40
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "handoff: not a git repository" >&2; exit 1; }
 F="$ROOT/docs/SESSION_HANDOFF.md"; ARCHIVE="$ROOT/docs/SESSION_HANDOFF_ARCHIVE.md"
 
+# --- PI-40: ONE definition of where a section begins, shared by the writer (`log`, `fact`) and by the
+# read-only composer (`facts|show|recent|grep`). Threat model: this file is free text written by agents
+# and it legitimately quotes its own markers — a fact explaining how to read the log carries `## Log`
+# inside its text. Such a quote is DATA. A heading is "## " at the START OF A LINE, nowhere else.
+# What it protects against: a heading deleted, or a fact reclassified into another section, by the mere
+# act of writing a line. `log` used to split the file with s.partition("## Log") — a substring match — so
+# the first fact quoting the marker took the heading's place: the real heading was then dropped (it does
+# not start with "- "), every fact below the quote was rewritten as a log line, and the facts cap then
+# trimmed real facts to make room for progress lines. What it deliberately leaves out: a heading whose
+# own text is wrong or duplicated (two real "## Log" headings) — the first one wins, as before; and any
+# reader living outside this script.
+PY_SECTIONS=$(cat <<'PY'
+import re
+
+def split_section(text, name):
+    r"""Split TEXT on the first "## {name}..." HEADING; return (before, heading, body, after).
+
+      before  -- everything above the heading, verbatim
+      heading -- the heading line itself, without its newline ("" when the file has no such heading)
+      body    -- everything between that heading and the next "## " heading (or EOF)
+      after   -- from that next heading to EOF, verbatim ("" when there is none)
+
+    A heading is matched with re.M, where only "\n" starts a line (Python's re, like awk's RS="\n",
+    never treats \r \v \f \x1c-\x1e U+0085 U+2028 U+2029 as line boundaries) -- so "## Log" occurring
+    inside a line's text is data and is left in `before`/`body` untouched.
+    """
+    m = re.search(r'^## ' + re.escape(name) + r'[^\n]*', text, re.M)
+    if not m:
+        return text, "", "", ""
+    before, heading, rest = text[:m.start()], m.group(0), text[m.end():]
+    if rest.startswith("\n"):
+        rest = rest[1:]
+    nxt = re.search(r'^## ', rest, re.M)
+    if not nxt:
+        return before, heading, rest, ""
+    return before, heading, rest[:nxt.start()], rest[nxt.start():]
+
+def section_body(text, name):
+    # body of the first "## {name}..." section, up to the next "## " heading or EOF -- same extraction
+    # the pre-PI-14 `awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /'` performed, so AC1 stays
+    # byte-identical.
+    return split_section(text, name)[2]
+
+def dash_lines(body):
+    # split ONLY on "\n" -- never str.splitlines(), which also breaks on \v \f \x1c-\x1e U+0085 U+2028
+    # U+2029 and a lone \r, characters awk's default RS="\n" treats as ordinary data. Splitting on those
+    # truncates a line silently: the tail after the character doesn't start with "- " and is dropped.
+    return [l for l in body.split('\n') if l.startswith("- ")]
+
+def read_text(path):
+    # newline='' disables universal-newline translation: CR, CRLF and every other line-ish byte stay as
+    # literal data in the string, exactly like awk (RS="\n") sees them -- only a bare "\n" ends a record.
+    # The writer needs this as much as the reader: reading with translation ON and writing the result
+    # back rewrites every CR in the file, which silently cuts the tail off the line that held it.
+    with open(path, encoding="utf-8", newline='') as f:
+        return f.read()
+
+def write_text(path, text):
+    with open(path, "w", encoding="utf-8", newline='') as f:
+        f.write(text)
+PY
+)
+# Every python program below is fed to `python3 -` as: the shared helpers, then the program itself.
+# sys.argv is unchanged by this (argv[0] is "-", argv[1:] are the arguments passed here).
+py_run() { { printf '%s\n' "$PY_SECTIONS"; cat; } | python3 - "$@"; }
+
 compose() {
-  python3 - "$ROOT" "$CAP" "$LOGCAP" "$cmd" "$@" <<'PY'
+  py_run "$ROOT" "$CAP" "$LOGCAP" "$cmd" "$@" <<'PY'
 import sys, os, re, glob, hashlib
 
 root, CAP, LOGCAP, cmd = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), sys.argv[4]
@@ -33,33 +99,16 @@ FRAG_DIR = os.path.join(root, "docs", "handoff")
 ARCHIVE_DIR = os.path.join(FRAG_DIR, "archive")
 
 def read(path):
-    # newline='' disables universal-newline translation: CR, CRLF and every other line-ish byte stay as
-    # literal data in the string, exactly like awk (RS="\n") sees them — only a bare "\n" ends a record.
+    # section_body / dash_lines / read_text come from the shared block above (PI-40): one definition of
+    # where a section begins, used by this read-only composer and by the writer alike.
     try:
-        with open(path, encoding="utf-8", newline='') as f:
-            return f.read()
+        return read_text(path)
     except (FileNotFoundError, IsADirectoryError):
         return None
 
 def usage_exit():
     print("usage: handoff.sh facts|show|recent N|recent --all|grep REGEX", file=sys.stderr)
     sys.exit(2)
-
-def section_body(text, name):
-    # body of the first "## {name}..." section, up to the next "## " heading or EOF — same extraction
-    # the pre-PI-14 `awk '/^## Fatti/{f=1;next} /^## /{f=0} f && /^- /'` performed, so AC1 stays byte-identical.
-    m = re.search(r'^## ' + re.escape(name) + r'.*?\n', text, re.M)
-    if not m:
-        return ""
-    start = m.end()
-    nxt = re.search(r'^## ', text[start:], re.M)
-    return text[start: start + nxt.start()] if nxt else text[start:]
-
-def dash_lines(body):
-    # split ONLY on "\n" — never str.splitlines(), which also breaks on \v \f \x1c-\x1e U+0085 U+2028
-    # U+2029 and a lone \r, characters awk's default RS="\n" treats as ordinary data. Splitting on those
-    # truncates a line silently: the tail after the character doesn't start with "- " and is dropped.
-    return [l for l in body.split('\n') if l.startswith("- ")]
 
 NEG = ""  # frozen sources sort before every fragment timestamp string (ADR-3: they are older than everything)
 
@@ -268,7 +317,9 @@ EOF
 fi
 # Normalise a stale cap comment from an older version of this script (e.g. "max 30 righe")
 # to the current CAP, on every run — no project is left with a comment that contradicts it.
-sed -i.bak -E "s/max [0-9]+ righe:/max $CAP righe:/" "$F" && rm -f "$F.bak"
+# Anchored at the start of the line (PI-40, same reason as the heading anchor): the comment is a line of
+# its own, so a fact or a log line quoting "max 30 righe:" is data and is left exactly as written.
+sed -i.bak -E "s/^<!-- max [0-9]+ righe:/<!-- max $CAP righe:/" "$F" && rm -f "$F.bak"
 case "$cmd" in
   log)
     # PI-39: a caller can pass a message that already starts with an ISO date (its own or someone
@@ -285,25 +336,32 @@ case "$cmd" in
       msg=""
     fi
     line="- $(date +%Y-%m-%d)${msg:+ $msg}"
-    python3 - "$F" "$ARCHIVE" "$LOGCAP" "$line" <<'PY'
+    py_run "$F" "$ARCHIVE" "$LOGCAP" "$line" <<'PY'
 import sys,os
 p,archive,logcap,line=sys.argv[1],sys.argv[2],int(sys.argv[3]),sys.argv[4]
-s=open(p).read()
-head,sep,tail=s.partition("## Log")
-if not sep: s=s.rstrip()+f"\n\n## Log (più recente in alto, ultime {logcap} righe)\n"; head,sep,tail=s.partition("## Log")
-title,_,body=tail.partition("\n")
-lines=[l for l in body.splitlines() if l.startswith("- ")]
-lines=[line]+lines
+s=read_text(p)
+# PI-40: the Log section is located by its HEADING (shared split_section: "## " at the start of a line),
+# never by the substring "## Log" wherever it appears — a fact quoting the marker is data, stays in
+# `before` byte for byte, and cannot take the heading's place. Whatever follows the section (`after`) is
+# carried over unchanged too, so no other section is deleted by writing a log line either.
+before,heading,body,after=split_section(s,"Log")
+if not heading:
+    # No Log section at all (a fresh or hand-edited file): create it ONCE, at the END of the file, so
+    # nothing already written above — dated lines included — is re-parented into it.
+    before=s.rstrip()+"\n\n"
+    heading=f"## Log (più recente in alto, ultime {logcap} righe)"
+    body=after=""
+lines=[line]+dash_lines(body)
 overflow=lines[logcap:]
 lines=lines[:logcap]
-open(p,"w").write(head+sep+title+"\n"+"\n".join(lines)+"\n")
+write_text(p,before+heading+"\n"+"\n".join(lines)+"\n"+("\n"+after if after else ""))
 if overflow:
     if not os.path.exists(archive):
-        with open(archive,"w") as f:
+        with open(archive,"w",encoding="utf-8",newline='') as f:
             f.write("# Session handoff — archive\n\nRighe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime "
                      f"{logcap}. Nessuna riga viene persa: questo file si accoda, non si sovrascrive mai. Ordine: la più "
                      "vecchia in alto, la più recente in fondo — vale dentro un batch e tra un batch e il successivo, un solo ordine.\n\n## Log archiviato\n")
-    with open(archive,"a") as f:
+    with open(archive,"a",encoding="utf-8",newline='') as f:
         # overflow is newest-first (index 0 = just pushed past the cap); reverse it so this batch is
         # written oldest-first. Batches are always appended in the chronological order they rotate,
         # so the whole archive file ends up oldest-at-top, newest-at-bottom, top to bottom, no exceptions.
@@ -312,12 +370,20 @@ if overflow:
 PY
     echo "handoff: logged — $F";;
   fact)
-    python3 - "$F" "$CAP" "$*" <<'PY'
+    py_run "$F" "$CAP" "$*" <<'PY'
 import sys
-p,CAP,text=sys.argv[1],int(sys.argv[2]),sys.argv[3]; s=open(p).read()
-head,sep,tail=s.partition("## Fatti che non scadono")
-body,sep2,rest=tail.partition("\n## ")
-lines=[l for l in body.splitlines() if l.startswith("- ")]
+p,CAP,text=sys.argv[1],int(sys.argv[2]),sys.argv[3]; s=read_text(p)
+# PI-40: same single definition as `log` and as the composer — the facts section is found by its
+# heading at the start of a line, so a LOG line quoting "## Fatti che non scadono" is data and no log
+# line is ever reclassified as a fact.
+before,heading,body,after=split_section(s,"Fatti che non scadono")
+if not heading:
+    # No facts section at all: create it ONCE, at the end — before PI-40 the fact was written under no
+    # heading, where every reader (anchored on the heading) is blind to it.
+    before=s.rstrip()+"\n\n"
+    heading="## Fatti che non scadono"
+    body=after=""
+lines=dash_lines(body)
 line="- "+text
 if line in lines:
     print(f"handoff: fact already present — {p}"); sys.exit(0)
@@ -326,7 +392,7 @@ if len(lines)>=CAP:
     sys.exit(3)
 lines.append(line)
 comment=f"\n<!-- max {CAP} righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->\n"
-open(p,"w").write(head+sep+comment+"\n".join(lines)+"\n\n"+("## "+rest if sep2 else ""))
+write_text(p,before+heading+comment+"\n".join(lines)+"\n\n"+after)
 if len(lines)==CAP:
     print(f"handoff: facts {CAP}/{CAP} — cap reached, next fact will be refused — {p}", file=sys.stderr)
 else:
