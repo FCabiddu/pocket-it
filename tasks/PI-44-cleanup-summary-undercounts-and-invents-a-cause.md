@@ -1,6 +1,6 @@
 # PI-44 — cleanup-merged.sh sotto-conta i "kept" e dichiara una causa che non ha accertato
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: pipeline-improvements
 **Story**: pipeline-improvements
