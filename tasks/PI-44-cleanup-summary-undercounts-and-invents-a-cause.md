@@ -1,6 +1,6 @@
 # PI-44 — cleanup-merged.sh sotto-conta i "kept" e dichiara una causa che non ha accertato
 
-**Status**: Todo
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: pipeline-improvements
 **Story**: pipeline-improvements
@@ -62,6 +62,15 @@ later is covered without editing the test. Plus a mutation: reintroducing the un
 counter must turn the suite red. Integration/E2E: not needed.
 
 ## Notes
-`bin/cleanup-merged.sh`: counter declared line ~218, `keep()` ~219, local-branch failure ~223,
-remote-branch failure ~262 (inside `reap_remote_branches`, whose source list is
-`g for-each-ref … refs/remotes/origin`), summary ~337-338.
+The invariant, not a list of addresses: **every path that leaves a branch or a worktree in place
+goes through `keep()`** — the one function that both announces it and counts it. A path that keeps
+something while printing its own message, or while printing nothing at all, is the defect,
+wherever it lives. Silence is a form of it: the PI-44 review found a fifth site
+(`bin/cleanup-merged.sh`, the "prunable" branch of the main loop, worktree directory missing from
+disk) that keeps a branch without printing anything, which the first fix never reached because the
+Notes here enumerated four call sites instead of stating this rule.
+
+Starting points only, not the boundary of the work: counter declared line ~218, `keep()` ~219,
+local-branch failure ~223, remote-branch failure ~262 (inside `reap_remote_branches`, whose source
+list is `g for-each-ref … refs/remotes/origin`), `locked_entry()`, the prunable branch of the main
+loop, summary ~337-338.
