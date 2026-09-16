@@ -3,7 +3,6 @@
 Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (si calcola con `status.sh`): qui stanno i fatti che non scadono e il log degli eventi.
 
 ## Fatti che non scadono
-<!-- max 100 righe: invarianti, gotcha, decisioni e perché. Chi aggiunge una riga toglie quella che non vale più. -->
 - bin/worktree.sh: mai 'git worktree add --track -B <branch>' su un branch locale esistente — resetta il branch su origin e perde i commit non pushati (WIP di un agente killato). Preferire il branch locale se refs/heads/<branch> esiste.
 - guard.sh: il blocco push-su-main non copre 'git push > file' (il target della redirezione conta come posizionale), 'git -c k=v push' e 'env X=1 git push' — fail-open noti, da chiudere in un prossimo task sul hook.
 - next-wave.sh (pre-#24): the id regex ^#\s*([A-Za-z]+-[\w.]+) truncated any id with a second embedded hyphen (T-BUG-1 -> tid T-BUG); same-prefix ids collided in the in-memory dict and the later one silently overwrote the earlier — no exception, no warning, task just vanished from the board. Fixed in #24 alongside the mixed-id sort-key TypeError; reproduced independently in review (T-BUG-1 + T-BUG-10 -> '1 total' instead of 2).
@@ -55,6 +54,8 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - handoff.sh: una scrittura appende UN record — one_line() collassa gli a capo del testo del chiamante prima di ogni altra regola, altrimenti l'argomento stesso inietta un'intestazione e i lettori si fermano lì
 - Un fix di review va eseguito anche sulle forme che la regola VICINA protegge, non solo su quelle del finding: la mia correzione PI-40 (collasso degli a capo dopo lo strip data PI-39) chiudeva il finding e riapriva PI-39 — 'log $'2026-01-01\nfoo'' finiva come '- <oggi> 2026-01-01 foo', perche lo strip pretende uno spazio dopo la data e un a capo non lo e. Ordine giusto: normalizzare il testo del chiamante prima di ogni altra regola.
 - Risolvere un conflitto su docs/SESSION_HANDOFF*.md e poi scriverci ancora prima del merge riapre il conflitto: chi risolve non scrive più su quei file, e la riga di log del merge la scrive chi merge, DOPO il merge.
+- verify.sh exit codes (PI-41): 0 green, 1 the branch's own red (an unknown attribution counts as own), 2 could not run, 3 every failing check already fails at the tip of origin/{base} — printed as 'verify: RED — pre-existing on base (cause: base-moved)'. 1 is the worse of the two reds, so a mixed run exits 1. Only checks that FAILED are re-run, once each, in a second throwaway worktree under .claude/worktrees/verify-base-*, swept by the same traps; a green run creates nothing. Attribution is per CHECK, never per assertion: a check red on both sides is reported pre-existing even if the branch added a failure of its own to it — reviewer.md says to verify that area by hand when the diff touches it.
+- A grep filter that excludes paths by ABSOLUTE path is vacuous when a suite runs from an agent worktree: the worktree's own path contains /.claude/worktrees/, so 'grep -rn … $REPO_ROOT | grep -v /.claude/worktrees/' drops every file in the repo and the assertion passes whatever the files say (measured in PI-41: the guard stayed green with the defect reinstated in CLAUDE.md). Match repo-relative paths: cd $REPO_ROOT && grep -rn … . | grep -vE '^\./(tasks|docs/reports|\.claude/worktrees)/'.
 
 ## Log (più recente in alto, ultime 40 righe)
 - 2026-09-16 PI-42 PR #82 merged — doctor.sh verifica le sezioni che la board cita davvero, intervalli e qualificatori inclusi
@@ -64,6 +65,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-16 PI-40 PR #81 fix ripresa — nessun argomento a log o fact può scrivere un'intestazione: collasso a un record prima dello strip data, fixture avvelenate generate dalle scritture vere, 238 asserzioni
 - 2026-09-16 PI-40 PR draft — handoff.sh trova le sezioni dalla loro intestazione a inizio riga, non da un marcatore citato dentro un fatto — 42 test nuovi
 - 2026-09-16 PI-41 PR #83 needs work — a branch's own red attributed to the base — cause: first-round
+- 2026-09-16 PI-41 PR #83 draft — verify.sh attributes a red check to the branch or to the base — 69 tests
 - 2026-09-16 PI-42 PR #82 needs work — en-dash range citations checked only endpoints — cause: first-round
 - 2026-09-16 PI-40 PR #81 needs work — writer can still inject a heading from its own argument — cause: first-round
 - 2026-09-16 PI-42 PR #82 draft — doctor derives TAD subsection checks from citations — 15 tests
@@ -96,4 +98,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-14 PI-35 PR #66 needs work (delta 2) — cause e needs work non ancorati — cause: example-not-class
 - 2026-09-14 PI-35 round 2 fix pushed — anchored mark/BUDGET/STALL/needs-work, exit-2 contract, no duplicate retro, initial mark above #65 — 57 tests green
 - 2026-09-13 PI-35 PR #66 needs work — il segno si riconosce anche in prosa — cause: first-round
-- 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests

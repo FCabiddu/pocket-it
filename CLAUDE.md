@@ -51,7 +51,7 @@ tools: [Read, Write, ...]
 | `implementation-planner.md` | Sonnet | 80 | Board: self-contained task files (Files, TAD §, Contract, Risk, AC1…n as Given/When/Then, Non-goals), `INDEX.md`, `DEPS.json` with waves; contract-first tasks so backend and frontend run in the same wave; runs `doctor.sh`. No Linear |
 | `developer.md` | Sonnet (floor); the orchestrator raises it to Opus per launch — see Model choice | 120 | One task — **Backend, Frontend or DevOps** — with its unit tests, task branch, draft PR whose body maps AC→test |
 | `qa-engineer.md` | Sonnet | 150 | Integration/E2E only for QA tasks the planner justified; files bug tasks |
-| `reviewer.md` | Opus | 60 | `verify.sh` first (red = needs work), then diff vs criteria, contract, TAD, best practices; comments + labels; conflicts; CI routing to `developer` |
+| `reviewer.md` | Opus | 60 | `verify.sh` first (a red the branch introduced = needs work; a red inherited from the base is reported, never charged to the PR), then diff vs criteria, contract, TAD, best practices; comments + labels; conflicts; CI routing to `developer` |
 | `retro.md` | Opus | 60 | End of epic: repeated findings → best-practices rules (PR) + proposed template/heuristic lines for pocket-it |
 | `documentation-agent.md` | Sonnet | 60 | Optional, on request: README, API reference, architecture overview |
 
@@ -74,7 +74,7 @@ An orchestrator in front of pocket-it (private, not part of this repo) needs not
 |---|---|
 | `doctor.sh [--wave N]` | pre-flight: config valid and committed, task files complete and committed, DEPS.json consistent, no shared files in a wave, TAD numbering, hygiene. Exit 1 on errors |
 | `next-wave.sh` | prints one JSON line per launchable task (deps Done, no file overlap with tasks launched in the same call, `model_hint` — a suggestion from Risk alone, not a decision, see Model choice) + a blocked list |
-| `verify.sh <PR|branch>` | lint, type-check, affected tests on the PR branch in a throwaway worktree, ≤ 40 lines. The reviewer runs it before reading |
+| `verify.sh <PR|branch>` | lint, type-check, affected tests on the PR branch in a throwaway worktree, ≤ 40 lines. The reviewer runs it before reading. Exit 0 green, 1 the branch’s own red, 3 a red that also fails at the base commit it pinned for the run (re-run there, once, only for the checks that failed, and only when it could establish the base can run them at all), 2 could not run |
 | `status.sh` | the project state computed from disk in ~25 lines: config, docs, board counts and high-risk open tasks, ready wave, open PRs with labels, worktrees, handoff facts + last log lines. What an orchestrator reads first; replaces `--resume` |
 | `handoff.sh log|fact|show` | the narrative memory `docs/SESSION_HANDOFF.md`: `log` prepends a dated line (kept to 40), `fact` adds an evergreen fact (cap 100). Agents call it at every PR and review; humans read it after a week away |
 | `tasks-index.sh` | regenerates `tasks/INDEX.md` |

@@ -260,5 +260,511 @@ R12=1; grep -qxF '.claude/worktrees/' "$M/.git/info/exclude" 2>/dev/null && R12=
 ok "PI-34 AC5 — the exclude entry lands in the shared .git/info/exclude, not a per-worktree one" "[ $R12 -eq 0 ]"
 q git -C "$M" worktree remove --force "$LINKED_WT"
 
+# ============================ PI-41 — whose defect is a red check? ============================
+# Everything below runs against its own disposable repo ($P, with its own bare origin under $S), because
+# these cases move the BASE branch under a fixture branch on purpose (that is the whole mutation proof) and
+# must not disturb the branches the tests above built on $M. Both repos die with $S.
+#
+# The single check these fixtures drive is the "affected tests" one, via a .pocket-it.json testCommand of
+# "bash ./check.sh": whichever worktree the command runs in supplies its own check.sh, so the same command
+# string can pass on one side and fail on the other — exactly the asymmetry attribution has to read. check.sh
+# records the directory it ran in, so one artefact proves both "how many times did it run" (AC4) and "did the
+# base re-check really happen inside the throwaway base worktree" (AC5 guard).
+P="$S/pi41"; PORIGIN="$S/pi41-origin.git"
+CALLLOG="$S/pi41-check-cwds.log"; LINTLOG="$S/pi41-lint-cwds.log"
+: > "$CALLLOG"; : > "$LINTLOG"
+q git init -q --bare "$PORIGIN"
+q git init -q -b main "$P"
+wcheck(){ # wcheck <path> <body> — a check script that records its cwd, then runs <body> (e.g. "exit 1")
+  printf '#!/usr/bin/env bash\npwd -P >> %s\n%s\n' "$CALLLOG" "$2" > "$1"; chmod +x "$1"; }
+wlint(){ printf '#!/usr/bin/env bash\npwd -P >> %s\n%s\n' "$LINTLOG" "$2" > "$1"; chmod +x "$1"; }
+pfile(){ mkdir -p "$(dirname "$1")"; echo content > "$1"; }   # bin/ does not survive a checkout of main
+p_commit(){ # p_commit <msg> — commit everything on the current branch, push it, go back to main
+  local b; b=$(git -C "$P" rev-parse --abbrev-ref HEAD)
+  q git -C "$P" add -A; q git -C "$P" commit -qm "$1"; q git -C "$P" push -q -u origin "$b"
+  q git -C "$P" checkout -q main; }
+set_base(){ # set_base <body> — main's check.sh gets this body; this is the mutation AC2 turns on and off
+  q git -C "$P" checkout -q main; wcheck "$P/check.sh" "$1"; p_commit "base check: $1"; }
+# runp <branch> [extra PATH dir] — run verify.sh on the pi41 repo, capture output and exit code
+runp(){ local br="$1" pre="${2:-}"
+  : > "$CALLLOG"; : > "$LINTLOG"
+  if [[ -n "$pre" ]]; then OUTP=$(cd "$P" && PATH="$pre:$PATH" bash "$SCRIPT" "$br" main 2>&1); RCP=$?
+  else OUTP=$(cd "$P" && bash "$SCRIPT" "$br" main 2>&1); RCP=$?; fi; }
+hasl(){ printf '%s\n' "$1" | grep -qF "$2"; }   # fixed-string line match on a captured output
+
+echo base > "$P/README.md"
+wcheck "$P/check.sh" "exit 0"
+printf '{"testCommand":"bash ./check.sh"}\n' > "$P/.pocket-it.json"
+q git -C "$P" add -A; q git -C "$P" commit -qm base
+q git -C "$P" remote add origin "$PORIGIN"; q git -C "$P" push -q -u origin main
+
+# a git that records its calls — used to prove a worktree was (or was never) created for the base
+GBIN="$S/pi41-gitbin"; mkdir -p "$GBIN"; GLOG="$S/pi41-git.log"; REALGITP=$(command -v git)
+cat > "$GBIN/git" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$GLOG"
+exec "$REALGITP" "\$@"
+SH
+chmod +x "$GBIN/git"
+
+# --- AC4 — a green run pays nothing: no base worktree, no check re-run -------------------------------------
+q git -C "$P" checkout -q -b pi41-green main
+pfile "$P/bin/green.test.sh"; p_commit pi41-green
+: > "$GLOG"; runp pi41-green "$GBIN"
+R41=1; [ "$RCP" -eq 0 ] && R41=0
+ok "PI-41 AC4 — an all-green run still exits 0" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "verify: GREEN" && R41=0
+ok "PI-41 AC4 — an all-green run still prints verify: GREEN" "[ $R41 -eq 0 ]"
+R41=0; grep '^worktree add\|worktree add ' "$GLOG" | grep -q 'verify-base-' && R41=1
+ok "PI-41 AC4 — no worktree is created for the base when nothing failed" "[ $R41 -eq 0 ]"
+R41=0; [ -n "$(find "$P/.claude/worktrees" -mindepth 1 -maxdepth 1 -name 'verify-base-*' 2>/dev/null)" ] && R41=1
+ok "PI-41 AC4 — no verify-base-* directory exists after a green run" "[ $R41 -eq 0 ]"
+R41=1; [ "$(grep -c . "$CALLLOG")" -eq 1 ] && R41=0
+ok "PI-41 AC4 — the passing check ran exactly once, never re-run against the base" "[ $R41 -eq 0 ]"
+
+# --- AC1 — the branch's own red: base green, branch breaks the check ---------------------------------------
+q git -C "$P" checkout -q -b pi41-own main
+wcheck "$P/check.sh" "exit 1"; pfile "$P/bin/own.test.sh"; p_commit pi41-own
+runp pi41-own
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 AC1 — an own-diff red still exits 1, the code that already meant 'the branch is red'" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$OUTP" | grep -qx 'verify: RED' && R41=0
+ok "PI-41 AC1 — an own-diff red still prints exactly 'verify: RED', unqualified" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "own   affected tests — passes at origin/main@" && R41=0
+ok "PI-41 AC1 — the failing check is named as this branch's own" "[ $R41 -eq 0 ]"
+R41=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R41=1
+ok "PI-41 AC1 — an own-diff red never says the base fails too" "[ $R41 -eq 0 ]"
+R41=1; [ "$(grep -c . "$CALLLOG")" -eq 2 ] && R41=0
+ok "PI-41 AC4 — a failing check is re-run against the base exactly once (2 runs in total)" "[ $R41 -eq 0 ]"
+
+# --- AC2 — inherited red: the same failure is already at the tip of origin/main ------------------------------
+set_base "exit 1"
+q git -C "$P" checkout -q -b pi41-inherited main
+pfile "$P/bin/unrelated.test.sh"; p_commit pi41-inherited
+: > "$GLOG"; runp pi41-inherited "$GBIN"
+R41=1; [ "$RCP" -eq 3 ] && R41=0
+ok "PI-41 AC2 — an inherited red exits 3, a code no other outcome uses" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "verify: RED — inherited: every failing check also fails at origin/main@" && R41=0
+ok "PI-41 AC2 — the verdict line states what was observed, and names the base commit it was observed at" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "base  affected tests — the same command also fails at origin/main@" && R41=0
+ok "PI-41 AC2 — the check itself is named as pre-existing on the base" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "note  attribution is per check" && R41=0
+ok "PI-41 AC2 — the granularity of the inherited verdict is stated on the run that uses it" "[ $R41 -eq 0 ]"
+# AC5 — the base re-check happened inside a throwaway worktree under <repo>/.claude/worktrees/, never in the
+# main checkout and never in /tmp: check.sh recorded the directory it actually ran in, both times.
+CW1=$(sed -n 1p "$CALLLOG"); CW2=$(sed -n 2p "$CALLLOG")
+R41=1; case "$CW1" in "$P/.claude/worktrees/verify-"*) R41=0;; esac
+ok "PI-41 AC5 — the branch's check ran inside the branch's throwaway worktree" "[ $R41 -eq 0 ]"
+R41=1; case "$CW2" in "$P/.claude/worktrees/verify-base-"*) R41=0;; esac
+ok "PI-41 AC5 — the base re-check ran inside a throwaway worktree under <repo>/.claude/worktrees/" "[ $R41 -eq 0 ]"
+R41=0; { [ "$CW2" = "$P" ] || case "$CW2" in /tmp/*|/private/tmp/*) true;; *) false;; esac; } && R41=1
+ok "PI-41 AC5 — the base re-check ran neither in the main checkout nor under /tmp" "[ $R41 -eq 0 ]"
+R41=0; [ -n "$(find "$P/.claude/worktrees" -mindepth 1 -maxdepth 1 -name 'verify-base-*' 2>/dev/null)" ] && R41=1
+ok "PI-41 AC5 — the base worktree is gone once the run ends normally" "[ $R41 -eq 0 ]"
+R41=0; git -C "$P" worktree list | grep -q '.claude/worktrees/verify-' && R41=1
+ok "PI-41 AC5 — no worktree of either kind stays registered after a normal run" "[ $R41 -eq 0 ]"
+
+# --- AC2, by mutation — fix the base and the very same run must flip to the branch's own red, then back -----
+set_base "exit 0"
+runp pi41-inherited
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 AC2 mutation — base made green: the same branch now exits 1, not 3" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "own   affected tests — passes at origin/main@" && R41=0
+ok "PI-41 AC2 mutation — base made green: the failure is now attributed to the branch" "[ $R41 -eq 0 ]"
+R41=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R41=1
+ok "PI-41 AC2 mutation — base made green: nothing is said to also fail there any more" "[ $R41 -eq 0 ]"
+set_base "exit 1"
+runp pi41-inherited
+R41=1; [ "$RCP" -eq 3 ] && R41=0
+ok "PI-41 AC2 mutation — base broken again: the same branch flips back to exit 3" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "base  affected tests — the same command also fails at origin/main@" && R41=0
+ok "PI-41 AC2 mutation — base broken again: the check is pre-existing once more" "[ $R41 -eq 0 ]"
+
+# --- AC6 — an attribution that could not be performed is never reported as 'pre-existing on base' ------------
+# (a) the throwaway worktree for the base cannot be created. Same fixture as AC2, which without the shim
+# reports "pre-existing": only the refusal changes, so the test cannot pass by accident.
+GBIN_A="$S/pi41-gitbin-a"; mkdir -p "$GBIN_A"
+cat > "$GBIN_A/git" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$GLOG"
+if [[ "\$*" == *"worktree add"*"verify-base-"* ]]; then echo "fixture: refusing" >&2; exit 128; fi
+exec "$REALGITP" "\$@"
+SH
+chmod +x "$GBIN_A/git"
+: > "$GLOG"; runp pi41-inherited "$GBIN_A"
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 AC6a — a refused base worktree falls back to today's plain red, exit 1" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$OUTP" | grep -qx 'verify: RED' && R41=0
+ok "PI-41 AC6a — a refused base worktree prints the unqualified 'verify: RED'" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "warn  affected tests — attribution unknown: a throwaway worktree for origin/main could not be created" && R41=0
+ok "PI-41 AC6a — the reason the attribution is unknown is named" "[ $R41 -eq 0 ]"
+R41=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R41=1
+ok "PI-41 AC6a — a re-check that never ran never says the base fails too" "[ $R41 -eq 0 ]"
+R41=0; [ -n "$(find "$P/.claude/worktrees" -mindepth 1 -maxdepth 1 -name 'verify-base-*' 2>/dev/null)" ] && R41=1
+ok "PI-41 AC6a — a refused base worktree leaves no directory behind" "[ $R41 -eq 0 ]"
+
+# (b) the base's ref cannot be resolved at all (an unfetchable base): no worktree is even attempted.
+GBIN_B="$S/pi41-gitbin-b"; mkdir -p "$GBIN_B"
+cat > "$GBIN_B/git" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$GLOG"
+if [[ "\$*" == *"rev-parse --verify -q origin/main^{commit}"* ]]; then exit 1; fi
+exec "$REALGITP" "\$@"
+SH
+chmod +x "$GBIN_B/git"
+: > "$GLOG"; runp pi41-inherited "$GBIN_B"
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 AC6b — an unresolvable base ref falls back to plain red, exit 1" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "warn  affected tests — attribution unknown: origin/main is not available locally" && R41=0
+ok "PI-41 AC6b — the unknown names the missing base ref" "[ $R41 -eq 0 ]"
+R41=0; grep 'worktree add ' "$GLOG" | grep -q 'verify-base-' && R41=1
+ok "PI-41 AC6b — no base worktree is attempted when the base ref cannot be resolved" "[ $R41 -eq 0 ]"
+R41=1; [ "$(grep -c . "$CALLLOG")" -eq 1 ] && R41=0
+ok "PI-41 AC6b — the check is not re-run when there is nothing to re-run it against" "[ $R41 -eq 0 ]"
+
+# (c) the check itself errors rather than fails (command not found, exit 127) on both sides.
+q git -C "$P" checkout -q -b pi41-badcmd main
+printf '{"testCommand":"pi41_no_such_command_xyz"}\n' > "$P/.pocket-it.json"
+pfile "$P/bin/badcmd.test.sh"; p_commit pi41-badcmd
+runp pi41-badcmd
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 AC6c — a check whose runner is absent on the base is plain red, exit 1" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" 'attribution unknown: "pi41_no_such_command_xyz" does not resolve here' && R41=0
+ok "PI-41 AC6c — a command that does not resolve on the base is unknown, and is never even run there" "[ $R41 -eq 0 ]"
+R41=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R41=1
+ok "PI-41 AC6c — a check that cannot resolve on the base is never said to fail there" "[ $R41 -eq 0 ]"
+
+# --- AC3 — one check the branch broke, one it inherited: attributed one by one, verdict is the worse one -----
+# A second check is needed, so the branch grows a package manifest with a lint script. The fixture's stand-in
+# npm runs ./<script>.sh: the point under test is attribution across two checks, not any package manager.
+NPMBIN="$S/pi41-npmbin"; mkdir -p "$NPMBIN"
+cat > "$NPMBIN/npm" <<'SH'
+#!/usr/bin/env bash
+# fixture stand-in for npm: `npm run <name>` runs ./<name>.sh in the current directory, nothing else.
+[[ "$1" == run ]] || exit 2
+exec bash "./$2.sh"
+SH
+chmod +x "$NPMBIN/npm"
+# (c-bis) the base has no script by that name: npm exits 1 for a missing script, which is NOT evidence of a
+# pre-existing defect — attribution must be unknown for that check while the other is still read normally.
+q git -C "$P" checkout -q -b pi41-noscript main
+printf '{"scripts":{"lint":"bash ./lint.sh"}}\n' > "$P/package.json"; printf '{}\n' > "$P/package-lock.json"
+wlint "$P/lint.sh" "exit 1"; pfile "$P/bin/noscript.test.sh"; p_commit pi41-noscript
+runp pi41-noscript "$NPMBIN"
+# round 2: the branch also adds the manifest itself, so the rule that fires first is the marker-file one —
+# the base has no package.json at all, so `npm run lint` there is not the same check, not a base defect.
+# The script rule proper (a base that HAS a manifest but not that script) is fixture F1a further down.
+R41=1; hasl "$OUTP" 'warn  lint — attribution unknown: origin/main has no package.json, so this is not the same check there' && R41=0
+ok "PI-41 AC6d — a check the base cannot even declare is unknown, never attributed to the base" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "base  affected tests — the same command also fails at origin/main@" && R41=0
+ok "PI-41 AC6d — the other failing check is still attributed normally in the same run" "[ $R41 -eq 0 ]"
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 AC6d — one unknown makes the whole verdict the branch's own red, exit 1" "[ $R41 -eq 0 ]"
+R41=1; [ "$(grep -c . "$LINTLOG")" -eq 1 ] && R41=0
+ok "PI-41 AC6d — a check with no counterpart on the base is not re-run there" "[ $R41 -eq 0 ]"
+
+# now the mixed case itself: lint exists on the base and passes there, the tests check fails on both sides
+q git -C "$P" checkout -q main
+printf '{"scripts":{"lint":"bash ./lint.sh"}}\n' > "$P/package.json"; printf '{}\n' > "$P/package-lock.json"
+wlint "$P/lint.sh" "exit 0"; p_commit "base gets a green lint"
+PRE_PKG_MAIN=$(git -C "$P" rev-parse main~1)   # the last main commit without a package manifest (AC5 below)
+q git -C "$P" checkout -q -b pi41-mixed main
+wlint "$P/lint.sh" "exit 1"; pfile "$P/bin/mixed.test.sh"; p_commit pi41-mixed
+runp pi41-mixed "$NPMBIN"
+R41=1; hasl "$OUTP" "own   lint — passes at origin/main@" && R41=0
+ok "PI-41 AC3 — the check the branch broke is attributed to the branch" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "base  affected tests — the same command also fails at origin/main@" && R41=0
+ok "PI-41 AC3 — the check it inherited is attributed to the base, in the same run" "[ $R41 -eq 0 ]"
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 AC3 — the verdict is the worse of the two: exit 1, never 3" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$OUTP" | grep -qx 'verify: RED' && R41=0
+ok "PI-41 AC3 — a branch with its own defect is not excused by also inheriting one" "[ $R41 -eq 0 ]"
+R41=1; [ "$(grep -c . "$LINTLOG")" -eq 2 ] && [ "$(grep -c . "$CALLLOG")" -eq 2 ] && R41=0
+ok "PI-41 AC4 — each failing check is re-run against the base exactly once, no more" "[ $R41 -eq 0 ]"
+
+# --- AC5 — a real signal during the base re-check leaves neither worktree behind ------------------------------
+# The base's check.sh sleeps, so the kill lands while the base worktree exists and its command is running.
+# The fixture branch forks from the last main commit without a package manifest, so only one check runs.
+set_base "sleep 3; exit 1"
+q git -C "$P" checkout -q -b pi41-signal "$PRE_PKG_MAIN"
+wcheck "$P/check.sh" "exit 1"; pfile "$P/bin/signal.test.sh"; p_commit pi41-signal
+kill_in_base(){ # kill_in_base <label> <signal> <expected exit code>
+  local label="$1" sig="$2" want="$3" log="$S/pi41-kill-$sig.log" kpid i=0 j=0 rc r
+  (cd "$P" && exec bash "$SCRIPT" pi41-signal main) >"$log" 2>&1 &
+  kpid=$!
+  while (( i < 200 )) && ! git -C "$P" worktree list | grep -q '.claude/worktrees/verify-base-'; do sleep 0.1; i=$((i+1)); done
+  r=1; git -C "$P" worktree list | grep -q '.claude/worktrees/verify-base-' && r=0
+  ok "$label — the base worktree really existed when the signal was sent" "[ $r -eq 0 ]"
+  kill "-$sig" "$kpid" 2>/dev/null
+  while (( j < 100 )) && kill -0 "$kpid" 2>/dev/null; do sleep 0.1; j=$((j+1)); done
+  kill -0 "$kpid" 2>/dev/null && kill -KILL "$kpid" 2>/dev/null
+  wait "$kpid" 2>/dev/null; rc=$?
+  r=1; git -C "$P" worktree list | grep -q '.claude/worktrees/verify-' || r=0
+  ok "$label — neither worktree stays registered" "[ $r -eq 0 ]"
+  r=1; [ -z "$(find "$P/.claude/worktrees" -mindepth 1 -maxdepth 1 -name 'verify-*' 2>/dev/null)" ] && r=0
+  ok "$label — no verify-* or verify-base-* directory is left on disk" "[ $r -eq 0 ]"
+  r=1; [ "$rc" -eq "$want" ] && r=0
+  ok "$label — exits $want, never a verdict" "[ $r -eq 0 ]"
+  r=1; grep -qE 'verify: (GREEN|RED)' "$log" || r=0
+  ok "$label — prints no verdict at all" "[ $r -eq 0 ]"; }
+kill_in_base "PI-41 AC5 SIGTERM during the base re-check" TERM 143
+kill_in_base "PI-41 AC5 SIGINT during the base re-check" INT 130
+kill_in_base "PI-41 AC5 SIGHUP during the base re-check" HUP 129
+
+# ============ PI-41 round 2, F1 — "the base could not really run this check" is a CLASS, not two cases =======
+# Round 1 guarded exactly one member of it (a package script missing on the base) and read every other
+# non-zero exit as evidence of a base defect — so a brand-new failing test that belonged to the branch was
+# certified as the base's. The guard is now a single choke point (base_blockers) every re-run goes through,
+# and the case list below is REGENERATED from verify.sh's own producer block at run time instead of being a
+# list of examples: a command producer added later is covered by these assertions without editing this file.
+eval "$(awk '/^# --- base-runnability helpers/,/^# --- end base-runnability helpers/' "$SCRIPT")"
+BASE=main   # base_blockers names the base in its reasons; what is asserted is only whether a reason came back
+SBX="$S/blockers"
+mkdir -p "$SBX/empty" "$SBX/full/node_modules/.bin" "$SBX/full/bin" "$SBX/full/tests" "$SBX/full/src" \
+         "$SBX/branch/tests" "$SBX/branch/src"
+WT_REAL="$SBX/branch"   # base_blockers compares against the branch worktree it was told about
+: > "$SBX/branch/tests/test_x.py"; : > "$SBX/branch/src/new.ts"; : > "$SBX/branch/check.sh"
+# the "full" tree has everything any producer can name: scripts, runners, selectors and marker files
+printf '{"scripts":{"lint":"x","type-check":"x","typecheck":"x","test:affected":"x","test":"x"},"jest":{}}\n' > "$SBX/full/package.json"
+for b in vitest jest tsc; do printf '#!/usr/bin/env bash\nexit 0\n' > "$SBX/full/node_modules/.bin/$b"; chmod +x "$SBX/full/node_modules/.bin/$b"; done
+printf '#!/usr/bin/env bash\nexit 0\n' > "$SBX/full/bin/go"; chmod +x "$SBX/full/bin/go"
+: > "$SBX/full/tests/test_x.py"; : > "$SBX/full/src/new.ts"; : > "$SBX/full/check.sh"
+: > "$SBX/full/pytest.py"   # makes `python3 -m pytest` resolvable here without installing anything
+for f in go.mod tsconfig.json pyproject.toml vitest.config.ts .pocket-it.json; do : > "$SBX/full/$f"; done
+# the "marked" tree is the full one MINUS the package scripts and minus every file a command names: it is
+# what isolates "the base cannot declare this script" and "the base does not have that file" from the
+# cheaper marker-file rule, which would otherwise be the only rule any of these assertions ever exercised.
+mkdir -p "$SBX/marked"; cp -R "$SBX/full/." "$SBX/marked/"
+printf '{"scripts":{},"jest":{}}\n' > "$SBX/marked/package.json"
+rm -f "$SBX/marked/tests/test_x.py" "$SBX/marked/src/new.ts" "$SBX/marked/check.sh"
+# one expansion for both sandboxes: the producer templates are shell, and these are the variables they read
+expand(){ PM=npm QUOTED="'src/new.ts' " PYQUOTED="'tests/test_x.py' " BASE_REF=0123456789ab \
+          VITCFG=vitest.config.ts PYCFG=pyproject.toml eval "printf '%s' \"$1\""; }
+PRODBLOCK=$(awk '/^# --- command producers/,/^# --- end command producers/' "$SCRIPT")
+NPROD=0; NLIT=0; NONLIT=0; NONEEDS=""; NOTREFUSED=""; NOTREFUSED2=""; NOTCLEARED=""
+while IFS= read -r pline; do
+  [ -n "$pline" ] || continue
+  NPROD=$((NPROD+1))
+  case "$pline" in *'_NEEDS='*) ;; *) NONEEDS="$NONEEDS
+      $pline";; esac
+  ptpl=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z]+="[^"]+"' | head -1 | sed 's/^CMD_[A-Z]*="//; s/"$//')
+  pnds=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z]+_NEEDS="[^"]+"' | head -1 | sed 's/^CMD_[A-Z]*_NEEDS="//; s/"$//')
+  if [ -z "$ptpl" ]; then NONLIT=$((NONLIT+1)); continue; fi
+  NLIT=$((NLIT+1))
+  pcmd=$(expand "$ptpl"); pnee=$(expand "$pnds")
+  pres=$(cd "$SBX/empty" && base_blockers "$pcmd" "$pnee")
+  [ -z "$pres" ] && NOTREFUSED="$NOTREFUSED
+      $pcmd"
+  # Teach both sandboxes what THIS producer needs, read off the producer itself — so the two passes below
+  # stay meaningful for a producer added after this file was written: its declared marker file is created,
+  # and every bare word it invokes that this machine does not have gets a stub that exits 0.
+  for pn in $pnee; do
+    mkdir -p "$SBX/full/$(dirname "$pn")" "$SBX/marked/$(dirname "$pn")"
+    [ -e "$SBX/full/$pn" ]   || : > "$SBX/full/$pn"      # never truncate a marker these sandboxes rely on
+    [ -e "$SBX/marked/$pn" ] || : > "$SBX/marked/$pn"
+  done
+  for ptok in $(printf '%s' "$pcmd" | tr -d "'"); do
+    case "$ptok" in -*|*/*) continue;; esac
+    command -v "$ptok" >/dev/null 2>&1 && continue
+    for pd in "$SBX/full/bin" "$SBX/marked/bin"; do printf '#!/usr/bin/env bash\nexit 0\n' > "$pd/$ptok"; chmod +x "$pd/$ptok"; done
+  done
+  pres=$(cd "$SBX/full" && PATH="$SBX/full/bin:$PATH" base_blockers "$pcmd" "$pnee")
+  [ -n "$pres" ] && NOTCLEARED="$NOTCLEARED
+      $pcmd => $pres"
+  # does this command name a package script, or a file that exists on the branch? Read off the command
+  # itself, never from a list kept here — if it does, the base not having it must stop the attribution.
+  pexp=0
+  case "$pcmd" in *"npm run "*|*"pnpm run "*|*"yarn run "*|*"bun run "*) pexp=1;; esac
+  for ptok in $(printf '%s' "$pcmd" | tr -d "'"); do
+    [ -n "$ptok" ] && [ -e "$SBX/branch/$ptok" ] && pexp=1
+  done
+  if [ $pexp -eq 1 ]; then
+    pres=$(cd "$SBX/marked" && PATH="$SBX/marked/bin:$PATH" base_blockers "$pcmd" "$pnee")
+    [ -z "$pres" ] && NOTREFUSED2="$NOTREFUSED2
+      $pcmd"
+  fi
+done <<EOF
+$(printf '%s\n' "$PRODBLOCK" | grep -E 'CMD_[A-Z]+=("[^"]+"|\$\()')
+EOF
+R41=0; [ -n "$NONEEDS" ] && { R41=1; echo "      producers with no _NEEDS on their own line:$NONEEDS"; }
+ok "PI-41 F1 — every command producer declares, on its own line, the file the base must have too" "[ $R41 -eq 0 ]"
+R41=0; [ -n "$NOTREFUSED" ] && { R41=1; echo "      not refused against a base tree that has nothing:$NOTREFUSED"; }
+ok "PI-41 F1 — every command producer is refused when the base has none of what the command names" "[ $R41 -eq 0 ]"
+R41=0; [ -n "$NOTREFUSED2" ] && { R41=1; echo "      not refused although the base has neither its script nor the file it names:$NOTREFUSED2"; }
+ok "PI-41 F1 — every producer that names a script or a file is refused when the base has that one thing missing" "[ $R41 -eq 0 ]"
+R41=0; [ -n "$NOTCLEARED" ] && { R41=1; echo "      wrongly refused against a base tree that has everything:$NOTCLEARED"; }
+ok "PI-41 F1 — every command producer is cleared when the base does have what the command names" "[ $R41 -eq 0 ]"
+R41=1; [ "$NPROD" -ge 7 ] && R41=0
+ok "PI-41 F1 — the case list really was regenerated from the producer block (7 producers or more)" "[ $R41 -eq 0 ]"
+R41=1; [ "$NONLIT" -eq 1 ] && R41=0
+ok "PI-41 F1 — exactly one producer has no literal command (the configured testCommand, covered end to end below)" "[ $R41 -eq 0 ]"
+R41=1; [ "$(grep -c 'base_blockers "\${FAIL_CMD\[\$i\]}"' "$SCRIPT")" -eq 1 ] && [ "$(grep -c 'bash -c "\${FAIL_CMD\[\$i\]}"' "$SCRIPT")" -eq 1 ] && R41=0
+ok "PI-41 F1 — there is exactly one place a check is re-run on the base, and exactly one guard in front of it" "[ $R41 -eq 0 ]"
+
+# --- F1 end to end (a): a configured testCommand naming a package script the base does not declare ----------
+# The measured case: the base has no such script, the branch adds it AND a failing test of its own. A package
+# manager exits 1 for a missing script, so before this round the branch's own new red came out as the base's.
+FA="$S/f1a"; FAO="$S/f1a-origin.git"
+q git init -q --bare "$FAO"; q git init -q -b main "$FA"
+echo base > "$FA/README.md"
+printf '{"name":"f1a","version":"1.0.0","scripts":{}}\n' > "$FA/package.json"
+printf '{}\n' > "$FA/package-lock.json"
+printf '{"testCommand":"npm run test:ci"}\n' > "$FA/.pocket-it.json"
+q git -C "$FA" add -A; q git -C "$FA" commit -qm base
+q git -C "$FA" remote add origin "$FAO"; q git -C "$FA" push -q -u origin main
+q git -C "$FA" checkout -q -b f1a-branch main
+printf '{"name":"f1a","version":"1.0.0","scripts":{"test:ci":"bash ./t.sh"}}\n' > "$FA/package.json"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$FA/t.sh"; chmod +x "$FA/t.sh"
+mkdir -p "$FA/bin"; echo content > "$FA/bin/f1a.test.sh"
+q git -C "$FA" add -A; q git -C "$FA" commit -qm f1a; q git -C "$FA" push -q -u origin f1a-branch
+q git -C "$FA" checkout -q main
+OUTP=$(cd "$FA" && bash "$SCRIPT" f1a-branch main 2>&1); RCP=$?
+R41=1; hasl "$OUTP" "FAIL  affected tests" && R41=0
+ok "PI-41 F1a — the branch's own new test really does fail (the fixture is not vacuous)" "[ $R41 -eq 0 ]"
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 F1a — a script the base never declared is the branch's own red, exit 1, never 3" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" 'attribution unknown: origin/main has no "test:ci" script to re-run' && R41=0
+ok "PI-41 F1a — the configured testCommand is guarded by the same script rule as any other command" "[ $R41 -eq 0 ]"
+R41=0; hasl "$OUTP" "also fails at" && R41=1
+ok "PI-41 F1a — nothing claims the base fails too" "[ $R41 -eq 0 ]"
+
+# --- F1 end to end (b): a per-file selector, with the runner absent from this environment -------------------
+# The measured case: pytest is not installed, `python3 -m pytest` exits 1 (not 127), and the selector names a
+# file the base does not have at all. Either reason alone must stop the attribution; the verdict is the same
+# whether or not this machine happens to have pytest, which is what the assertions below read.
+FB="$S/f1b"; FBO="$S/f1b-origin.git"
+q git init -q --bare "$FBO"; q git init -q -b main "$FB"
+echo base > "$FB/README.md"; printf '[project]\nname = "f1b"\n' > "$FB/pyproject.toml"
+q git -C "$FB" add -A; q git -C "$FB" commit -qm base
+q git -C "$FB" remote add origin "$FBO"; q git -C "$FB" push -q -u origin main
+q git -C "$FB" checkout -q -b f1b-branch main
+mkdir -p "$FB/tests"; printf 'def test_x():\n    assert False\n' > "$FB/tests/test_x.py"
+q git -C "$FB" add -A; q git -C "$FB" commit -qm f1b; q git -C "$FB" push -q -u origin f1b-branch
+q git -C "$FB" checkout -q main
+OUTP=$(cd "$FB" && bash "$SCRIPT" f1b-branch main 2>&1); RCP=$?
+R41=1; hasl "$OUTP" "FAIL  affected tests" && R41=0
+ok "PI-41 F1b — the selector check really does fail on the branch (the fixture is not vacuous)" "[ $R41 -eq 0 ]"
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 F1b — a selector naming a file the base does not have is the branch's own red, exit 1, never 3" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "warn  affected tests — attribution unknown:" && R41=0
+ok "PI-41 F1b — the attribution is reported unknown, with its reason" "[ $R41 -eq 0 ]"
+R41=0; hasl "$OUTP" "also fails at" && R41=1
+ok "PI-41 F1b — a base where nothing is broken is never said to fail" "[ $R41 -eq 0 ]"
+
+# --- F1 end to end (c): the selector rule on its own, with a runner that resolves and a check that fails ----
+# Nothing here is missing except the file the command names: the runner is present on both sides and exits 1
+# on both sides. Only the "the base does not have that path" rule can tell these two failures apart.
+FC="$S/f1c"; FCO="$S/f1c-origin.git"
+q git init -q --bare "$FCO"; q git init -q -b main "$FC"
+echo base > "$FC/README.md"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$FC/runner.sh"; chmod +x "$FC/runner.sh"
+printf '{"testCommand":"bash ./runner.sh tests/new_case.py"}\n' > "$FC/.pocket-it.json"
+q git -C "$FC" add -A; q git -C "$FC" commit -qm base
+q git -C "$FC" remote add origin "$FCO"; q git -C "$FC" push -q -u origin main
+q git -C "$FC" checkout -q -b f1c-branch main
+mkdir -p "$FC/tests"; echo content > "$FC/tests/new_case.py"
+q git -C "$FC" add -A; q git -C "$FC" commit -qm f1c; q git -C "$FC" push -q -u origin f1c-branch
+q git -C "$FC" checkout -q main
+OUTP=$(cd "$FC" && bash "$SCRIPT" f1c-branch main 2>&1); RCP=$?
+R41=1; [ "$RCP" -eq 1 ] && R41=0
+ok "PI-41 F1c — a runner that fails on both sides is still the branch's own red when the base lacks the file" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "attribution unknown: origin/main does not have tests/new_case.py, which this check names" && R41=0
+ok "PI-41 F1c — the reason names the path the base does not have" "[ $R41 -eq 0 ]"
+R41=0; hasl "$OUTP" "also fails at" && R41=1
+ok "PI-41 F1c — an identical exit code on both sides is not read as evidence on its own" "[ $R41 -eq 0 ]"
+
+# --- F1, the wording: this script reports an observation and never a cause ----------------------------------
+R41=0; grep -n 'echo "' "$SCRIPT" | grep -q 'cause:' && R41=1
+ok "PI-41 F1 — no line verify.sh prints names a cause it never determined" "[ $R41 -eq 0 ]"
+R41=0; grep -q 'base-moved' "$SCRIPT" && R41=1
+ok "PI-41 F1 — 'base-moved' is gone from verify.sh: it never looked at history" "[ $R41 -eq 0 ]"
+
+# --- F2 — the base is resolved to a commit once, and that same commit is what everything below uses ---------
+# Proved by moving origin/main UNDER the run: the branch's own check.sh pushes a fix to main and fetches it,
+# then fails. Reading origin/<base> a second time would re-check against that new, green commit and call the
+# failure the branch's own (exit 1) — against a base commit the diff never used and the output never named.
+FD="$S/f2"; FDO="$S/f2-origin.git"
+q git init -q --bare "$FDO"; q git init -q -b main "$FD"
+echo base > "$FD/README.md"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$FD/check.sh"; chmod +x "$FD/check.sh"
+printf '{"testCommand":"bash ./check.sh"}\n' > "$FD/.pocket-it.json"
+q git -C "$FD" add -A; q git -C "$FD" commit -qm base
+q git -C "$FD" remote add origin "$FDO"; q git -C "$FD" push -q -u origin main
+q git -C "$FD" checkout -q -b f2-branch main
+cat > "$FD/check.sh" <<SH
+#!/usr/bin/env bash
+# the base moves while this run is in flight: main is fixed, pushed and fetched, so origin/main read a second
+# time would point at a green commit. Then this check fails, exactly as it did before the base moved.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$FD/check.sh"
+git -C "$FD" add -A >/dev/null 2>&1
+git -C "$FD" commit -qm "base fixed mid-run" >/dev/null 2>&1
+git -C "$FD" push -q origin main >/dev/null 2>&1
+git -C "$FD" fetch -q origin main >/dev/null 2>&1
+exit 1
+SH
+chmod +x "$FD/check.sh"
+mkdir -p "$FD/bin"; echo content > "$FD/bin/f2.test.sh"
+q git -C "$FD" add -A; q git -C "$FD" commit -qm f2; q git -C "$FD" push -q -u origin f2-branch
+q git -C "$FD" checkout -q main
+OLDSHA=$(git -C "$FD" rev-parse origin/main)
+OUTP=$(cd "$FD" && bash "$SCRIPT" f2-branch main 2>&1); RCP=$?
+NEWSHA=$(git -C "$FD" rev-parse origin/main)
+R41=1; [ "$OLDSHA" != "$NEWSHA" ] && R41=0
+ok "PI-41 F2 — origin/main really did move during the run (the fixture is not vacuous)" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "vs origin/main@${OLDSHA:0:12}" && R41=0
+ok "PI-41 F2 — the run names the base commit it is judging against" "[ $R41 -eq 0 ]"
+R41=1; [ "$RCP" -eq 3 ] && R41=0
+ok "PI-41 F2 — the attribution uses the commit the diff used, not whatever origin/main points at now" "[ $R41 -eq 0 ]"
+R41=1; hasl "$OUTP" "also fails at origin/main@${OLDSHA:0:12}" && R41=0
+ok "PI-41 F2 — the per-check line names that same commit, so the verdict can be audited afterwards" "[ $R41 -eq 0 ]"
+R41=0; hasl "$OUTP" "${NEWSHA:0:12}" && R41=1
+ok "PI-41 F2 — the commit the base moved to is never the one the verdict is reported against" "[ $R41 -eq 0 ]"
+R41=1; [ "$(grep -c 'rev-parse --verify -q "origin/\$BASE' "$SCRIPT")" -eq 1 ] && R41=0
+ok "PI-41 F2 — origin/<base> is resolved in exactly one place in the script" "[ $R41 -eq 0 ]"
+
+# --- PI-41, the caller side — the distinction is worthless if the reviewer still acts on "red = needs work" ---
+# ($RVWR was resolved above, from this script's own repo root)
+VSTEP=$(awk '/^## Step 3 — Mechanical verification/,/^```bash$/{print} /^It runs lint, type-check/{print}' "$RVWR")
+R41=0; grep -qF 'verify.sh $N 2>&1 | tail -40' "$RVWR" && R41=1
+ok "PI-41 caller — reviewer.md no longer throws the exit code away in a pipe" "[ $R41 -eq 0 ]"
+R41=1; grep -qF 'VRC=$?' "$RVWR" && R41=0
+ok "PI-41 caller — reviewer.md captures verify.sh's exit code and prints it" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'verify: RED — inherited: every failing check also fails at origin/{base}@{commit}' && R41=0
+ok "PI-41 caller — reviewer.md names the inherited verdict verbatim, as the script now prints it" "[ $R41 -eq 0 ]"
+R41=0; printf '%s\n' "$VSTEP" | grep -qF 'cause: base-moved' && R41=1
+ok "PI-41 caller (F1) — reviewer.md no longer repeats a cause the script never established" "[ $R41 -eq 0 ]"
+# F3 — the Step used to forbid re-running the attribution by hand and require a hand check two sentences
+# later. One rule now, and the base's own red is routed to the one reader who acts on it.
+R41=0; printf '%s\n' "$VSTEP" | grep -qF 'never re-run it by hand to prove it' && R41=1
+ok "PI-41 caller (F3) — reviewer.md no longer forbids by hand what it then requires by hand" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'do not re-derive the attribution as routine' && printf '%s\n' "$VSTEP" | grep -qF 'run that one area yourself' && R41=0
+ok "PI-41 caller (F3) — the routine and the exception are stated as one rule, in one sentence" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'ORCHESTRATOR:' && R41=0
+ok "PI-41 caller (F3) — reviewer.md names where a base-red goes: the report's ORCHESTRATOR line" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'origin/{base}@{commit}' && R41=0
+ok "PI-41 caller (F2) — reviewer.md tells the reviewer the verdict names a base commit" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'NEEDS WORK immediately' && R41=0
+ok "PI-41 caller — reviewer.md still sends an own-diff red straight to NEEDS WORK" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'attribution unknown' && R41=0
+ok "PI-41 caller — reviewer.md treats an unknown attribution as the PR's own red" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'per check, never per assertion' && R41=0
+ok "PI-41 caller — reviewer.md states the limit of what a base-red check excuses" "[ $R41 -eq 0 ]"
+# the rule lives in more than one file, and a second copy is exactly how it goes stale: no doc may still
+# reduce verify.sh to "red = needs work" (tasks/ and docs/reports/ are history, not instructions)
+# The paths are matched RELATIVE to the repo root, never absolute: this suite normally runs from an agent
+# worktree, whose own absolute path contains /.claude/worktrees/, so an absolute filter would exclude every
+# file in the repo and the assertion would pass no matter what any file said (measured: it did).
+# Excluded on purpose: tasks/ and docs/reports/ are history, .claude/worktrees/ holds other branches.
+# Widened after round 2: one literal phrasing was not the class, and docs/SESSION_HANDOFF* is memory, not
+# an instruction — a fact quoting the old wording must not turn this suite red.
+STALE=$(cd "$REPO_ROOT" && grep -rniE --include='*.md' 'red = needs work|a red = needs work|red means needs work|red is needs work|any red .{0,20}needs work' . \
+  | grep -vE '^\./(tasks|docs/reports|\.claude/worktrees)/' | grep -v '^\./docs/SESSION_HANDOFF')
+R41=0; [ -n "$STALE" ] && R41=1
+ok "PI-41 caller — no instruction file still reduces a red to 'red = needs work'" "[ $R41 -eq 0 ]"
+R41=1; grep -qF 'a red that also fails at the base commit it pinned for the run' "$REPO_ROOT/CLAUDE.md" && R41=0
+ok "PI-41 caller — CLAUDE.md's script table states the new exit codes" "[ $R41 -eq 0 ]"
+# and the script's own header must document the codes a caller is now expected to read
+R41=1; grep -qE '^#   3  RED, inherited' "$SCRIPT" && grep -qE '^#   1  RED, this branch' "$SCRIPT" && R41=0
+ok "PI-41 caller — verify.sh documents every exit code it can return" "[ $R41 -eq 0 ]"
 [[ $fail -eq 0 ]] && echo "verify.test.sh: ALL PASS" || echo "verify.test.sh: FAILURES"
 exit $fail
