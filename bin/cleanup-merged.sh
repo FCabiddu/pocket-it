@@ -39,6 +39,27 @@
 # the case that is otherwise clean, on a remote and unused. The corresponding local branch is then deleted and
 # `git worktree prune`
 # runs. One line per action, a summary with the freed size at the end.
+# Remote branches (PI-38): `gh pr merge --delete-branch` fails its own cleanup in two silent shapes (run from a
+# worktree: aborts before the remote delete because the base is checked out elsewhere; run from the main checkout
+# while another worktree still holds the branch: the remote delete can succeed while the local one fails) and
+# nothing retries either. Independently of the worktree/local-branch handling above, a separate pass (below the
+# main loop) reads every merged PR once and deletes any remote branch — one with no worktree currently checked
+# out for it — whose current tip equals that PR's own head: never by ancestry (squash breaks it by construction,
+# AC3), never a protected/base branch, and never a branch with commits pushed since — but that last guarantee is
+# only as good as the single `g fetch --prune -q origin` near the top of this script (its own failure discarded,
+# exit code unchecked): `refs/remotes/origin/*` is read here exactly as that fetch last left it, so a push that
+# lands on origin after it and before this pass's own `push --delete` (the whole length of the worktree loop
+# above) is judged on a tip this script has not seen yet and can be deleted. Outside this script's own model —
+# left to whoever pushes to a branch a merge has already closed — not a bug to fix here. A branch with an open PR,
+# a closed-unmerged PR, or no PR at all never
+# appears in the merged list and is left alone. This pass reads which branches are still checked out only after
+# the worktree loop above has run, so a branch whose worktree that same loop just removed as merged is reaped
+# right here, in this same run — the remote delete only ever touches a remote ref, never a live worktree's own
+# checkout, local branch or files, so nothing about a worktree still present is disturbed either way. A branch
+# still checked out in one of this repo's own worktrees when this pass runs is left alone entirely and picked up
+# by this pass on a later run once it no longer is. `gh` missing, `gh pr list` failing, or the delete push failing
+# (no network, no permission) skips that step or that one branch in silence — one report line, no error, exit 0;
+# the rest of the cleanup (worktrees, local branches) is unaffected.
 # Exit 0 always (2 on usage error). Safe to run repeatedly.
 set -uo pipefail
 DRY=0; ALL=0
@@ -194,12 +215,54 @@ in_use(){ command -v lsof >/dev/null 2>&1 && [[ -n "$(lsof +D "$1" 2>/dev/null)"
   # so this reads the actual listing (empty = nothing open there) instead of trusting lsof's own exit code.
 kb(){ du -sk "$1" 2>/dev/null | cut -f1; }
 
-removed=0; deleted=0; kept=0; before=0; after=0
+removed=0; deleted=0; remote_deleted=0; kept=0; before=0; after=0
 keep(){ echo "kept $1 ($2)"; kept=$((kept+1)); }
 drop_branch(){ # $1 branch
   [[ -z "$1" ]] && return 0
   if (( DRY )); then echo "would delete branch $1"; deleted=$((deleted+1)); return 0; fi
   if g branch -D "$1" >/dev/null 2>&1; then echo "deleted branch $1"; deleted=$((deleted+1)); else echo "kept branch $1 (delete failed)"; fi; }
+# PI-38: every remote branch NOT currently checked out in one of this repo's own worktrees (a branch still
+# checked out anywhere is left entirely to the loop above and to a later run once it is not — never touched
+# here, so this pass never competes with the current worktree's own decision or removes a ref out from under
+# a live worktree), read against every merged PR in one `gh` call. Deletes only a remote branch whose current
+# tip equals a merged PR's own head — never by ancestry (AC3: squash breaks it by construction) — so a branch
+# with an open PR, a closed-unmerged PR, no PR at all, or commits pushed after the PR merged (its tip then
+# differs from every recorded head) is left alone. Protected/base branches are skipped even if a same-named
+# PR exists. `gh` missing, `gh pr list` failing, or a single push failing (no network, no permission) is
+# reported and skipped without ever aborting the pass or the script.
+reap_remote_branches(){
+  command -v gh >/dev/null 2>&1 || { echo "remote branch cleanup skipped (gh not available)"; return 0; }
+  g remote get-url origin >/dev/null 2>&1 || { echo "remote branch cleanup skipped (no origin)"; return 0; }
+  local prs rc active wline rline name rsha found pname poid
+  prs=$(cd "$MAIN" && gh pr list --state merged --limit 1000 --json headRefName,headRefOid \
+        --jq '.[] | "\(.headRefName)\t\(.headRefOid)"' 2>/dev/null); rc=$?
+  (( rc == 0 )) || { echo "remote branch cleanup skipped (gh pr list failed, exit $rc)"; return 0; }
+  # Read fresh, not from $entries (that snapshot predates the worktree loop above): a branch whose worktree
+  # this same run just removed as merged must not be counted active here, or its remote never gets reaped
+  # on the very run that made it eligible (PI-38 F1) — it would wait one more run for no reason.
+  active=" "
+  while IFS= read -r wline; do
+    case "$wline" in "branch "*) active="$active ${wline#branch refs/heads/} ";; esac
+  done < <(g worktree list --porcelain)
+  while IFS= read -r rline; do
+    [[ -z "$rline" ]] && continue
+    name="${rline%% *}"; rsha="${rline#* }"
+    [[ "$name" == "HEAD" || "$name" == "$rsha" ]] && continue
+    [[ "$active" == *" $name "* ]] && continue
+    protected "$name" && continue
+    found=""
+    while IFS=$'\t' read -r pname poid; do
+      [[ "$pname" == "$name" && "$poid" == "$rsha" ]] && { found=1; break; }
+    done <<<"$prs"
+    [[ -z "$found" ]] && continue
+    if (( DRY )); then echo "would delete remote branch $name (merged)"; remote_deleted=$((remote_deleted+1))
+    elif g push origin --delete "$name" -q >/dev/null 2>&1; then
+      echo "deleted remote branch $name (merged)"; remote_deleted=$((remote_deleted+1))
+    else
+      echo "kept remote branch $name (delete failed: no permission or network)"
+    fi
+  done < <(g for-each-ref --format='%(refname:short) %(objectname)' refs/remotes/origin | sed 's#^origin/##')
+}
 remove(){ # $1 path, $2 reason, $3 branch to delete afterwards ("" for none), $4 lock reason to release first ("" for none)
   local p="$1" why="$2" b="$3" lr="${4:-}" k; k=$(kb "$p"); before=$((before+${k:-0}))
   if (( DRY )); then [[ -n "$lr" ]] && echo "would unlock worktree $p"; echo "would remove worktree $p ($why)"; removed=$((removed+1)); drop_branch "$b"; return 0; fi
@@ -267,9 +330,10 @@ for e in "${entries[@]}"; do
   why=$(decide "$sha" "$branch") || { keep "$p" "$why"; continue; }
   remove "$p" "$why" "$branch"
 done
+reap_remote_branches
 (( DRY )) || g worktree prune >/dev/null 2>&1
 
 mb=$(awk -v k=$((before-after)) 'BEGIN{printf "%.1f", k/1024}')
-if (( DRY )); then echo "cleanup-merged (dry-run): $removed worktrees would be removed, $deleted branches would be deleted, $kept kept, would free $mb MB"
-else echo "cleanup-merged: $removed worktrees removed, $deleted branches deleted, $kept kept, freed $mb MB"; fi
+if (( DRY )); then echo "cleanup-merged (dry-run): $removed worktrees would be removed, $deleted branches would be deleted, $remote_deleted remote branches would be deleted, $kept kept, would free $mb MB"
+else echo "cleanup-merged: $removed worktrees removed, $deleted branches deleted, $remote_deleted remote branches deleted, $kept kept, freed $mb MB"; fi
 exit 0
