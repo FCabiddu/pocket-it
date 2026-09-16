@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-44-cleanup-kept-count-and-cause
-**PR**:
+**PR**: https://github.com/FCabiddu/pocket-it/pull/84
 
 ## Goal
 Two defects observed together on a real sweep of 228 remote branches.
