@@ -507,5 +507,35 @@ kill_in_base(){ # kill_in_base <label> <signal> <expected exit code>
 kill_in_base "PI-41 AC5 SIGTERM during the base re-check" TERM 143
 kill_in_base "PI-41 AC5 SIGINT during the base re-check" INT 130
 kill_in_base "PI-41 AC5 SIGHUP during the base re-check" HUP 129
+
+# --- PI-41, the caller side — the distinction is worthless if the reviewer still acts on "red = needs work" ---
+# ($RVWR was resolved above, from this script's own repo root)
+VSTEP=$(awk '/^## Step 3 — Mechanical verification/,/^```bash$/{print} /^It runs lint, type-check/{print}' "$RVWR")
+R41=0; grep -qF 'verify.sh $N 2>&1 | tail -40' "$RVWR" && R41=1
+ok "PI-41 caller — reviewer.md no longer throws the exit code away in a pipe" "[ $R41 -eq 0 ]"
+R41=1; grep -qF 'VRC=$?' "$RVWR" && R41=0
+ok "PI-41 caller — reviewer.md captures verify.sh's exit code and prints it" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'pre-existing on base (cause: base-moved)' && R41=0
+ok "PI-41 caller — reviewer.md names the inherited verdict verbatim" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'NEEDS WORK immediately' && R41=0
+ok "PI-41 caller — reviewer.md still sends an own-diff red straight to NEEDS WORK" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'attribution unknown' && R41=0
+ok "PI-41 caller — reviewer.md treats an unknown attribution as the PR's own red" "[ $R41 -eq 0 ]"
+R41=1; printf '%s\n' "$VSTEP" | grep -qF 'per check, never per assertion' && R41=0
+ok "PI-41 caller — reviewer.md states the limit of what a base-red check excuses" "[ $R41 -eq 0 ]"
+# the rule lives in more than one file, and a second copy is exactly how it goes stale: no doc may still
+# reduce verify.sh to "red = needs work" (tasks/ and docs/reports/ are history, not instructions)
+# The paths are matched RELATIVE to the repo root, never absolute: this suite normally runs from an agent
+# worktree, whose own absolute path contains /.claude/worktrees/, so an absolute filter would exclude every
+# file in the repo and the assertion would pass no matter what any file said (measured: it did).
+# Excluded on purpose: tasks/ and docs/reports/ are history, .claude/worktrees/ holds other branches.
+STALE=$(cd "$REPO_ROOT" && grep -rn --include='*.md' 'red = needs work' . | grep -vE '^\./(tasks|docs/reports|\.claude/worktrees)/')
+R41=0; [ -n "$STALE" ] && R41=1
+ok "PI-41 caller — no instruction file still reduces a red to 'red = needs work'" "[ $R41 -eq 0 ]"
+R41=1; grep -qF 'a red already at the tip of' "$REPO_ROOT/CLAUDE.md" && R41=0
+ok "PI-41 caller — CLAUDE.md's script table states the new exit codes" "[ $R41 -eq 0 ]"
+# and the script's own header must document the codes a caller is now expected to read
+R41=1; grep -qE '^#   3  RED, inherited' "$SCRIPT" && grep -qE '^#   1  RED, this branch' "$SCRIPT" && R41=0
+ok "PI-41 caller — verify.sh documents every exit code it can return" "[ $R41 -eq 0 ]"
 [[ $fail -eq 0 ]] && echo "verify.test.sh: ALL PASS" || echo "verify.test.sh: FAILURES"
 exit $fail

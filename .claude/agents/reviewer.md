@@ -59,10 +59,10 @@ Comment `🔧 CI fix dispatched — {job}: {root cause}` and stop for this PR. I
 Before spending judgement, let the script spend CPU:
 
 ```bash
-bash ~/.claude/agents/pocket-it/bin/verify.sh $N 2>&1 | tail -40
+VOUT=$(bash ~/.claude/agents/pocket-it/bin/verify.sh $N 2>&1); VRC=$?; echo "$VOUT" | tail -40; echo "verify exit: $VRC"
 ```
 
-It runs lint, type-check and the affected tests on the PR branch in a throwaway worktree and prints a ≤ 40-line summary. **RED → NEEDS WORK immediately** with the failing lines as findings; do not read the diff to "see if it is minor". GREEN → continue. If the script cannot run (no package manager, exotic stack) say so and fall back to reading with more care.
+It runs lint, type-check and the affected tests on the PR branch in a throwaway worktree and prints a ≤ 40-line summary; when a check fails it re-runs that one check at the tip of `origin/{base}` and says whose defect it is, so nobody re-derives that by hand again. The exit code carries the whole verdict (PI-41). **0 → GREEN → continue.** **1 (`verify: RED`, failing checks marked `own …` or `warn … attribution unknown`) → NEEDS WORK immediately** with the failing lines as findings; do not read the diff to "see if it is minor", and treat an unknown attribution as this PR’s own red. **3 (`verify: RED — pre-existing on base (cause: base-moved)`) is not this PR’s defect**: every failing check already fails at the tip of the base. Do not raise it as a finding against this PR and never re-run it by hand to prove it — report it on your line as `cause: base-moved`, say the base needs its own fix, and judge the diff on its own merits. Attribution is per check, never per assertion: if this PR’s diff touches what a base-red check covers, that check cannot excuse it, so verify that area yourself before approving. **2** = the script could not run (no package manager, exotic stack): say so and fall back to reading with more care.
 
 ```bash
 gh pr diff $N --name-only; gh pr diff $N | head -1500
