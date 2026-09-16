@@ -696,4 +696,105 @@ RUNWAVE_SKILL="$(cd .. && pwd -P)/.claude/skills/run-wave/SKILL.md"
 ok "AC5 run-wave Step 5 checks the merged PR's task file says Status: Done, and fixes it if not" \
   'grep -A2 "gh pr merge {n} --squash --delete-branch" "$RUNWAVE_SKILL" | grep -q "make sure .tasks/{ID}-\*\.md. says .\*\*Status\*\*: Done. (set it if the developer left it otherwise"'
 
+# --- repo 15: PI-42 — §4b checks exactly the sections the board cites, never a hardcoded set ---
+# Invented project, invented section numbers: 5.2/9.9/42.7 exist in the project TAD, 7.6 only in a
+# delta; none of these are any real project's numbering, on purpose.
+tad_task(){ # tad_task <path> <TAD-line> — minimal task file with a given **TAD**: line
+  mkdir -p "$(dirname "$1")"
+  printf '# %s\n\n**Status**: Todo\n**Label**: DevOps\n**Files**: `x`\n**TAD**: %s\n\n## Acceptance criteria\n- ok\n' \
+    "$(basename "$1" .md)" "$2" > "$1"
+}
+R15="$S/repo15"
+q git init -q -b main "$R15"
+mkdir -p "$R15/tech-analysis"
+cat > "$R15/tech-analysis/PROJECT_TECH_ANALYSIS.md" <<'EOF'
+## 3. Stack
+Text.
+
+## 5. Endpoints
+### 5.2 Widgets
+Text.
+
+## 9. Testing
+### 9.9 An oddball number this project alone uses
+Text.
+
+## 42. Zeta
+### 42.7 Also odd, on purpose
+Text.
+EOF
+cat > "$R15/tech-analysis/WIDGETS_TECH_DELTA.md" <<'EOF'
+## Delta for widgets
+
+### 7.6 Delta-only section
+Text.
+EOF
+tad_task "$R15/tasks/PI-9001-no-citation.md"          "none"                                                # AC1/AC4: nothing cited -> silent, even though this TAD lacks the old hardcoded numbers (6.2/7.6/8.1/9.3/11.1)
+tad_task "$R15/tasks/PI-9002-unqualified-ok.md"       "§5.2 (endpoints)"                                    # AC1: unqualified citation, section exists in the project TAD -> silent
+tad_task "$R15/tasks/PI-9003-delta-ok.md"             "DELTA §7.6"                                          # AC2: DELTA-qualified, section exists only in the delta -> silent
+tad_task "$R15/tasks/PI-9004-project-missing-section.md" "PROJECT §6.2"                                     # AC3: PROJECT-qualified, section absent from the project TAD -> one warning
+tad_task "$R15/tasks/PI-9005-named-file-ok.md"        "tech-analysis/PROJECT_TECH_ANALYSIS.md (§42.7)"     # AC2 (extra qualifier form): document named directly by path, section present -> silent
+tad_task "$R15/tasks/PI-9006-named-file-missing-doc.md" "tech-analysis/GHOST_TECH_ANALYSIS.md (§9.9)"       # AC6: named document does not exist -> one warning naming the document
+tad_task "$R15/tasks/PI-9007-combined.md"             "PROJECT §5.2 · DELTA §7.6"                           # both keyword-qualified segments on one line, both resolve -> silent
+q git -C "$R15" add -A; q git -C "$R15" commit -qm board
+
+OUT=$(cd "$R15" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC1/AC4 unusual, uncited numbering: not one 'subsections' warning (the hardcoded set is gone)" '! has "subsections"'
+ok "AC1 unqualified citation to an existing section: silent"                    '! has "PI-9002"'
+ok "AC2 DELTA-qualified citation resolved against the delta, section there: silent" '! has "PI-9003"'
+ok "AC3 PROJECT-qualified citation to a missing section: one warning naming task, document and section" \
+  'has "warn  tasks/PI-9004-project-missing-section.md: cites PROJECT §6.2 — no such section in tech-analysis/PROJECT_TECH_ANALYSIS.md"'
+ok "AC2 extra qualifier form (document named by path), section present: silent" '! has "PI-9005"'
+ok "AC6 citation naming a document that does not exist at all: warns about the missing document" \
+  'has "warn  tasks/PI-9006-named-file-missing-doc.md: cites tech-analysis/GHOST_TECH_ANALYSIS.md §9.9 but tech-analysis/GHOST_TECH_ANALYSIS.md does not exist"'
+ok "combined PROJECT . DELTA line, both segments resolve: silent"               '! has "PI-9007"'
+ok "exactly two subsection citation warnings fired (AC3 + AC6), nothing else"    '[[ $(grep -c "^warn.*: cites " <<<"$OUT") -eq 2 ]]'
+ok "a subsection citation warning never fails doctor (exit 0)"                  '[[ $rc -eq 0 ]]'
+
+# mutation: restore the hardcoded expected/present check this task removes, on the same fixture —
+# proves the AC1/AC4 assertion above is not vacuous (it would go red without the fix).
+MUT_PI42=$(mktemp "${TMPDIR:-/tmp}/doctor-mut-pi42.XXXXXX")
+python3 - "$SCRIPT" "$MUT_PI42" <<'PYEOF'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src).read()
+old_bug = (
+    'for tad in glob.glob("tech-analysis/*_TECH_ANALYSIS.md"):\n'
+    '    txt = open(tad, errors="ignore").read()\n'
+    '    expected = {"5.2","6.2","7.6","8.1","9.3","11.1"}\n'
+    '    present = set(re.findall(r"^### (\\d+\\.\\d+)", txt, re.M))\n'
+    '    missing = expected - present\n'
+    '    if missing and cfg.get("scope","medium") != "simple": '
+    'warn(f"{tad}: subsections referenced by agents missing: {sorted(missing)}")\n'
+)
+mutated, n = re.subn(r"# PI-42 CHECK BEGIN.*?# PI-42 CHECK END\n", lambda m: old_bug, text, flags=re.S)
+assert n == 1, "PI-42 CHECK marker block not found — mutation did not apply"
+open(dst, "w").write(mutated)
+PYEOF
+OUT_MUT=$(cd "$R15" && bash "$MUT_PI42"); rc_mut=$?
+rm -f "$MUT_PI42"
+echo "$OUT_MUT" | sed 's/^/      | /'
+ok "mutation: hardcoded expected set restored -> AC1/AC4's silence on unusual, uncited numbering goes red" \
+  'grep -q "subsections referenced by agents missing" <<<"$OUT_MUT"'
+
+# --- repo 16: AC5 — top-level order-out-of-order check is untouched by this task ---
+R16="$S/repo16"
+q git init -q -b main "$R16"
+mkdir -p "$R16/tech-analysis"
+cat > "$R16/tech-analysis/PROJECT_TECH_ANALYSIS.md" <<'EOF'
+## 40. Zeta
+Text.
+
+## 9. Alpha
+Text.
+EOF
+task "$R16/tasks/PI-9101-any.md" "Todo"
+q git -C "$R16" add -A; q git -C "$R16" commit -qm board
+OUT=$(cd "$R16" && bash "$SCRIPT"); rc=$?
+echo "$OUT" | sed 's/^/      | /'
+ok "AC5 top-level sections out of order: still an ERROR, unchanged wording" \
+  'has "ERROR tech-analysis/PROJECT_TECH_ANALYSIS.md: top-level sections out of order: [40, 9]"'
+ok "AC5 out-of-order TAD: doctor exits 1"           '[[ $rc -eq 1 ]]'
+
 exit $fail
