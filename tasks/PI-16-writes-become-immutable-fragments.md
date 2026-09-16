@@ -1,6 +1,6 @@
 # PI-16 — Le scritture diventano frammenti immutabili; congelamento del vecchio file; `retract`
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
@@ -13,7 +13,7 @@
 **Files**: bin/handoff.sh, bin/handoff.test.sh, .claude/agents/shared/implementing-common.md:104,118, .claude/agents/developer.md:112, .claude/agents/retro.md:3,34,48,58, .claude/skills/quickfix/SKILL.md:79, .claude/skills/run-wave/SKILL.md:48, CLAUDE.md:78,79,160,161,164, README.md:46,74
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§2.4 ADR-3, ADR-4, ADR-5, §4.2, §4.3, §4.4, §5.2, §6, §9.2, §11.2, §12 PI-16, §13 R-01, R-02, R-03, R-07)
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-16-writes-immutable-fragments
 **PR**: 
 
 ## Goal
