@@ -1,6 +1,6 @@
 # PI-42 — doctor must check the TAD sections the board actually cites, not a hardcoded list
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
