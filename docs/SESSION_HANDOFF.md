@@ -65,6 +65,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-16 PI-41 PR #83 needs work — a branch's own red attributed to the base — cause: first-round
 - 2026-09-16 PI-42 PR #82 needs work — en-dash range citations checked only endpoints — cause: first-round
 - 2026-09-16 PI-40 PR #81 needs work — writer can still inject a heading from its own argument — cause: first-round
+- 2026-09-16 PI-42 PR #82 draft — doctor derives TAD subsection checks from citations — 15 tests
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
 - 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
@@ -96,4 +97,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-35 PR #66 needs work — il segno si riconosce anche in prosa — cause: first-round
 - 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests
 - 2026-09-14 PI-34 PR #64 approved (delta 4) — merge: orchestrator, prima di #66
-- 2026-09-14 PI-34 PR #64 giro 4 fix pushed — scratch tenuta se HEAD non su remote, nomi scratch a cifre esatte — 2 nuovi test, 180 verdi

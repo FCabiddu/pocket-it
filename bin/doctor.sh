@@ -318,16 +318,119 @@ for bd in bad_deltas:
     if not re.search(r"Given .*, when .*, then ", txt, re.I): warn(f"{bd}: no Given/When/Then acceptance criteria")
     if "US-1:" in txt and (bad_project or bad_full) and not re.search(r"supersedes US-1\b", txt): warn(f"{bd}: US-1 — story numbering restarted instead of continuing the project sequence")
 
-# 4b. TAD numbering contract
+# 4b. TAD numbering contract: top-level order (AC5, untouched below).
 for tad in glob.glob("tech-analysis/*_TECH_ANALYSIS.md"):
     txt = open(tad, errors="ignore").read()
     heads = re.findall(r"^## (\d+)\.", txt, re.M)
     nums = [int(h) for h in heads]
     if nums and nums != sorted(nums): err(f"{tad}: top-level sections out of order: {nums}")
-    expected = {"5.2","6.2","7.6","8.1","9.3","11.1"}
-    present = set(re.findall(r"^### (\d+\.\d+)", txt, re.M))
-    missing = expected - present
-    if missing and cfg.get("scope","medium") != "simple": warn(f"{tad}: subsections referenced by agents missing: {sorted(missing)}")
+
+# PI-42 CHECK BEGIN
+# 4b2. The subsections doctor checks are exactly the ones the board's own task files cite in their
+# **TAD**: line — never a hardcoded set. A hardcoded expected={"5.2",...} warned forever on a valid
+# TAD numbered differently from some other project (no edit to the board could ever clear it), and it
+# checked a section cited only in a feature delta against the wrong document. Citation grammar found
+# across real boards (implementation-planner.md's own template, plus this repo's own tasks/*.md — see
+# the PI-42 report for the forms and where each was found): "none" (nothing cited, or "none — why");
+# a bare "§N[.N]" list with no document named, resolved against the single project TAD; keyword-
+# qualified segments joined by U+00B7 ("PROJECT §… · DELTA §…", matched case-insensitively — a review
+# round found the real board using "delta" lower-case, which the case-sensitive match used to drop
+# through to "unqualified" and silently check against the wrong document, the exact forever-warning
+# failure mode this task exists to fix); and a document named directly by its path with the sections
+# in parens ("path/X_TECH_ANALYSIS.md (§2.3, §4.4, §12 note)"). The unqualified branch is reached only
+# when a segment genuinely starts with "§" and no qualifier was written at all — a leading word that
+# is neither PROJECT/DELTA nor a *.md path is an unrecognised qualifier and is warned about, never
+# silently defaulted to the project TAD. A dot in the cited number means a subsection ("### N.N"); no
+# dot means a top-level section ("## N.").
+#
+# A range ("§4.1–§4.4") used to be read as its two endpoints only, silently dropping every section in
+# between — found live on this repo's own board (tasks/PI-14, PI-16 cite exactly this form). The
+# separator may be a hyphen, an en dash, an em dash or the word "to", with any whitespace around it,
+# and the second "§" is optional. A range expands to every section between its ends, inclusive, only
+# when both ends are at the same depth and non-descending (§4.1–§4.4, or the single-element §4.1–§4.1,
+# or a bare top-level §9–§11); a range whose ends sit at different depths (§4–§4.4), that names a
+# different top-level section on each end, or that runs backwards (§4.4–§4.1) is malformed — it is
+# never silently reduced to its endpoints (that would be this same bug in a smaller shape): it is
+# warned about once, by its own literal text, and none of its numbers are checked.
+MIDDOT = "·"
+_doc_cache = {}
+def _doc_text(path):
+    if path not in _doc_cache:
+        _doc_cache[path] = open(path, errors="ignore").read() if os.path.exists(path) else None
+    return _doc_cache[path]
+def _has_section(text, sec):
+    if "." in sec: return re.search(rf"^### {re.escape(sec)}\b", text, re.M) is not None
+    return re.search(rf"^## {re.escape(sec)}\.", text, re.M) is not None
+
+_RANGE_RE = re.compile(r"§(\d+(?:\.\d+)?)\s*(?:[-–—]|\bto\b)\s*§?(\d+(?:\.\d+)?)", re.IGNORECASE)
+def _expand_sections(body):
+    # -> (sections, malformed) — sections is every individual "N" / "N.N" the body cites once ranges
+    # are expanded; malformed is the raw text of any range this function refuses to guess about.
+    sections, malformed = [], []
+    def _consume(m):
+        a, b = m.group(1), m.group(2)
+        a_dot, b_dot = "." in a, "." in b
+        if a_dot and b_dot:
+            a_top, a_sub = a.split(".", 1)
+            b_top, b_sub = b.split(".", 1)
+            if a_top == b_top and a_sub.isdigit() and b_sub.isdigit() and int(a_sub) <= int(b_sub):
+                sections.extend(f"{a_top}.{n}" for n in range(int(a_sub), int(b_sub) + 1))
+                return " "
+        elif not a_dot and not b_dot and int(a) <= int(b):
+            sections.extend(str(n) for n in range(int(a), int(b) + 1))
+            return " "
+        malformed.append(m.group(0))
+        return " "
+    residual = _RANGE_RE.sub(_consume, body)
+    sections.extend(re.findall(r"§(\d+(?:\.\d+)?)", residual))
+    return sections, malformed
+
+project_docs = (["tech-analysis/PROJECT_TECH_ANALYSIS.md"] if os.path.exists("tech-analysis/PROJECT_TECH_ANALYSIS.md")
+                else sorted(glob.glob("tech-analysis/*_TECH_ANALYSIS.md")))
+delta_docs = sorted(glob.glob("tech-analysis/*_TECH_DELTA.md"))
+
+for tid, t in tasks.items():
+    tad_line = t["fields"].get("TAD", "")
+    if not tad_line or re.match(r"(?i)^none\b", tad_line.strip()):
+        continue
+    for segment in tad_line.split(MIDDOT):
+        segment = segment.strip()
+        if not segment: continue
+        m_named = re.match(r"^([\w./-]+\.md)\s*\((.*)\)\s*$", segment)
+        m_kw = re.match(r"^(PROJECT|DELTA)\b\s*[:\-]?\s*(.*)$", segment, re.IGNORECASE)
+        if m_named:
+            doc_paths, doc_label, body = [m_named.group(1)], m_named.group(1), m_named.group(2)
+        elif m_kw:
+            kw = m_kw.group(1).upper()
+            doc_paths = project_docs if kw == "PROJECT" else delta_docs
+            doc_label, body = kw, m_kw.group(2)
+        elif segment.startswith("§"):
+            doc_paths, doc_label, body = project_docs, "the project TAD", segment
+        else:
+            # a leading word that is neither a recognised keyword nor a document path: never silently
+            # fall back to the project TAD for a qualifier this parser failed to understand.
+            _sections, _ranges = _expand_sections(segment)
+            if _sections or _ranges:
+                leading = segment.split()[0]
+                warn(f"{t['file']}: cites §{', §'.join(_sections)} with an unrecognised qualifier "
+                     f"{leading!r} (expected PROJECT, DELTA, or a document path) — not resolved")
+            continue
+        sections, malformed = _expand_sections(body)
+        for bad in malformed:  # never silently reduced to just the two endpoints
+            warn(f"{t['file']}: cites {doc_label} range {bad!r} — malformed (ends at different depth, "
+                 f"descending, or otherwise not a valid span) — not checked")
+        if not sections: continue
+        if not doc_paths:  # AC6: the citation names a document that does not exist at all
+            warn(f"{t['file']}: cites {doc_label} §{', §'.join(sections)} but no such document exists")
+            continue
+        existing = [p for p in doc_paths if _doc_text(p) is not None]
+        if not existing:  # AC6: a named path that is simply not on disk
+            warn(f"{t['file']}: cites {doc_label} §{', §'.join(sections)} but {', '.join(doc_paths)} does not exist")
+            continue
+        for sec in sections:
+            if not any(_has_section(_doc_text(p), sec) for p in existing):  # AC3
+                warn(f"{t['file']}: cites {doc_label} §{sec} — no such section in {', '.join(existing)}")
+# PI-42 CHECK END
 
 # 5. hygiene
 if os.path.exists(".env") and sh("git ls-files .env"): err(".env is committed")
