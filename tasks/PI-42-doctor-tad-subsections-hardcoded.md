@@ -1,6 +1,6 @@
 # PI-42 — doctor must check the TAD sections the board actually cites, not a hardcoded list
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/doctor.sh, bin/doctor.test.sh
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/pi-42-doctor-tad-citations
+**PR**: PENDING
 
 ## Goal
 `bin/doctor.sh` §4b warns `{tad}: subsections referenced by agents missing: [...]` against a set of
@@ -32,22 +32,22 @@ A permanent warning that cannot be cleared is worse than no warning: `doctor.sh`
 and a board whose baseline is "8 warnings, ignore them" cannot surface the ninth.
 
 ## Acceptance criteria
-- [ ] AC1 — Given a board whose task files cite TAD sections, when `doctor.sh` runs, then the sections
+- [x] AC1 — Given a board whose task files cite TAD sections, when `doctor.sh` runs, then the sections
       it checks are exactly the ones the board cites — read from the task files — and the hardcoded
       `expected` set is gone. No task citing a section ⇒ nothing to warn about.
-- [ ] AC2 — Given a citation that names which document it belongs to (the project TAD or a feature
+- [x] AC2 — Given a citation that names which document it belongs to (the project TAD or a feature
       delta), when `doctor.sh` resolves it, then it resolves against **that** document. Cover the whole
       class of qualifiers the boards actually use, not the two spellings this task happens to name:
       derive them from the task files, and say in the report which forms you found.
-- [ ] AC3 — Given a citation that resolves to a heading that does not exist in the document it names,
+- [x] AC3 — Given a citation that resolves to a heading that does not exist in the document it names,
       when `doctor.sh` runs, then it warns once, naming the citing task, the document and the section —
       so the warning says who to fix, not only that something is missing.
-- [ ] AC4 — Given a TAD with a numbering scheme different from any other project's, when no task cites
+- [x] AC4 — Given a TAD with a numbering scheme different from any other project's, when no task cites
       a missing section, then `doctor.sh` is silent about subsections. A document is not required to
       contain a section merely because some other project has one.
-- [ ] AC5 — Given the rest of §4b (top-level sections out of order is an `err`), when this change lands,
+- [x] AC5 — Given the rest of §4b (top-level sections out of order is an `err`), when this change lands,
       then that check is untouched and still errors on an out-of-order document.
-- [ ] AC6 — Given a citation naming a document that does not exist at all, when `doctor.sh` runs, then
+- [x] AC6 — Given a citation naming a document that does not exist at all, when `doctor.sh` runs, then
       it warns about the missing document rather than silently skipping the citation.
 
 ## Tests expected
