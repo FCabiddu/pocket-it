@@ -318,16 +318,68 @@ for bd in bad_deltas:
     if not re.search(r"Given .*, when .*, then ", txt, re.I): warn(f"{bd}: no Given/When/Then acceptance criteria")
     if "US-1:" in txt and (bad_project or bad_full) and not re.search(r"supersedes US-1\b", txt): warn(f"{bd}: US-1 — story numbering restarted instead of continuing the project sequence")
 
-# 4b. TAD numbering contract
+# 4b. TAD numbering contract: top-level order (AC5, untouched below).
 for tad in glob.glob("tech-analysis/*_TECH_ANALYSIS.md"):
     txt = open(tad, errors="ignore").read()
     heads = re.findall(r"^## (\d+)\.", txt, re.M)
     nums = [int(h) for h in heads]
     if nums and nums != sorted(nums): err(f"{tad}: top-level sections out of order: {nums}")
-    expected = {"5.2","6.2","7.6","8.1","9.3","11.1"}
-    present = set(re.findall(r"^### (\d+\.\d+)", txt, re.M))
-    missing = expected - present
-    if missing and cfg.get("scope","medium") != "simple": warn(f"{tad}: subsections referenced by agents missing: {sorted(missing)}")
+
+# PI-42 CHECK BEGIN
+# 4b2. The subsections doctor checks are exactly the ones the board's own task files cite in their
+# **TAD**: line — never a hardcoded set. A hardcoded expected={"5.2",...} warned forever on a valid
+# TAD numbered differently from some other project (no edit to the board could ever clear it), and it
+# checked a section cited only in a feature delta against the wrong document. Citation grammar found
+# across real boards (implementation-planner.md's own template, plus this repo's own tasks/*.md — see
+# the PI-42 report for the forms and where each was found): "none" (nothing cited, or "none — why");
+# a bare "§N[.N]" list with no document named, resolved against the single project TAD; keyword-
+# qualified segments joined by U+00B7 ("PROJECT §… · DELTA §…"); and a document named directly by its
+# path with the sections in parens ("path/X_TECH_ANALYSIS.md (§2.3, §4.4, §12 note)"). A dot in the
+# cited number means a subsection ("### N.N"); no dot means a top-level section ("## N.").
+MIDDOT = "·"
+_doc_cache = {}
+def _doc_text(path):
+    if path not in _doc_cache:
+        _doc_cache[path] = open(path, errors="ignore").read() if os.path.exists(path) else None
+    return _doc_cache[path]
+def _has_section(text, sec):
+    if "." in sec: return re.search(rf"^### {re.escape(sec)}\b", text, re.M) is not None
+    return re.search(rf"^## {re.escape(sec)}\.", text, re.M) is not None
+
+project_docs = (["tech-analysis/PROJECT_TECH_ANALYSIS.md"] if os.path.exists("tech-analysis/PROJECT_TECH_ANALYSIS.md")
+                else sorted(glob.glob("tech-analysis/*_TECH_ANALYSIS.md")))
+delta_docs = sorted(glob.glob("tech-analysis/*_TECH_DELTA.md"))
+
+for tid, t in tasks.items():
+    tad_line = t["fields"].get("TAD", "")
+    if not tad_line or re.match(r"(?i)^none\b", tad_line.strip()):
+        continue
+    for segment in tad_line.split(MIDDOT):
+        segment = segment.strip()
+        if not segment: continue
+        m_named = re.match(r"^([\w./-]+\.md)\s*\((.*)\)\s*$", segment)
+        m_kw = re.match(r"^(PROJECT|DELTA)\b\s*(.*)$", segment)
+        if m_named:
+            doc_paths, doc_label, body = [m_named.group(1)], m_named.group(1), m_named.group(2)
+        elif m_kw:
+            kw = m_kw.group(1)
+            doc_paths = project_docs if kw == "PROJECT" else delta_docs
+            doc_label, body = kw, m_kw.group(2)
+        else:
+            doc_paths, doc_label, body = project_docs, "the project TAD", segment
+        sections = re.findall(r"§(\d+(?:\.\d+)?)", body)
+        if not sections: continue
+        if not doc_paths:  # AC6: the citation names a document that does not exist at all
+            warn(f"{t['file']}: cites {doc_label} §{', §'.join(sections)} but no such document exists")
+            continue
+        existing = [p for p in doc_paths if _doc_text(p) is not None]
+        if not existing:  # AC6: a named path that is simply not on disk
+            warn(f"{t['file']}: cites {doc_label} §{', §'.join(sections)} but {', '.join(doc_paths)} does not exist")
+            continue
+        for sec in sections:
+            if not any(_has_section(_doc_text(p), sec) for p in existing):  # AC3
+                warn(f"{t['file']}: cites {doc_label} §{sec} — no such section in {', '.join(existing)}")
+# PI-42 CHECK END
 
 # 5. hygiene
 if os.path.exists(".env") and sh("git ls-files .env"): err(".env is committed")
