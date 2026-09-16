@@ -61,6 +61,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Per forzare 'git branch -D' a fallire in un test: chmod a-w sulla sottodirectory IMMEDIATA del ref (.git/refs/heads/<sottodir>/), non su .git/refs/heads/ — il permesso di unlink dipende dalla directory padre diretta del file, non da un antenato.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 PI-44 PR #84 needs work — prunable branch kept silently, never announced/counted — cause: example-not-class
 - 2026-09-16 PI-44 PR draft — cleanup-merged kept count + real cause — 198 tests
 - 2026-09-16 PI-41 PR #83 merged — verify.sh distingue il rosso del branch da quello ereditato; lista dei produttori provata rigenerata aggiungendone un ottavo
 - 2026-09-16 PI-42 PR #82 merged — doctor.sh verifica le sezioni che la board cita davvero, intervalli e qualificatori inclusi
