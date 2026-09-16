@@ -31,6 +31,15 @@ ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 has(){ grep -qE "$1" <<<"$OUT"; }
 branch_exists(){ git -C "$M" rev-parse --verify -q "refs/heads/$1" >/dev/null 2>&1; }
 remote_exists(){ git -C "${2:-$M}" rev-parse --verify -q "refs/remotes/origin/$1" >/dev/null 2>&1; }   # after a run: its own fetch --prune already ran
+# PI-44 AC1 — the invariant is the equality, not a list of call sites: count every "kept " line $OUT actually
+# printed and compare it with the number the summary line itself reports, both read from $OUT alone, so a
+# kept-path added to the script later is covered here without this test ever being edited for it.
+kept_equals_summary(){
+  local lines total
+  lines=$(grep -c '^kept ' <<<"$OUT")
+  total=$(grep -oE '[0-9]+ kept' <<<"$OUT" | tail -1 | grep -oE '^[0-9]+')
+  [[ -n "$total" ]] && [[ "$lines" == "$total" ]]
+}
 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 q(){ "$@" >/dev/null 2>&1; }
@@ -133,6 +142,7 @@ ok "dry-run announces the squash-merged worktree via PR" "has 'would remove work
 ok "dry-run announces the worktree.sh-style squash-merged worktree via PR (AC6)" "has 'would remove worktree .*/task-viaworktree \(PR #8 merged\)'"
 ok "dry-run never announces a worktree with no commits of its own (AC1)" "! has 'would remove worktree .*task-(atbase|behind|fromepic|reused|fromgoneepic|fromfix|fromsha|pulled|resetback|freshrebased|noreflog|copied|renamed|revempty|revnopr)'"
 ok "dry-run summary" "has '^cleanup-merged \(dry-run\): 12 worktrees would be removed, 10 branches would be deleted, 0 remote branches would be deleted, 26 kept'"
+ok "AC1+AC4 dry-run summary's kept count equals the kept lines actually printed" 'kept_equals_summary'
 ok "dry-run leaves the directories" "[[ -d $WT/agent-merged && -d $OLD/squash && -d $WT/task-viaworktree && -d $SCRATCH_WT ]]"
 ok "dry-run leaves the branches" "branch_exists task/merged && branch_exists task/squash && branch_exists task/viaworktree && branch_exists task/gone"
 # 3. real run from a non-main worktree whose own branch is merged
@@ -181,6 +191,7 @@ ok "old detached scratch under /tmp removed" "has 'removed worktree .*pocket-it-
 ok "missing on disk, merged: pruned and branch deleted" "has 'pruned worktree .*task-gone ' && ! branch_exists task/gone"
 ok "missing on disk, no commits of its own: pruned, branch kept" "has 'pruned worktree .*task-gonefresh' && branch_exists task/gonefresh"
 ok "summary line" "has '^cleanup-merged: 11 worktrees removed, 9 branches deleted, 2 remote branches deleted, 27 kept, freed [0-9.]+ MB$'"
+ok "AC1 summary's kept count equals the kept lines actually printed" 'kept_equals_summary'
 ok "main checkout untouched" "[[ -d $M && \$(git -C $M branch --show-current) == main ]]"
 # PI-38 F1: task-revmerged/task-squashremote's own worktree is removed by the ordinary loop in THIS same run
 # (both are PR-merged), and the reap pass below re-reads which worktrees are still checked out only after that
@@ -196,13 +207,16 @@ OUT=$(cd "$M" && bash "$SCRIPT")
 ok "former current worktree removed on the next run" "has 'removed worktree .*agent-current \(merged into origin/main\)' && ! branch_exists task/current"
 ok "second run does not re-touch what run 3 already reaped" "! has 'remote branch task/revmerged' && ! has 'remote branch task/squashremote'"
 ok "second run summary" "has '^cleanup-merged: 1 worktrees removed, 1 branches deleted, 0 remote branches deleted, 26 kept'"
+ok "AC1 second run's kept count equals the kept lines actually printed" 'kept_equals_summary'
 OUT=$(cd "$M" && bash "$SCRIPT")
 ok "third run is a no-op" "has '^cleanup-merged: 0 worktrees removed, 0 branches deleted, 0 remote branches deleted, 26 kept, freed 0.0 MB$'"
+ok "AC1 third (no-op) run's kept count equals the kept lines actually printed" 'kept_equals_summary'
 # 5. --all also cleans the merged epic branch, and still keeps everything with work in it
 OUT=$(cd "$M" && bash "$SCRIPT" --all)
 ok "--all removes the merged epic worktree" "has 'removed worktree .*epic-e1 \(merged into origin/main\)' && [[ ! -d $OLD/epic-e1 ]] && ! branch_exists epic/e1"
 ok "--all still keeps live, dirty, locked" "has 'kept .*agent-live \(not merged\)' && has 'kept .*agent-dirty \(dirty\)' && has 'kept .*agent-locked \(locked: no reason given; not a pocket-it lock, never released — its owner runs: git -C [^ ]+ worktree unlock .*agent-locked\)'"
 ok "--all still keeps worktrees with no commits of its own" "has 'kept .*task-atbase \($NOOWN' && has 'kept .*task-behind \($NOOWN' && has 'kept .*task-fromepic \($NOOWN' && has 'kept .*task-fromgoneepic \($NOOWN' && has 'kept .*task-noreflog'"
+ok "AC1 --all run's kept count equals the kept lines actually printed" 'kept_equals_summary'
 ok "worktree list is consistent" "[[ \$(git -C $M worktree list | wc -l | tr -d ' ') -eq 26 ]]"
 # 5b. PI-34 finding 4 — .claude/worktrees/verify-*/wave-overlay-* scratch is removed once no process uses it,
 # never gated by a 24h age like the legacy /tmp layout above: a kill -9'd verify.sh or overlay pass must not
@@ -298,6 +312,7 @@ for mode in absent failing unreadable; do
   ok "PI-31 gh $mode: never says 'no merged PR' about it" "! has 'task-lockmerged .*no merged PR contains its tip'"
   ok "PI-31 gh $mode: unlocked and squash-merged: kept, not merged into a base, PRs unknown" "has \"kept .*task-lockreleased \\(not merged into a base, merged PRs unknown: $UNK\\)\" && [[ -d $L_REL ]]"
   [[ $mode == absent ]] && ok "PI-31 gh absent: locked and missing on disk: pruned, branch kept with the unknown said" "has 'unlocked and pruned worktree .*task-lockgoneunk \(missing on disk\)' && has 'kept branch task/lockgoneunk \(merged PRs unknown: gh not available\)' && branch_exists task/lockgoneunk"
+  ok "AC1 gh $mode run's kept count equals the kept lines actually printed (locked_entry's own kept sites included)" 'kept_equals_summary'
 done
 # the first gh-broken run already pruned lockgoneunk; the gone fixtures judged by a working gh are deleted only now
 rm -rf "$L_GONE" "$L_GONELIVE"
@@ -306,6 +321,7 @@ ok "PI-31 dry-run announces the unlock and the removal, touches nothing" "has 'w
 OUT=$(cd "$M" && bash "$SCRIPT"); rc=$?
 echo "$OUT" | grep lock | sed 's/^/      | /'
 ok "PI-31 exit 0" "[[ $rc -eq 0 ]]"
+ok "AC1 PI-31 lock run's kept count equals the kept lines actually printed" 'kept_equals_summary'
 ok "PI-31 AC2+AC4 locked, at the base tip: kept, still locked, the line says locked and why" "has \"kept .*task-lockfresh \\($LOCKED task/lockfresh $WHEN; no merged PR contains its tip; $REL task/lockfresh\\)\" && [[ -d $L_FRESH && -n \"\$(lockof task-lockfresh)\" ]] && branch_exists task/lockfresh"
 ok "PI-31 AC2 locked, merged by ancestry but by no PR: kept (the unlocked rule would remove it)" "has \"kept .*task-lockancestry \\($LOCKED task/lockancestry $WHEN; no merged PR contains its tip; $REL task/lockancestry\\)\" && [[ -d $L_ANC ]] && branch_exists task/lockancestry"
 ok "PI-31 AC2 locked, commits after its merged PR: kept" "has \"kept .*task-lockafterpr \\($LOCKED task/lockafterpr $WHEN; commits not in merged PR #21; $REL task/lockafterpr\\)\" && [[ -d $L_AFTER ]]"
@@ -424,6 +440,7 @@ ok "PI-38 AC2 negative: branch standing in for a closed-without-merge PR is kept
 ok "PI-38 AC2 negative: branch with no PR at all is kept" "! has 'remote branch r8/nopr' && remote_exists r8/nopr \"$R8\""
 ok "PI-38 AC2 negative: main is never reaped even with a forged matching PR record" "! has 'remote branch main' && remote_exists main \"$R8\""
 ok "PI-38 AC2 negative: commits pushed after the PR merged keep the branch (tip no longer matches the PR head)" "! has 'remote branch r8/afterpr' && remote_exists r8/afterpr \"$R8\""
+ok "AC1 kept count equals the kept lines actually printed" 'kept_equals_summary'
 
 # AC2 positive counterpart, reusing r8/afterpr's dimension: once no further commits are pushed after a fresh PR
 # record taken at its (now final) tip, the same branch is reaped on the very next run — proving the negative
@@ -431,6 +448,7 @@ ok "PI-38 AC2 negative: commits pushed after the PR merged keep the branch (tip 
 pr8 r8/afterpr 103b
 OUT=$(cd "$R8" && bash "$SCRIPT")
 ok "PI-38 AC2 positive counterpart: r8/afterpr is reaped once a PR record matches its current tip" "has 'deleted remote branch r8/afterpr \(merged\)' && ! remote_exists r8/afterpr \"$R8\""
+ok "AC1 kept count equals the kept lines actually printed" 'kept_equals_summary'
 
 # Standalone echo of the same-run scenario the two revmerged/squashremote fixtures above prove, on an isolated
 # repo of this section's own: r8/checkedout's own worktree is merged by PR too, so the ordinary per-worktree
@@ -443,6 +461,7 @@ R8WT="$S/r8wt-checkedout"; q git -C "$R8" worktree add -q "$R8WT" r8/checkedout
 OUT=$(cd "$R8" && bash "$SCRIPT")
 ok "PI-38 AC1/active dim 2 (worktree just removed as merged): worktree and local branch gone" "has 'removed worktree .*r8wt-checkedout \(PR #104 merged\)' && [[ ! -d \"$R8WT\" ]] && ! git -C \"$R8\" rev-parse -q --verify refs/heads/r8/checkedout >/dev/null 2>&1"
 ok "PI-38 AC1/active dim 2: its remote ref is reaped in that very same run, not deferred" "has 'deleted remote branch r8/checkedout \(merged\)' && ! remote_exists r8/checkedout \"$R8\""
+ok "AC1 kept count equals the kept lines actually printed" 'kept_equals_summary'
 
 # AC1/active dim 3: worktree kept, dirty. Still checked out (however untidy), so it stays in the fresh active
 # list read after the loop, and its remote ref is left alone even though a PR record matches its current tip
@@ -453,6 +472,7 @@ R8WTDIRTY="$S/r8wt-dirtykept"; q git -C "$R8" worktree add -q "$R8WTDIRTY" r8/di
 echo untracked > "$R8WTDIRTY/untracked"
 OUT=$(cd "$R8" && bash "$SCRIPT")
 ok "PI-38 AC1/active dim 3: worktree kept dirty, and its remote ref stays despite a matching PR record" "has 'kept .*r8wt-dirtykept \(dirty\)' && [[ -d \"$R8WTDIRTY\" ]] && ! has 'remote branch r8/dirtykept' && remote_exists r8/dirtykept \"$R8\""
+ok "AC1 kept count equals the kept lines actually printed" 'kept_equals_summary'
 q git -C "$R8" worktree remove --force "$R8WTDIRTY"
 
 # AC1/active dim 4: worktree kept, locked (a plain, non-pocket-it lock is never judged for merge status at all,
@@ -464,6 +484,7 @@ R8WTLOCK="$S/r8wt-lockedkept"; q git -C "$R8" worktree add -q "$R8WTLOCK" r8/loc
 q git -C "$R8" worktree lock "$R8WTLOCK"
 OUT=$(cd "$R8" && bash "$SCRIPT")
 ok "PI-38 AC1/active dim 4: worktree kept locked (foreign lock, not judged), remote ref stays despite a matching PR" "has 'kept .*r8wt-lockedkept \(.*not a pocket-it lock' && [[ -d \"$R8WTLOCK\" ]] && ! has 'remote branch r8/lockedkept' && remote_exists r8/lockedkept \"$R8\""
+ok "AC1 kept count equals the kept lines actually printed" 'kept_equals_summary'
 q git -C "$R8" worktree unlock "$R8WTLOCK" >/dev/null 2>&1; q git -C "$R8" worktree remove --force "$R8WTLOCK"
 
 # AC4 dimension 1: gh entirely absent — remote cleanup skips silently, exit 0, local worktree/branch cleanup
@@ -478,6 +499,7 @@ OUT=$(cd "$R8" && PATH="$NOGH_PATH" bash "$SCRIPT"); rc=$?
 ok "PI-38 AC4 gh absent: remote cleanup skipped in silence, exit 0" "[[ $rc -eq 0 ]] && has 'remote branch cleanup skipped \(gh not available\)' && ! has 'remote branch r8/'"
 ok "PI-38 AC4 gh absent: remote branch left alone despite a matching PR record" "remote_exists r8/localgh1 \"$R8\""
 ok "PI-38 AC4 gh absent: local worktree cleanup (no gh needed, ancestry alone) still happens" "has 'removed worktree .*r8wt-localgh1 \(merged into (origin/)?main\)' && [[ ! -d \"$S/r8wt-localgh1\" ]]"
+ok "AC1 kept count equals the kept lines actually printed" 'kept_equals_summary'
 
 # AC4 dimension 2: gh present but `gh pr list` fails (stands in for no network) — same guarantees.
 q git -C "$R8" worktree add -q -b task/localgh2wt "$S/r8wt-localgh2" main
@@ -488,14 +510,77 @@ OUT=$(cd "$R8" && GH_FAIL=1 bash "$SCRIPT"); rc=$?
 ok "PI-38 AC4 gh pr list failing (no network): remote cleanup skipped in silence, exit 0" "[[ $rc -eq 0 ]] && has 'remote branch cleanup skipped \(gh pr list failed, exit 4\)' && ! has 'remote branch r8/'"
 ok "PI-38 AC4 gh pr list failing: remote branch left alone" "remote_exists r8/localgh1 \"$R8\""
 ok "PI-38 AC4 gh pr list failing: local worktree cleanup still happens" "has 'removed worktree .*r8wt-localgh2 \(merged into (origin/)?main\)' && [[ ! -d \"$S/r8wt-localgh2\" ]]"
+ok "AC1 kept count equals the kept lines actually printed" 'kept_equals_summary'
 
-# AC4 dimension 3: gh works, but the push that deletes the remote ref fails (stands in for no write permission /
-# no network to origin itself) — the branch is kept, one report line, exit 0, no hang; nothing else is aborted.
+# AC4 dimension 3: gh works, but the push that deletes the remote ref fails for real (stands in for no write
+# permission / no network to origin itself) — the branch is kept, one report line, exit 0, no hang; nothing else
+# is aborted. PI-44 AC2: the message must name the cause git itself gave (here, a real "Permission denied" from
+# the filesystem-backed origin) and never the old guessed "no permission or network" — and AC1: this failure,
+# unlike an already-gone branch (tested next), is a genuine failure and must still be counted as kept.
 chmod -R a-w "$ORIGIN8"
 OUT=$(cd "$R8" && bash "$SCRIPT"); rc=$?
 chmod -R u+w "$ORIGIN8"
-ok "PI-38 AC4 push-delete failing: reported and kept, exit 0, script not aborted" "[[ $rc -eq 0 ]] && has 'kept remote branch r8/localgh1 \(delete failed: no permission or network\)'"
+ok "PI-44 AC2 push-delete failing: reported and kept, exit 0, script not aborted, with the cause git itself gave" "[[ $rc -eq 0 ]] && has 'kept remote branch r8/localgh1 \(delete failed: .*Permission denied'"
+ok "PI-44 AC2 push-delete failing: never the old guessed cause" "! has 'no permission or network'"
 ok "PI-38 AC4 push-delete failing: remote branch really still there" "remote_exists r8/localgh1 \"$R8\""
+ok "AC1 kept count equals the kept lines actually printed (the genuine push failure IS counted)" 'kept_equals_summary'
+
+# PI-44 AC3 — the remote branch is genuinely already gone from origin by the time this pass's own `push
+# --delete` runs, but this run's OWN initial `fetch --prune` (top of the script) never saw that: a git wrapper
+# stands in for the race documented at cleanup-merged.sh's own top comment (a concurrent delete landing in the
+# gap between that fetch and this pass reading `refs/remotes/origin`) by making just that one fetch call a
+# no-op, so the stale local tracking ref survives to reach the real push — which meets an origin that never
+# had the branch (deleted here directly on the bare repo, bypassing R8's own push so its local tracking ref
+# stays stale) and gets git's own "remote ref does not exist", for real, not simulated.
+REALGIT=$(command -v git)
+mkdir -p "$S/nofetch"
+cat > "$S/nofetch/git" <<WRAPEOF
+#!/usr/bin/env bash
+case "\$*" in *"fetch --prune -q origin"*) exit 0;; esac
+exec "$REALGIT" "\$@"
+WRAPEOF
+chmod +x "$S/nofetch/git"
+mkr8 r8/alreadygone
+pr8 r8/alreadygone 107
+q git -C "$ORIGIN8" branch -D r8/alreadygone   # gone from origin directly; R8's own refs/remotes/origin/r8/alreadygone stays stale
+OUT=$(cd "$R8" && PATH="$S/nofetch:$PATH" bash "$SCRIPT")
+ok "PI-44 AC3 setup: R8's own tracking ref for the already-gone branch is still there (genuinely stale)" "remote_exists r8/alreadygone \"$R8\""
+ok "PI-44 AC3 already-gone remote branch: reported, never claims a cause it never established" "has 'remote branch r8/alreadygone already gone from origin'"
+ok "PI-44 AC3 already-gone remote branch: not reported or counted as kept" "! has 'kept remote branch r8/alreadygone'"
+ok "AC1 kept count equals the kept lines actually printed (already-gone never inflates it)" 'kept_equals_summary'
+
+# PI-44 AC1 (drop_branch path) — the local branch delete itself fails (no write permission on the loose ref's
+# own directory, `refs/heads/task/`): the worktree is still removed (a failed branch delete never blocks the
+# worktree removal already done), but the branch survives and must be reported AND counted as kept, not just
+# announced. A dedicated repo, since the chmod below hits the one directory every "task/*" branch's ref file
+# in $M shares — the shared fixture above cannot afford it.
+R9="$S/r9"
+q git init -q -b main "$R9"
+echo base > "$R9/f"; q git -C "$R9" add f; q git -C "$R9" commit -qm base
+q git -C "$R9" worktree add -q -b task/r9merged "$S/r9wt" main
+commit "$S/r9wt" task/r9merged
+q git -C "$R9" merge -q --no-ff task/r9merged -m "merge task/r9merged"
+chmod a-w "$R9/.git/refs/heads/task"
+OUT=$(cd "$R9" && bash "$SCRIPT"); rc=$?
+chmod u+w "$R9/.git/refs/heads/task"
+ok "PI-44 AC1 drop_branch delete failure: worktree removed anyway, branch kept and REPORTED" "[[ $rc -eq 0 ]] && has 'removed worktree .*r9wt \(merged into (origin/)?main\)' && has 'kept branch task/r9merged \(delete failed\)'"
+ok "PI-44 AC1 drop_branch delete failure: branch really still there" "git -C \"$R9\" rev-parse --verify -q refs/heads/task/r9merged >/dev/null"
+ok "AC1 kept count equals the kept lines actually printed (drop_branch's own failure IS counted)" 'kept_equals_summary'
+
+# PI-44 AC1 mutation (the one the task itself asks for): revert drop_branch's fix back to its exact pre-fix
+# form — a raw, uncounted echo instead of a call through keep() — and prove the generic invariant catches it
+# without any test naming this call site: reusing the same kept_equals_summary this suite already trusts
+# everywhere else is enough to turn the suite red the moment any kept-path stops incrementing the counter.
+sed 's/keep "branch $1" "delete failed"/echo "kept branch $1 (delete failed)"/' "$SCRIPT" > "$S/mutant9.sh"
+ok "PI-44 AC1 mutant really differs from the script (drop_branch's counted keep reverted to a raw echo)" "grep -q 'echo \"kept branch \$1 (delete failed)\"' \"$S/mutant9.sh\" && ! cmp -s \"$SCRIPT\" \"$S/mutant9.sh\""
+q git -C "$R9" worktree add -q -b task/r9merged2 "$S/r9wt2" main
+commit "$S/r9wt2" task/r9merged2
+q git -C "$R9" merge -q --no-ff task/r9merged2 -m "merge task/r9merged2"
+chmod a-w "$R9/.git/refs/heads/task"
+OUT=$(cd "$R9" && bash "$S/mutant9.sh")
+chmod u+w "$R9/.git/refs/heads/task"
+ok "PI-44 AC1 mutant: the raw echo still announces it (this is what the fix removed, not the message)" "has 'kept branch task/r9merged2 \(delete failed\)'"
+ok "PI-44 AC1 mutant: the invariant catches the regression — kept count no longer equals the lines printed" "! kept_equals_summary"
 
 # AC5 — mutation: remove the PR-state match itself (not just skip it) so every non-active, non-protected
 # remote branch is treated as matched, regardless of any merged PR — the negative AC2 cases must now start
