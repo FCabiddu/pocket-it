@@ -179,3 +179,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 PI-35 PR #66 draft — retro-due.sh signal script, run-wave/quickfix trigger, retro-mark write — 34 tests
 - 2026-09-13 PI-35 PR #66 needs work — il segno si riconosce anche in prosa — cause: first-round
 - 2026-09-14 PI-35 round 2 fix pushed — anchored mark/BUDGET/STALL/needs-work, exit-2 contract, no duplicate retro, initial mark above #65 — 57 tests green
+- 2026-09-14 PI-35 PR #66 needs work (delta 2) — cause e needs work non ancorati — cause: example-not-class

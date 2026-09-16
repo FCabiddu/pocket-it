@@ -60,6 +60,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - verify.sh's exit 3 cannot see state the two runs SHARE because it lives outside both worktrees: verify.sh lends the main checkout's node_modules to the branch tree (:111) and to the base tree (:279), so a branch check that writes there — or to a port, a $HOME cache, a database, /tmp — makes the base re-run fail too and the branch's own red comes out as the base's (measured 2026-09-16: a test writing node_modules/.cache/poison gives exit 3 while the base tree alone exits 0; the control without the write exits 1). No exit code can settle it. It is contained because the vector needs the branch's check to have run and mutated the shared state, so the base-red check always covers code the diff touches — exactly the case where reviewer.md already requires re-running that area by hand.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 PI-45 PR #85 needs work — MUT_LOCALE range sed swallows to EOF, marker still found — cause: first-round
 - 2026-09-16 PI-44 PR #84 needs work — prunable branch kept silently, never announced/counted — cause: example-not-class
 - 2026-09-16 PI-41 PR #83 merged — verify.sh distingue il rosso del branch da quello ereditato; lista dei produttori provata rigenerata aggiungendone un ottavo
 - 2026-09-16 PI-42 PR #82 merged — doctor.sh verifica le sezioni che la board cita davvero, intervalli e qualificatori inclusi
@@ -99,4 +100,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
 - 2026-09-14 PI-35 PR #66 needs work (delta 3) — forma (delta) non riconosciuta — cause: example-not-class
 - 2026-09-14 PI-35 round 3 fix pushed — cause/needs-work read by field position not example, mark verified above #65 — 71 tests green
-- 2026-09-14 PI-35 PR #66 needs work (delta 2) — cause e needs work non ancorati — cause: example-not-class
