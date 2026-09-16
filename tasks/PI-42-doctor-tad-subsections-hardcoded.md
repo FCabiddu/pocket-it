@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-42-doctor-tad-citations
-**PR**: PENDING
+**PR**: https://github.com/FCabiddu/pocket-it/pull/82
 
 ## Goal
 `bin/doctor.sh` §4b warns `{tad}: subsections referenced by agents missing: [...]` against a set of
