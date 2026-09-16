@@ -188,3 +188,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
 - 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
+- 2026-09-15 PI-15 PR #71 needs work — AC1 grep not actually empty, status.test.sh matches
