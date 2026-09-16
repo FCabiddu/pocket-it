@@ -57,9 +57,11 @@
 # right here, in this same run — the remote delete only ever touches a remote ref, never a live worktree's own
 # checkout, local branch or files, so nothing about a worktree still present is disturbed either way. A branch
 # still checked out in one of this repo's own worktrees when this pass runs is left alone entirely and picked up
-# by this pass on a later run once it no longer is. `gh` missing, `gh pr list` failing, or the delete push failing
-# (no network, no permission) skips that step or that one branch in silence — one report line, no error, exit 0;
-# the rest of the cleanup (worktrees, local branches) is unaffected.
+# by this pass on a later run once it no longer is. `gh` missing or `gh pr list` failing skips the whole pass;
+# the delete push failing skips only that one branch — either way one report line, no error, exit 0, the rest
+# of the cleanup (worktrees, local branches) unaffected. A failed push is never assumed to be "no network, no
+# permission" (PI-44): already-gone-from-origin is told apart from a real failure, whose own message is what
+# gets reported — see `reap_remote_branches`'s own comment.
 # Exit 0 always (2 on usage error). Safe to run repeatedly.
 set -uo pipefail
 DRY=0; ALL=0
@@ -216,11 +218,15 @@ in_use(){ command -v lsof >/dev/null 2>&1 && [[ -n "$(lsof +D "$1" 2>/dev/null)"
 kb(){ du -sk "$1" 2>/dev/null | cut -f1; }
 
 removed=0; deleted=0; remote_deleted=0; kept=0; before=0; after=0
+# PI-44: `keep` is the ONLY place that announces a kept branch or worktree, so it is the only place that
+# increments `kept` — every call site below prints through it instead of its own `echo "kept …"`, which is what
+# makes the summary's count equal the number of "kept " lines by construction, for every kept-path today and any
+# added later, rather than something each new call site has to remember to do.
 keep(){ echo "kept $1 ($2)"; kept=$((kept+1)); }
 drop_branch(){ # $1 branch
   [[ -z "$1" ]] && return 0
   if (( DRY )); then echo "would delete branch $1"; deleted=$((deleted+1)); return 0; fi
-  if g branch -D "$1" >/dev/null 2>&1; then echo "deleted branch $1"; deleted=$((deleted+1)); else echo "kept branch $1 (delete failed)"; fi; }
+  if g branch -D "$1" >/dev/null 2>&1; then echo "deleted branch $1"; deleted=$((deleted+1)); else keep "branch $1" "delete failed"; fi; }
 # PI-38: every remote branch NOT currently checked out in one of this repo's own worktrees (a branch still
 # checked out anywhere is left entirely to the loop above and to a later run once it is not — never touched
 # here, so this pass never competes with the current worktree's own decision or removes a ref out from under
@@ -228,12 +234,27 @@ drop_branch(){ # $1 branch
 # tip equals a merged PR's own head — never by ancestry (AC3: squash breaks it by construction) — so a branch
 # with an open PR, a closed-unmerged PR, no PR at all, or commits pushed after the PR merged (its tip then
 # differs from every recorded head) is left alone. Protected/base branches are skipped even if a same-named
-# PR exists. `gh` missing, `gh pr list` failing, or a single push failing (no network, no permission) is
-# reported and skipped without ever aborting the pass or the script.
+# PR exists. `gh` missing or `gh pr list` failing is reported and skips the whole pass; a `push --delete` that
+# fails is reported and skips only that one branch — never aborts the pass or the script — and (PI-44) is one
+# of two things, told apart instead of both being called "no permission or network": the branch is simply
+# already gone from origin (this run's own `refs/remotes/origin` cache, taken by the single fetch near the top
+# of the script, was stale by the time this push ran — see that fetch's own comment) and that is reported and
+# never counted as kept, since nothing was kept by leaving it, it was already gone; or the push genuinely failed,
+# which is counted (so the summary's kept count still holds, AC1) and reported with the cause git's own stderr
+# gave, collapsed to one line — never a guessed cause.
+remote_push_cause(){ # $1 raw stderr from a failed `git push --delete` → the cause actually observed, one line
+  local line out=""                        # ("To <url>" is just the destination git prints, never the cause)
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    case "$line" in "To "*) continue;; esac
+    out="${out:+$out; }$line"
+  done <<<"$1"
+  printf '%s' "${out:-cause unknown}"
+}
 reap_remote_branches(){
   command -v gh >/dev/null 2>&1 || { echo "remote branch cleanup skipped (gh not available)"; return 0; }
   g remote get-url origin >/dev/null 2>&1 || { echo "remote branch cleanup skipped (no origin)"; return 0; }
-  local prs rc active wline rline name rsha found pname poid
+  local prs rc active wline rline name rsha found pname poid push_err
   prs=$(cd "$MAIN" && gh pr list --state merged --limit 1000 --json headRefName,headRefOid \
         --jq '.[] | "\(.headRefName)\t\(.headRefOid)"' 2>/dev/null); rc=$?
   (( rc == 0 )) || { echo "remote branch cleanup skipped (gh pr list failed, exit $rc)"; return 0; }
@@ -256,10 +277,17 @@ reap_remote_branches(){
     done <<<"$prs"
     [[ -z "$found" ]] && continue
     if (( DRY )); then echo "would delete remote branch $name (merged)"; remote_deleted=$((remote_deleted+1))
-    elif g push origin --delete "$name" -q >/dev/null 2>&1; then
-      echo "deleted remote branch $name (merged)"; remote_deleted=$((remote_deleted+1))
     else
-      echo "kept remote branch $name (delete failed: no permission or network)"
+      push_err=$(g push -q origin --delete "$name" 2>&1 1>/dev/null); rc=$?
+      if (( rc == 0 )); then
+        echo "deleted remote branch $name (merged)"; remote_deleted=$((remote_deleted+1))
+      elif [[ "$push_err" == *"remote ref does not exist"* ]]; then
+        # AC3: the local `refs/remotes/origin` cache this pass reads was stale — the branch was already gone
+        # from the real origin, so nothing was kept by leaving it; never counted as kept, never re-attempted.
+        echo "remote branch $name already gone from origin (stale tracking ref)"
+      else
+        keep "remote branch $name" "delete failed: $(remote_push_cause "$push_err")"
+      fi
     fi
   done < <(g for-each-ref --format='%(refname:short) %(objectname)' refs/remotes/origin | sed 's#^origin/##')
 }
@@ -287,11 +315,11 @@ locked_entry(){ # $1 path, $2 sha, $3 branch, $4 lock reason → the only way ou
     else keep "$p" "$shown; missing on disk, unlock failed"; return 0; fi
     removed=$((removed+1))
     [[ -z "$b" ]] && return 0
-    protected "$b" && (( ! ALL )) && { echo "kept branch $b (protected)"; return 0; }
+    protected "$b" && (( ! ALL )) && { keep "branch $b" "protected"; return 0; }
     why=$(merged_pr "$sha" "$b"); rc=$?
     (( rc == 0 )) && { drop_branch "$b"; return 0; }
     (( rc == 2 )) && why="merged PRs unknown: $why"
-    echo "kept branch $b (${why:-no merged PR contains its tip})"; return 0; fi
+    keep "branch $b" "${why:-no merged PR contains its tip}"; return 0; fi
   [[ -z "$b" ]] && { keep "$p" "$shown; no branch"; return 0; }
   rel="release if abandoned or merged without a PR: bash $(printf '%q' "$SELF_DIR/worktree.sh") --unlock $(printf '%q' "$MAIN") $(printf '%q' "$b")"
   protected "$b" && (( ! ALL )) && { keep "$p" "$shown; protected branch $b (--all to judge it); $rel"; return 0; }
@@ -310,8 +338,14 @@ for e in "${entries[@]}"; do
   case " $flags " in *" locked "*) locked_entry "$p" "$sha" "$branch" "$lockr"; continue;; esac
   case " $flags " in *" prunable "*)
     echo "pruned worktree $p (missing on disk)"; removed=$((removed+1)); (( DRY )) || g worktree prune >/dev/null 2>&1
-    [[ -n "$branch" ]] && ( protected "$branch" && (( ! ALL )) ) && continue
-    [[ -n "$branch" ]] && decide "$sha" "$branch" >/dev/null && drop_branch "$branch"; continue;; esac
+    # PI-44: the worktree is already gone (pruned above); what is decided here is only whether ITS BRANCH is
+    # also deleted or kept — and every branch a `continue` here leaves in place must still go through keep(),
+    # mirroring the ordinary loop's own `why=$(decide …) || { keep …; continue; }` a few lines down, or a
+    # branch survives while nothing announces or counts it (the defect this whole task exists to close).
+    [[ -z "$branch" ]] && continue
+    protected "$branch" && (( ! ALL )) && { keep "branch $branch" "protected"; continue; }
+    if why=$(decide "$sha" "$branch"); then drop_branch "$branch"; else keep "branch $branch" "$why"; fi
+    continue;; esac
   case " $flags " in *" detached "*)
     P="$(abs "$p")"
     if is_scratch_new "$P"; then

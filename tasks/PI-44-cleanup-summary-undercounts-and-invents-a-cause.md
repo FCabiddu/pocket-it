@@ -1,6 +1,6 @@
 # PI-44 — cleanup-merged.sh sotto-conta i "kept" e dichiara una causa che non ha accertato
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: pipeline-improvements
 **Story**: pipeline-improvements
@@ -13,8 +13,8 @@
 **Files**: bin/cleanup-merged.sh, bin/cleanup-merged.test.sh
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/pi-44-cleanup-kept-count-and-cause
+**PR**: https://github.com/FCabiddu/pocket-it/pull/84
 
 ## Goal
 Two defects observed together on a real sweep of 228 remote branches.
