@@ -169,3 +169,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
 - 2026-09-13 retro-mark 2026-09-13 flow-errors
 - 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
+- 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
