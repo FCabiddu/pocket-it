@@ -51,8 +51,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - doctor.sh sed-range markers (per una mutazione eseguibile): un em dash sulla stessa riga dell'indirizzo /BEGIN/,/END/ fa fallire silenziosamente l'intero range sotto BSD sed (macOS, confermato anche con LC_ALL=C) — marker su riga pulita, prosa con em dash sulla riga dopo.
 - verify.sh's RED can be a pre-existing defect on the base, unrelated to the PR's own diff, not just a regression the PR introduced: PI-37 (PR #74, 2026-09-15) touched only bin/doctor.sh, bin/doctor.test.sh and run-wave/SKILL.md, yet failed on retro-due.test.sh's own R4F1 self-check because a malformed handoff log line had landed on main from an unrelated merge (fixed in PI-39, #77). The reviewer named it correctly (cause: base-moved) only by hand re-running R4F1 against a clean checkout of origin/main — a manual step that still cost a full needs-work round. Proposed, not yet built: verify.sh re-runs any newly-red assertion against a clean worktree of the base branch's tip before reporting; if that assertion is already red there, it reports 'RED — pre-existing on base (cause: base-moved)' distinctly from an own-diff RED, so developer, reviewer and orchestrator see the distinction without re-diagnosing by hand each time.
 - cleanup-merged.sh reaps remote branches of merged PRs (PI-38) via PR head-vs-tip match, never ancestry (squash breaks ancestry); a branch's own worktree removal and its remote-branch reap can land one run apart (same-run snapshot), never within the same run
+- bin/handoff.sh: una sezione si individua SOLO con split_section ("## " a inizio riga, definita una volta in PY_SECTIONS e condivisa da log, fact e dal composer): un fatto che cita `## Log` nel testo è dato, non intestazione. Verificato con la mutazione (tolto ^): 30 asserzioni rosse, 53 con lo script pre-PI-40.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 PI-40 PR draft — handoff.sh trova le sezioni dalla loro intestazione a inizio riga, non da un marcatore citato dentro un fatto — 42 test nuovi
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
 - 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
@@ -92,4 +94,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
 - 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
 - 2026-09-13 retro-mark 2026-09-13 flow-errors
-- 2026-09-13 retro 2026-09-13 flow errors — 5 patterns, 22 PRs, 53 needs work / 72 reviews — rules in planner, implementing-common §9, reviewer, run-wave, quickfix — PR #65
