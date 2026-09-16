@@ -53,6 +53,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - cleanup-merged.sh reaps remote branches of merged PRs (PI-38) via PR head-vs-tip match, never ancestry (squash breaks ancestry); a branch's own worktree removal and its remote-branch reap can land one run apart (same-run snapshot), never within the same run
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-16 PI-41 PR #83 needs work — a branch's own red attributed to the base — cause: first-round
 - 2026-09-16 PI-42 PR #82 needs work — en-dash range citations checked only endpoints — cause: first-round
 - 2026-09-16 PI-40 PR #81 needs work — writer can still inject a heading from its own argument — cause: first-round
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
@@ -92,4 +93,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-13 PI-34 PR #64 needs work (delta 2) — trap armato dopo il fetch, scratch sporche rimosse — cause: example-not-class
 - 2026-09-13 PI-34 giro 2 fixes pushed — SIGINT/TERM exit codes, conflict-resolution worktree reuse, scratch liveness, git-common-dir — 24 tests
 - 2026-09-13 PI-34 PR #64 needs work — segnale non ferma verify.sh, gira nel checkout — cause: first-round
-- 2026-09-13 PI-34 PR #64 draft — verify.sh + reviewer.md worktrees now under .claude/worktrees/ — 9 tests
