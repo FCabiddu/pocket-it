@@ -61,8 +61,10 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - Per forzare 'git branch -D' a fallire in un test: chmod a-w sulla sottodirectory IMMEDIATA del ref (.git/refs/heads/<sottodir>/), non su .git/refs/heads/ — il permesso di unlink dipende dalla directory padre diretta del file, non da un antenato.
 - cleanup-merged.sh: ogni percorso che lascia in piedi un branch o un worktree passa da keep(), l una funzione che annuncia e conta insieme. Un percorso che tiene qualcosa stampando un messaggio proprio, o NON stampando nulla, e il difetto: PI-44 (PR #84, giro 1) ha chiuso i quattro siti elencati nelle Notes e lasciato aperto il quinto, il ramo prunable del loop principale (worktree sparito dal disco), in due varianti mute - branch protetto senza --all, e decide() che risponde keep con lo stdout in /dev/null: branch vivo, riepilogo "0 kept". Ne un grep di echo "kept (non stampano) ne il test AC1 "righe kept stampate == riepilogo" (0 == 0) possono vederle: l uguaglianza va misurata sul mondo - git for-each-ref refs/heads prima e dopo la corsa, meno i branch davvero cancellati - non sull output dello script.
 - Task file: un elenco di call site nelle ## Notes vince sull invariante scritto negli AC, anche quando l AC dice "vale per ogni percorso, presente e futuro" - PI-44 aveva entrambi e il developer ha corretto l elenco (4 su 5). In questo repo le Notes portano solo starting points, dichiarati tali ("Starting points only, not the boundary of the work"), e il criterio sta negli AC espresso come EFFETTO osservabile (quali branch restano in piedi dopo la corsa), mai come uguaglianza fra due cose che lo script stesso stampa: un percorso muto e membro della classe e nessuna verifica costruita sugli annunci lo vede.
+- no_branch_silently_kept() in bin/cleanup-merged.test.sh only walks worktree entries whose path disappeared from disk: a path that keeps a worktree still present on disk is invisible to it and to kept_equals_summary alike (silencing cleanup-merged.sh:364 leaves both green). Only the 25 hand-typed per-site assertions catch that today. Measured by the PI-44 delta review, 2026-09-16.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-17 PI-44 PR #84 approved (delta 1) — prunable keeps announced and counted, invariant proved at two unwritten sites — merge: orchestrator
 - 2026-09-17 PI-46 PR #88 needs work — test sandbox anchored to the script under test — cause: first-round
 - 2026-09-16 retro-mark 2026-09-16 signals-2026-09-16
 - 2026-09-16 PI-45 PR #85 needs work — MUT_LOCALE range sed swallows to EOF, marker still found — cause: first-round
@@ -102,5 +104,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
 - 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
 - 2026-09-15 PI-37 PR draft — doctor warns merged-PR non-Done task, run-wave Step 5 fixes Status — 111 tests
-- 2026-09-14 PI-35 PR #66 approved (delta 4) — merge: orchestrator
-- 2026-09-14 PI-35 round 4 fix pushed — needs-work qualifier from real log, reviewer.md template gets cause field, merged #64+delta commit — 92 tests green
