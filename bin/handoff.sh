@@ -245,10 +245,24 @@ def branch_slug():
     return "detached-" + re.sub(r'[^0-9a-f]', '', sha.lower())[:7] if sha else "detached"
 
 
+ALPHA4 = string.digits + string.ascii_lowercase        # "0"<..<"9"<"a"<..<"z", i.e. ASCII order
+
+
 def rand4():
     """4 characters [a-z0-9] from the OS entropy source (/dev/urandom, via random.SystemRandom)."""
     rnd = random.SystemRandom()
-    return "".join(rnd.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+    return "".join(rnd.choice(ALPHA4) for _ in range(4))
+
+
+def succ4(s):
+    """The next 4-character suffix after S in ASCII order, or None when S is "zzzz" (no successor)."""
+    d = [ALPHA4.index(c) for c in s]
+    for i in range(len(d) - 1, -1, -1):
+        d[i] += 1
+        if d[i] < len(ALPHA4):
+            return "".join(ALPHA4[j] for j in d)
+        d[i] = 0
+    return None
 
 
 STAMP_FMT = "%Y%m%dT%H%M%SZ"
@@ -273,8 +287,26 @@ def create_fragment(section, entry, after=None):
     slug = branch_slug()
     body = "## %s\n%s\n" % (section, entry)
     os.makedirs(month_dir, exist_ok=True)
+    prefix = "%s-%s-" % (stamp, slug)
     for _ in range(64):
-        name = "%s-%s-%s.md" % (stamp, slug, rand4())
+        # Sub-second order, within one working tree. Two writes in the same second share a stamp, and
+        # §4.3 then orders them by NAME — which would be the random suffix, i.e. a coin toss, exactly
+        # where the log's "most recent on top" is a promise (`log` twice in a row, as an agent does).
+        # A same-second sibling written by THIS tree carries this same stamp and this same slug, so
+        # picking a suffix greater than the greatest one already there makes the sequence monotone and
+        # the composed order causal. It is the name doing the work, not the clock: nothing is rewritten,
+        # no stamp is pushed into the future, and uniqueness still comes from the exclusive create
+        # below (two concurrent writers may pick the same suffix — one of them simply loses the race and
+        # comes back here). Across branches the slugs differ, so concurrent writes stay unordered, which
+        # is what they are.
+        sibs = [n[len(prefix):-3] for n in os.listdir(month_dir)
+                if n.startswith(prefix) and n.endswith(".md") and len(n) == len(prefix) + 7]
+        suffix = rand4()
+        if sibs:
+            floor = max(sibs)
+            if suffix <= floor:
+                suffix = succ4(floor) or suffix
+        name = "%s%s.md" % (prefix, suffix)
         if not NAME_RE.match(name):
             print("handoff: refusing to write a fragment named %r — sanitisation failed" % name,
                   file=sys.stderr)
@@ -452,6 +484,8 @@ if SPEC.get(cmd, (0, 0, None, None, "repo", ""))[4] != "free" and not root:
     sys.exit(1)
 
 if cmd == "__spec":  # internal, used only by bin/handoff.test.sh to generate the tests below
+    if rest:         # it takes no argument: an argument means the caller expected something else
+        usage_exit()
     for name, (lo, hi, _check, bad, kind, syntax) in SPEC.items():
         print("%s %s %s %s %s %s" % (name, lo, "-" if hi is None else hi,
                                      bad if bad is not None else "-", kind, syntax))
