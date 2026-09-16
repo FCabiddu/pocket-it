@@ -524,8 +524,71 @@ mkdir -p "$SBX/empty" "$SBX/full/node_modules/.bin" "$SBX/full/bin" "$SBX/full/t
          "$SBX/branch/tests" "$SBX/branch/src"
 WT_REAL="$SBX/branch"   # base_blockers compares against the branch worktree it was told about
 : > "$SBX/branch/tests/test_x.py"; : > "$SBX/branch/src/new.ts"; : > "$SBX/branch/check.sh"
-# the "full" tree has everything any producer can name: scripts, runners, selectors and marker files
-printf '{"scripts":{"lint":"x","type-check":"x","typecheck":"x","test:affected":"x","test":"x"},"jest":{}}\n' > "$SBX/full/package.json"
+# reuse base_blockers' own list of package-manager subcommands (verify.sh's $pmsub) instead of keeping a
+# second copy of it here — a subcommand added there (a new pm's own verb) is excluded here too, no edit needed.
+PMSUB=$(grep -o 'local pmsub=" [^"]*"' "$SCRIPT" | sed -E 's/^local pmsub="//; s/"$//' | head -1)
+# PI-46 F1 — PMSUB above is read out of the script it also verifies: if verify.sh's own pmsub ever shrank
+# or emptied, PMSUB would shrink or empty with it, and any assertion that only loops over PMSUB would have
+# nothing left to check and pass on an empty loop (measured: dropping exec/dlx, or emptying the list to
+# nothing, both left the suite ALL PASS). PMSUB_FLOOR is a second, independent list — the test's own, never
+# read out of verify.sh — that (a) is looped over instead of PMSUB for the negative half of AC2, so a
+# shrunk PMSUB cannot empty that loop, and (b) is checked as a subset of PMSUB below, so a shrunk or emptied
+# PMSUB is caught and named on its own, not just silently under-tested.
+PMSUB_FLOOR=" install ci add remove rm uninstall link unlink exec dlx why audit publish pack init create update outdated list ls info view config cache dedupe prune store rebuild version "
+R46=0
+for sub in $PMSUB_FLOOR; do
+  case "$PMSUB" in *" $sub "*) ;; *) R46=1; echo "      verify.sh's pmsub no longer has \"$sub\", which this suite's floor requires";; esac
+done
+ok "PI-46 F1 — verify.sh's pmsub is still a superset of this suite's own floor list" "[ $R46 -eq 0 ]"
+# scripts_named <command> — every package script this command runs: `<pm> run <script>` / `<pm> run-script
+# <script>`, and the bare `<pm> <script>` form npm/pnpm/yarn/bun also accept — never a subcommand (checked
+# against PMSUB above, base_blockers' own list), a flag, or an argument that follows the script name.
+scripts_named(){
+  local cmd="$1" toks tok pend="" seg=1
+  toks=$(shlex "$cmd") || return 0
+  while IFS= read -r tok; do
+    [[ -n "$tok" ]] || continue
+    case "$tok" in '&&'|'||'|';'|'|'|'&') seg=1; pend=""; continue;; esac
+    if [[ $seg -eq 1 ]]; then
+      pend=""
+      case "$tok" in env|bash|sh|zsh|command|nice|time|xargs) continue;; esac
+      seg=0
+      case "$tok" in npm|pnpm|yarn|bun) pend=pm;; esac
+      continue
+    fi
+    case "$pend" in
+      pm)
+        case "$tok" in -*) continue;; run|run-script) pend=pmrun; continue;; esac
+        pend=""
+        case "$PMSUB" in *" $tok "*) continue;; esac
+        printf '%s\n' "$tok";;
+      pmrun)
+        case "$tok" in -*) continue;; esac
+        pend=""
+        printf '%s\n' "$tok";;
+    esac
+  done <<< "$toks"
+}
+# one expansion for both sandboxes: the producer templates are shell, and these are the variables they read
+expand(){ PM=npm QUOTED="'src/new.ts' " PYQUOTED="'tests/test_x.py' " BASE_REF=0123456789ab \
+          VITCFG=vitest.config.ts PYCFG=pyproject.toml eval "printf '%s' \"$1\""; }
+PRODBLOCK=$(awk '/^# --- command producers/,/^# --- end command producers/' "$SCRIPT")
+# the "full" tree has everything any producer can name: scripts, runners, selectors and marker files. The
+# scripts are DERIVED from the producers' own commands (never typed here, PI-46 AC1): a producer added later
+# that names a script never seen before is declared the moment scripts_named sees it, no edit to this file.
+SCRIPTNAMES=""
+while IFS= read -r pline; do
+  ptpl=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z0-9]+="[^"]+"' | head -1 | sed 's/^CMD_[A-Z0-9]*="//; s/"$//')
+  [ -n "$ptpl" ] || continue
+  SCRIPTNAMES="$SCRIPTNAMES
+$(scripts_named "$(expand "$ptpl")")"
+done <<EOF
+$(printf '%s\n' "$PRODBLOCK" | grep -E 'CMD_[A-Z0-9]+=("[^"]+"|\$\()')
+EOF
+FULLSCRIPTS=$(printf '%s\n' "$SCRIPTNAMES" | awk 'NF' | sort -u | python3 -c 'import json,sys
+names=[l.strip() for l in sys.stdin if l.strip()]
+print(json.dumps({n: "x" for n in names}))')
+printf '{"scripts":%s,"jest":{}}\n' "$FULLSCRIPTS" > "$SBX/full/package.json"
 for b in vitest jest tsc; do printf '#!/usr/bin/env bash\nexit 0\n' > "$SBX/full/node_modules/.bin/$b"; chmod +x "$SBX/full/node_modules/.bin/$b"; done
 printf '#!/usr/bin/env bash\nexit 0\n' > "$SBX/full/bin/go"; chmod +x "$SBX/full/bin/go"
 : > "$SBX/full/tests/test_x.py"; : > "$SBX/full/src/new.ts"; : > "$SBX/full/check.sh"
@@ -537,18 +600,56 @@ for f in go.mod tsconfig.json pyproject.toml vitest.config.ts .pocket-it.json; d
 mkdir -p "$SBX/marked"; cp -R "$SBX/full/." "$SBX/marked/"
 printf '{"scripts":{},"jest":{}}\n' > "$SBX/marked/package.json"
 rm -f "$SBX/marked/tests/test_x.py" "$SBX/marked/src/new.ts" "$SBX/marked/check.sh"
-# one expansion for both sandboxes: the producer templates are shell, and these are the variables they read
-expand(){ PM=npm QUOTED="'src/new.ts' " PYQUOTED="'tests/test_x.py' " BASE_REF=0123456789ab \
-          VITCFG=vitest.config.ts PYCFG=pyproject.toml eval "printf '%s' \"$1\""; }
-PRODBLOCK=$(awk '/^# --- command producers/,/^# --- end command producers/' "$SCRIPT")
+# PI-46 AC3 — a green run of the ordinary assertions below is not evidence that `marked` really excludes the
+# scripts AC1 now derives: the cp -R above copies `full`'s package.json (with those scripts) before the empty
+# one overwrites it, so the subtraction is one edit away from silently breaking. Execute the failure: make
+# `marked` declare one of the derived scripts, as an accidental inheritance would, and show base_blockers
+# WRONGLY clears the very check it exists to block — then restore it and require the correct, unmutated answer.
+MUTSCRIPT=$(printf '%s' "$FULLSCRIPTS" | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))' 2>/dev/null)
+R46=1; [ -n "$MUTSCRIPT" ] && R46=0
+ok "PI-46 AC1 — at least one script was really derived from a producer command" "[ $R46 -eq 0 ]"
+cp "$SBX/marked/package.json" "$SBX/marked/package.json.orig"
+python3 -c 'import json,sys
+p, s = sys.argv[1], sys.argv[2]
+d = json.load(open(p)); d["scripts"][s] = "x"; json.dump(d, open(p, "w"))' "$SBX/marked/package.json" "$MUTSCRIPT"
+POISONED=$(cd "$SBX/marked" && PATH="$SBX/marked/bin:$PATH" base_blockers "npm run $MUTSCRIPT" package.json)
+mv "$SBX/marked/package.json.orig" "$SBX/marked/package.json"
+R46=1; [ -z "$POISONED" ] && R46=0
+ok "PI-46 AC3 mutation — marked wrongly declaring a derived script really makes base_blockers clear it (the subtraction is load-bearing, not assumed)" "[ $R46 -eq 0 ]"
+CLEAN=$(cd "$SBX/marked" && PATH="$SBX/marked/bin:$PATH" base_blockers "npm run $MUTSCRIPT" package.json)
+R46=1; [ -n "$CLEAN" ] && R46=0
+ok "PI-46 AC3 — marked, unmutated, still answers 'not declared' for a script AC1's derivation added to full" "[ $R46 -eq 0 ]"
+# PI-46 AC2 — the WHOLE CLASS of invocation shapes a producer can emit, not the ones in use today: every
+# package manager x every accepted shape (`run`, `run-script`, bare `<pm> <script>`), a flag before and
+# after the script name — and, the negative half of the same class, every word on PMSUB_FLOOR (this
+# suite's own list, F1 above — never the live PMSUB, or a shrunk PMSUB would shrink this loop's coverage
+# along with it), which must never be read as a script whatever manager it follows.
+R46=0
+for pm in npm pnpm yarn bun; do
+  for shape in "run build" "run-script build" "build"; do
+    got=$(scripts_named "$pm $shape --flag" | tr '\n' ' ')
+    [ "$got" = "build " ] || { R46=1; echo "      scripts_named('$pm $shape --flag') => '$got', want 'build '"; }
+    got=$(scripts_named "$pm --flag $shape" | tr '\n' ' ')
+    [ "$got" = "build " ] || { R46=1; echo "      scripts_named('$pm --flag $shape') => '$got', want 'build '"; }
+  done
+done
+ok "PI-46 AC2 — every package manager and every accepted run-shape yields the script, never a flag around it" "[ $R46 -eq 0 ]"
+R46=0
+for sub in $PMSUB_FLOOR; do
+  for pm in npm pnpm yarn bun; do
+    got=$(scripts_named "$pm $sub" | tr '\n' ' ')
+    [ -z "$got" ] || { R46=1; echo "      scripts_named('$pm $sub') => '$got', want nothing (a pm subcommand, never a script)"; }
+  done
+done
+ok "PI-46 AC2 — every package-manager subcommand on the floor is excluded, whatever manager it follows" "[ $R46 -eq 0 ]"
 NPROD=0; NLIT=0; NONLIT=0; NONEEDS=""; NOTREFUSED=""; NOTREFUSED2=""; NOTCLEARED=""
 while IFS= read -r pline; do
   [ -n "$pline" ] || continue
   NPROD=$((NPROD+1))
   case "$pline" in *'_NEEDS='*) ;; *) NONEEDS="$NONEEDS
       $pline";; esac
-  ptpl=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z]+="[^"]+"' | head -1 | sed 's/^CMD_[A-Z]*="//; s/"$//')
-  pnds=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z]+_NEEDS="[^"]+"' | head -1 | sed 's/^CMD_[A-Z]*_NEEDS="//; s/"$//')
+  ptpl=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z0-9]+="[^"]+"' | head -1 | sed 's/^CMD_[A-Z0-9]*="//; s/"$//')
+  pnds=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z0-9]+_NEEDS="[^"]+"' | head -1 | sed 's/^CMD_[A-Z0-9]*_NEEDS="//; s/"$//')
   if [ -z "$ptpl" ]; then NONLIT=$((NONLIT+1)); continue; fi
   NLIT=$((NLIT+1))
   pcmd=$(expand "$ptpl"); pnee=$(expand "$pnds")
@@ -584,7 +685,7 @@ while IFS= read -r pline; do
       $pcmd"
   fi
 done <<EOF
-$(printf '%s\n' "$PRODBLOCK" | grep -E 'CMD_[A-Z]+=("[^"]+"|\$\()')
+$(printf '%s\n' "$PRODBLOCK" | grep -E 'CMD_[A-Z0-9]+=("[^"]+"|\$\()')
 EOF
 R41=0; [ -n "$NONEEDS" ] && { R41=1; echo "      producers with no _NEEDS on their own line:$NONEEDS"; }
 ok "PI-41 F1 — every command producer declares, on its own line, the file the base must have too" "[ $R41 -eq 0 ]"
@@ -596,6 +697,23 @@ R41=0; [ -n "$NOTCLEARED" ] && { R41=1; echo "      wrongly refused against a ba
 ok "PI-41 F1 — every command producer is cleared when the base does have what the command names" "[ $R41 -eq 0 ]"
 R41=1; [ "$NPROD" -ge 7 ] && R41=0
 ok "PI-41 F1 — the case list really was regenerated from the producer block (7 producers or more)" "[ $R41 -eq 0 ]"
+# PI-46 F3 — the bash/grep selector above (CMD_[A-Z0-9]+=) and the sandbox's own producer loop must see the
+# SAME producers a genuinely different extraction finds: a future producer name outside that character
+# class (an underscore, say) would otherwise drop out of NPROD silently, the suite staying green about
+# producers it never saw. Independent of the bash/grep selector: python's own regex, over \w+ (letters,
+# digits AND underscore), excluding _NEEDS lines and empty initializers by name/content, not by a
+# character-class boundary — so a narrowing in one does not also narrow the other the same way.
+GROUND_TRUTH=$(python3 -c 'import re,sys
+text = sys.stdin.read()
+n = 0
+for m in re.finditer(r"CMD_(\w+)=(\"[^\"]*\"|\$\()", text):
+    name, val = m.group(1), m.group(2)
+    if name.endswith("_NEEDS"): continue
+    if val == "\"\"": continue
+    n += 1
+print(n)' <<< "$PRODBLOCK")
+R46=1; [ "$NPROD" -eq "$GROUND_TRUTH" ] && R46=0
+ok "PI-46 F3 — the producer selector finds exactly as many producers as an independent count ($NPROD == $GROUND_TRUTH)" "[ $R46 -eq 0 ]"
 R41=1; [ "$NONLIT" -eq 1 ] && R41=0
 ok "PI-41 F1 — exactly one producer has no literal command (the configured testCommand, covered end to end below)" "[ $R41 -eq 0 ]"
 R41=1; [ "$(grep -c 'base_blockers "\${FAIL_CMD\[\$i\]}"' "$SCRIPT")" -eq 1 ] && [ "$(grep -c 'bash -c "\${FAIL_CMD\[\$i\]}"' "$SCRIPT")" -eq 1 ] && R41=0
