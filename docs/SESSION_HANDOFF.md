@@ -55,7 +55,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - A grep filter that excludes paths by ABSOLUTE path is vacuous when a suite runs from an agent worktree: the worktree's own path contains /.claude/worktrees/, so 'grep -rn … $REPO_ROOT | grep -v /.claude/worktrees/' drops every file in the repo and the assertion passes whatever the files say (measured in PI-41: the guard stayed green with the defect reinstated in CLAUDE.md). Match repo-relative paths: cd $REPO_ROOT && grep -rn … . | grep -vE '^\./(tasks|docs/reports|\.claude/worktrees)/'.
 
 ## Log (più recente in alto, ultime 40 righe)
-- 2026-09-16 PI-41 PR draft — verify.sh attributes a red check to the branch or to the base — 69 tests
+- 2026-09-16 PI-41 PR #83 draft — verify.sh attributes a red check to the branch or to the base — 69 tests
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
 - 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)

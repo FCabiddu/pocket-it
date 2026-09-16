@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-41-verify-base-red-attribution
-**PR**:
+**PR**: https://github.com/FCabiddu/pocket-it/pull/83
 
 ## Goal
 `bin/verify.sh` reports `verify: RED` whenever any check fails, with no way for the caller to
