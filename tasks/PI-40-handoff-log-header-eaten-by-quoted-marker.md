@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-40-handoff-log-header-anchor
-**PR**:
+**PR**: https://github.com/FCabiddu/pocket-it/pull/81
 
 ## Goal
 `bin/handoff.sh log` splits the handoff file with `head,sep,tail = s.partition("## Log")` — unanchored, so it
