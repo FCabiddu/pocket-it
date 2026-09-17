@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-51-reinstall-shared-checkout
-**PR**: 
+**PR**: https://github.com/FCabiddu/pocket-it/pull/96
 
 ## Goal
 Agent worktrees under `.claude/worktrees/` have no `node_modules` of their own: Node resolves the main checkout's, and `bin/verify.sh` (lines ~110–112) symlinks the main checkout's `node_modules` whenever the branch did not change the lockfile. After a PR that bumps dependencies is merged, nothing reinstalls the main checkout, so every later test run and every `verify.sh` silently runs on the versions installed before the bump — green, but on the wrong code. Observed in a consumer project: a framework was two minor versions behind its lockfile for two days, across several merged PRs, without any red. Expected: (1) the closing step of `/quickfix` and `/run-wave` reinstalls the shared checkout after merging a PR that touched a lockfile, when no agent is running on it; (2) `verify.sh` detects an installed tree that disagrees with the lockfile and fails with an explicit message instead of passing.
