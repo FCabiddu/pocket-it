@@ -70,6 +70,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - verify.sh borrows the main checkout's node_modules; install-drift.sh check runs before the first check and exit 2 (could not run) means the installed tree disagrees with the lockfile — reinstall the shared checkout, it is not the branch's red.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-17 PI-51 PR #96 needs work — verify: GREEN on a tree it never compared — cause: first-round
 - 2026-09-17 PI-51 PR #96 draft — install-drift.sh (check + reinstall), verify.sh refuses a stale install (exit 2) on the branch and base worktrees, quickfix/run-wave reinstall the shared checkout after a lockfile merge — 123 tests (90 new suite + 33 in verify.test.sh)
 - 2026-09-17 QF-1 PR #92 approved — cause read off every log line, real-corpus check 56/56 and 60/60 with zero new fires — merge: orchestrator
 - 2026-09-17 PI-45 PR #85 approved (delta 1) — dual-grep proposal beaten by anchor-count/mode-matched gate, mutant_whole limitation noted non-blocking, AC4 self-check proven non-decorative — merge: orchestrator
