@@ -524,8 +524,71 @@ mkdir -p "$SBX/empty" "$SBX/full/node_modules/.bin" "$SBX/full/bin" "$SBX/full/t
          "$SBX/branch/tests" "$SBX/branch/src"
 WT_REAL="$SBX/branch"   # base_blockers compares against the branch worktree it was told about
 : > "$SBX/branch/tests/test_x.py"; : > "$SBX/branch/src/new.ts"; : > "$SBX/branch/check.sh"
-# the "full" tree has everything any producer can name: scripts, runners, selectors and marker files
-printf '{"scripts":{"lint":"x","type-check":"x","typecheck":"x","test:affected":"x","test":"x"},"jest":{}}\n' > "$SBX/full/package.json"
+# reuse base_blockers' own list of package-manager subcommands (verify.sh's $pmsub) instead of keeping a
+# second copy of it here — a subcommand added there (a new pm's own verb) is excluded here too, no edit needed.
+PMSUB=$(grep -o 'local pmsub=" [^"]*"' "$SCRIPT" | sed -E 's/^local pmsub="//; s/"$//' | head -1)
+# PI-46 F1 — PMSUB above is read out of the script it also verifies: if verify.sh's own pmsub ever shrank
+# or emptied, PMSUB would shrink or empty with it, and any assertion that only loops over PMSUB would have
+# nothing left to check and pass on an empty loop (measured: dropping exec/dlx, or emptying the list to
+# nothing, both left the suite ALL PASS). PMSUB_FLOOR is a second, independent list — the test's own, never
+# read out of verify.sh — that (a) is looped over instead of PMSUB for the negative half of AC2, so a
+# shrunk PMSUB cannot empty that loop, and (b) is checked as a subset of PMSUB below, so a shrunk or emptied
+# PMSUB is caught and named on its own, not just silently under-tested.
+PMSUB_FLOOR=" install ci add remove rm uninstall link unlink exec dlx why audit publish pack init create update outdated list ls info view config cache dedupe prune store rebuild version "
+R46=0
+for sub in $PMSUB_FLOOR; do
+  case "$PMSUB" in *" $sub "*) ;; *) R46=1; echo "      verify.sh's pmsub no longer has \"$sub\", which this suite's floor requires";; esac
+done
+ok "PI-46 F1 — verify.sh's pmsub is still a superset of this suite's own floor list" "[ $R46 -eq 0 ]"
+# scripts_named <command> — every package script this command runs: `<pm> run <script>` / `<pm> run-script
+# <script>`, and the bare `<pm> <script>` form npm/pnpm/yarn/bun also accept — never a subcommand (checked
+# against PMSUB above, base_blockers' own list), a flag, or an argument that follows the script name.
+scripts_named(){
+  local cmd="$1" toks tok pend="" seg=1
+  toks=$(shlex "$cmd") || return 0
+  while IFS= read -r tok; do
+    [[ -n "$tok" ]] || continue
+    case "$tok" in '&&'|'||'|';'|'|'|'&') seg=1; pend=""; continue;; esac
+    if [[ $seg -eq 1 ]]; then
+      pend=""
+      case "$tok" in env|bash|sh|zsh|command|nice|time|xargs) continue;; esac
+      seg=0
+      case "$tok" in npm|pnpm|yarn|bun) pend=pm;; esac
+      continue
+    fi
+    case "$pend" in
+      pm)
+        case "$tok" in -*) continue;; run|run-script) pend=pmrun; continue;; esac
+        pend=""
+        case "$PMSUB" in *" $tok "*) continue;; esac
+        printf '%s\n' "$tok";;
+      pmrun)
+        case "$tok" in -*) continue;; esac
+        pend=""
+        printf '%s\n' "$tok";;
+    esac
+  done <<< "$toks"
+}
+# one expansion for both sandboxes: the producer templates are shell, and these are the variables they read
+expand(){ PM=npm QUOTED="'src/new.ts' " PYQUOTED="'tests/test_x.py' " BASE_REF=0123456789ab \
+          VITCFG=vitest.config.ts PYCFG=pyproject.toml eval "printf '%s' \"$1\""; }
+PRODBLOCK=$(awk '/^# --- command producers/,/^# --- end command producers/' "$SCRIPT")
+# the "full" tree has everything any producer can name: scripts, runners, selectors and marker files. The
+# scripts are DERIVED from the producers' own commands (never typed here, PI-46 AC1): a producer added later
+# that names a script never seen before is declared the moment scripts_named sees it, no edit to this file.
+SCRIPTNAMES=""
+while IFS= read -r pline; do
+  ptpl=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z0-9]+="[^"]+"' | head -1 | sed 's/^CMD_[A-Z0-9]*="//; s/"$//')
+  [ -n "$ptpl" ] || continue
+  SCRIPTNAMES="$SCRIPTNAMES
+$(scripts_named "$(expand "$ptpl")")"
+done <<EOF
+$(printf '%s\n' "$PRODBLOCK" | grep -E 'CMD_[A-Z0-9]+=("[^"]+"|\$\()')
+EOF
+FULLSCRIPTS=$(printf '%s\n' "$SCRIPTNAMES" | awk 'NF' | sort -u | python3 -c 'import json,sys
+names=[l.strip() for l in sys.stdin if l.strip()]
+print(json.dumps({n: "x" for n in names}))')
+printf '{"scripts":%s,"jest":{}}\n' "$FULLSCRIPTS" > "$SBX/full/package.json"
 for b in vitest jest tsc; do printf '#!/usr/bin/env bash\nexit 0\n' > "$SBX/full/node_modules/.bin/$b"; chmod +x "$SBX/full/node_modules/.bin/$b"; done
 printf '#!/usr/bin/env bash\nexit 0\n' > "$SBX/full/bin/go"; chmod +x "$SBX/full/bin/go"
 : > "$SBX/full/tests/test_x.py"; : > "$SBX/full/src/new.ts"; : > "$SBX/full/check.sh"
@@ -537,18 +600,56 @@ for f in go.mod tsconfig.json pyproject.toml vitest.config.ts .pocket-it.json; d
 mkdir -p "$SBX/marked"; cp -R "$SBX/full/." "$SBX/marked/"
 printf '{"scripts":{},"jest":{}}\n' > "$SBX/marked/package.json"
 rm -f "$SBX/marked/tests/test_x.py" "$SBX/marked/src/new.ts" "$SBX/marked/check.sh"
-# one expansion for both sandboxes: the producer templates are shell, and these are the variables they read
-expand(){ PM=npm QUOTED="'src/new.ts' " PYQUOTED="'tests/test_x.py' " BASE_REF=0123456789ab \
-          VITCFG=vitest.config.ts PYCFG=pyproject.toml eval "printf '%s' \"$1\""; }
-PRODBLOCK=$(awk '/^# --- command producers/,/^# --- end command producers/' "$SCRIPT")
+# PI-46 AC3 — a green run of the ordinary assertions below is not evidence that `marked` really excludes the
+# scripts AC1 now derives: the cp -R above copies `full`'s package.json (with those scripts) before the empty
+# one overwrites it, so the subtraction is one edit away from silently breaking. Execute the failure: make
+# `marked` declare one of the derived scripts, as an accidental inheritance would, and show base_blockers
+# WRONGLY clears the very check it exists to block — then restore it and require the correct, unmutated answer.
+MUTSCRIPT=$(printf '%s' "$FULLSCRIPTS" | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin))))' 2>/dev/null)
+R46=1; [ -n "$MUTSCRIPT" ] && R46=0
+ok "PI-46 AC1 — at least one script was really derived from a producer command" "[ $R46 -eq 0 ]"
+cp "$SBX/marked/package.json" "$SBX/marked/package.json.orig"
+python3 -c 'import json,sys
+p, s = sys.argv[1], sys.argv[2]
+d = json.load(open(p)); d["scripts"][s] = "x"; json.dump(d, open(p, "w"))' "$SBX/marked/package.json" "$MUTSCRIPT"
+POISONED=$(cd "$SBX/marked" && PATH="$SBX/marked/bin:$PATH" base_blockers "npm run $MUTSCRIPT" package.json)
+mv "$SBX/marked/package.json.orig" "$SBX/marked/package.json"
+R46=1; [ -z "$POISONED" ] && R46=0
+ok "PI-46 AC3 mutation — marked wrongly declaring a derived script really makes base_blockers clear it (the subtraction is load-bearing, not assumed)" "[ $R46 -eq 0 ]"
+CLEAN=$(cd "$SBX/marked" && PATH="$SBX/marked/bin:$PATH" base_blockers "npm run $MUTSCRIPT" package.json)
+R46=1; [ -n "$CLEAN" ] && R46=0
+ok "PI-46 AC3 — marked, unmutated, still answers 'not declared' for a script AC1's derivation added to full" "[ $R46 -eq 0 ]"
+# PI-46 AC2 — the WHOLE CLASS of invocation shapes a producer can emit, not the ones in use today: every
+# package manager x every accepted shape (`run`, `run-script`, bare `<pm> <script>`), a flag before and
+# after the script name — and, the negative half of the same class, every word on PMSUB_FLOOR (this
+# suite's own list, F1 above — never the live PMSUB, or a shrunk PMSUB would shrink this loop's coverage
+# along with it), which must never be read as a script whatever manager it follows.
+R46=0
+for pm in npm pnpm yarn bun; do
+  for shape in "run build" "run-script build" "build"; do
+    got=$(scripts_named "$pm $shape --flag" | tr '\n' ' ')
+    [ "$got" = "build " ] || { R46=1; echo "      scripts_named('$pm $shape --flag') => '$got', want 'build '"; }
+    got=$(scripts_named "$pm --flag $shape" | tr '\n' ' ')
+    [ "$got" = "build " ] || { R46=1; echo "      scripts_named('$pm --flag $shape') => '$got', want 'build '"; }
+  done
+done
+ok "PI-46 AC2 — every package manager and every accepted run-shape yields the script, never a flag around it" "[ $R46 -eq 0 ]"
+R46=0
+for sub in $PMSUB_FLOOR; do
+  for pm in npm pnpm yarn bun; do
+    got=$(scripts_named "$pm $sub" | tr '\n' ' ')
+    [ -z "$got" ] || { R46=1; echo "      scripts_named('$pm $sub') => '$got', want nothing (a pm subcommand, never a script)"; }
+  done
+done
+ok "PI-46 AC2 — every package-manager subcommand on the floor is excluded, whatever manager it follows" "[ $R46 -eq 0 ]"
 NPROD=0; NLIT=0; NONLIT=0; NONEEDS=""; NOTREFUSED=""; NOTREFUSED2=""; NOTCLEARED=""
 while IFS= read -r pline; do
   [ -n "$pline" ] || continue
   NPROD=$((NPROD+1))
   case "$pline" in *'_NEEDS='*) ;; *) NONEEDS="$NONEEDS
       $pline";; esac
-  ptpl=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z]+="[^"]+"' | head -1 | sed 's/^CMD_[A-Z]*="//; s/"$//')
-  pnds=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z]+_NEEDS="[^"]+"' | head -1 | sed 's/^CMD_[A-Z]*_NEEDS="//; s/"$//')
+  ptpl=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z0-9]+="[^"]+"' | head -1 | sed 's/^CMD_[A-Z0-9]*="//; s/"$//')
+  pnds=$(printf '%s\n' "$pline" | grep -oE 'CMD_[A-Z0-9]+_NEEDS="[^"]+"' | head -1 | sed 's/^CMD_[A-Z0-9]*_NEEDS="//; s/"$//')
   if [ -z "$ptpl" ]; then NONLIT=$((NONLIT+1)); continue; fi
   NLIT=$((NLIT+1))
   pcmd=$(expand "$ptpl"); pnee=$(expand "$pnds")
@@ -584,7 +685,7 @@ while IFS= read -r pline; do
       $pcmd"
   fi
 done <<EOF
-$(printf '%s\n' "$PRODBLOCK" | grep -E 'CMD_[A-Z]+=("[^"]+"|\$\()')
+$(printf '%s\n' "$PRODBLOCK" | grep -E 'CMD_[A-Z0-9]+=("[^"]+"|\$\()')
 EOF
 R41=0; [ -n "$NONEEDS" ] && { R41=1; echo "      producers with no _NEEDS on their own line:$NONEEDS"; }
 ok "PI-41 F1 — every command producer declares, on its own line, the file the base must have too" "[ $R41 -eq 0 ]"
@@ -596,6 +697,23 @@ R41=0; [ -n "$NOTCLEARED" ] && { R41=1; echo "      wrongly refused against a ba
 ok "PI-41 F1 — every command producer is cleared when the base does have what the command names" "[ $R41 -eq 0 ]"
 R41=1; [ "$NPROD" -ge 7 ] && R41=0
 ok "PI-41 F1 — the case list really was regenerated from the producer block (7 producers or more)" "[ $R41 -eq 0 ]"
+# PI-46 F3 — the bash/grep selector above (CMD_[A-Z0-9]+=) and the sandbox's own producer loop must see the
+# SAME producers a genuinely different extraction finds: a future producer name outside that character
+# class (an underscore, say) would otherwise drop out of NPROD silently, the suite staying green about
+# producers it never saw. Independent of the bash/grep selector: python's own regex, over \w+ (letters,
+# digits AND underscore), excluding _NEEDS lines and empty initializers by name/content, not by a
+# character-class boundary — so a narrowing in one does not also narrow the other the same way.
+GROUND_TRUTH=$(python3 -c 'import re,sys
+text = sys.stdin.read()
+n = 0
+for m in re.finditer(r"CMD_(\w+)=(\"[^\"]*\"|\$\()", text):
+    name, val = m.group(1), m.group(2)
+    if name.endswith("_NEEDS"): continue
+    if val == "\"\"": continue
+    n += 1
+print(n)' <<< "$PRODBLOCK")
+R46=1; [ "$NPROD" -eq "$GROUND_TRUTH" ] && R46=0
+ok "PI-46 F3 — the producer selector finds exactly as many producers as an independent count ($NPROD == $GROUND_TRUTH)" "[ $R46 -eq 0 ]"
 R41=1; [ "$NONLIT" -eq 1 ] && R41=0
 ok "PI-41 F1 — exactly one producer has no literal command (the configured testCommand, covered end to end below)" "[ $R41 -eq 0 ]"
 R41=1; [ "$(grep -c 'base_blockers "\${FAIL_CMD\[\$i\]}"' "$SCRIPT")" -eq 1 ] && [ "$(grep -c 'bash -c "\${FAIL_CMD\[\$i\]}"' "$SCRIPT")" -eq 1 ] && R41=0
@@ -766,5 +884,353 @@ ok "PI-41 caller — CLAUDE.md's script table states the new exit codes" "[ $R41
 # and the script's own header must document the codes a caller is now expected to read
 R41=1; grep -qE '^#   3  RED, inherited' "$SCRIPT" && grep -qE '^#   1  RED, this branch' "$SCRIPT" && R41=0
 ok "PI-41 caller — verify.sh documents every exit code it can return" "[ $R41 -eq 0 ]"
+
+# ============ PI-51 — a verdict about code that is not installed is not a verdict ============================
+# Same disposable repo as PI-41 ($P, its own origin), for the same reason: these cases move the base tree and
+# the shared install under a fixture branch on purpose. The mutation here is of the WORLD, not of the script:
+# one byte of the installed react/package.json is the only thing that changes between the red run and the
+# green one, so neither can pass by accident — and the pair is run in both directions.
+# bin/install-drift.test.sh carries the code-level mutations (the comparison removed, scoped packages ignored).
+q git -C "$P" checkout -q main
+printf 'node_modules/\n' > "$P/.gitignore"
+cat > "$P/package-lock.json" <<'J'
+{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"18.3.1"}}}
+J
+wcheck "$P/check.sh" "exit 0"
+p_commit "pi51: a lockfile on the base"
+# the shared checkout's install, stale: the tree every branch worktree borrows when it changed no lockfile
+mkdir -p "$P/node_modules/react"
+setinst(){ printf '{"name":"react","version":"%s"}\n' "$1" > "$P/node_modules/react/package.json"; }
+setinst 18.2.0
+
+q git -C "$P" checkout -q -b pi51-drift main
+pfile "$P/bin/pi51.test.sh"
+p_commit "pi51-drift"
+
+runp pi51-drift
+R51=1; [ "$RCP" -eq 2 ] && R51=0
+ok "PI-51 AC3 — a branch worktree on a stale shared install exits 2, could-not-run, never a red of the branch" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "FAIL  install drift — the installed tree is not the one the lockfile declares" && R51=0
+ok "PI-51 AC3 — the stale install is stated as the reason, by name" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "drift  react — installed 18.2.0, locked 18.3.1" && R51=0
+ok "PI-51 AC3 — the package, the installed version and the locked one are all named" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "install-drift.sh reinstall $P" && R51=0
+ok "PI-51 AC3 — the fix names the shared checkout, the one place a reinstall can help" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "node_modules is borrowed from $P/node_modules" && R51=0
+ok "PI-51 AC3 — and says where the tree it measured actually came from" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: could not run — the installed tree disagrees with the lockfile (nothing was measured)" && R51=0
+ok "PI-51 AC3 — the verdict line says nothing was measured" "[ $R51 -eq 0 ]"
+R51=0; { hasl "$OUTP" "verify: GREEN" || hasl "$OUTP" "verify: RED"; } && R51=1
+ok "PI-51 AC3 — no verdict of any kind is printed on a tree that was not the lockfile's" "[ $R51 -eq 0 ]"
+R51=0; [ -s "$CALLLOG" ] && R51=1
+ok "PI-51 AC3 — and not one check was executed against it" "[ $R51 -eq 0 ]"
+
+# the world mutated back: the same branch, the same script, one correct version installed
+setinst 18.3.1
+runp pi51-drift
+R51=1; [ "$RCP" -eq 0 ] && R51=0
+ok "PI-51 AC4 — with the install matching the lockfile the same branch runs and exits 0" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 AC4 — a matching install is verified as before, GREEN" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "info  install matches the lockfile: 1 compared entries of package-lock.json" && R51=0
+ok "PI-51 AC4 — and it says what it compared, so a green is never silent about it" "[ $R51 -eq 0 ]"
+R51=1; [ -s "$CALLLOG" ] && R51=0
+ok "PI-51 AC4 — the checks really did run this time" "[ $R51 -eq 0 ]"
+
+# AC4, the two trees with nothing to compare: unchanged behaviour, no new failure mode
+rm -rf "$P/node_modules"
+runp pi51-drift
+R51=1; [ "$RCP" -eq 0 ] && hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 AC4 — a lockfile with nothing installed anywhere is not drift, the run is unchanged" "[ $R51 -eq 0 ]"
+mkdir -p "$P/node_modules/react"; setinst 18.2.0
+q git -C "$P" checkout -q main; q git -C "$P" rm -q package-lock.json
+p_commit "pi51: no lockfile at all"
+q git -C "$P" checkout -q -b pi51-nolock main
+pfile "$P/bin/pi51-nolock.test.sh"
+p_commit "pi51-nolock"
+runp pi51-nolock
+R51=1; [ "$RCP" -eq 0 ] && hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 AC4 — a repository with no lockfile at all is untouched by the guard" "[ $R51 -eq 0 ]"
+R51=0; hasl "$OUTP" "install drift" && R51=1
+ok "PI-51 AC4 — and the guard says nothing about a project it has nothing to check" "[ $R51 -eq 0 ]"
+
+# --- the other borrowing path: the base worktree the attribution runs its re-checks in (PI-41) ---------------
+# The branch changes the lockfile, so verify installs the branch's own tree (a stand-in npm does it here,
+# nothing is downloaded) and the branch side is clean; the BASE worktree is the one left borrowing the shared
+# checkout's stale install. A base whose dependencies are not its own cannot answer "does this fail here too".
+q git -C "$P" checkout -q main
+cat > "$P/package-lock.json" <<'J'
+{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"18.3.1"}}}
+J
+wcheck "$P/check.sh" "exit 1"      # the base is red too: without the stale install this run says "inherited"
+p_commit "pi51: base lockfile back, base check red"
+setinst 18.2.0                      # shared install stale against the base's lockfile
+
+q git -C "$P" checkout -q -b pi51-baseside main
+cat > "$P/package-lock.json" <<'J'
+{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"20.0.0"}}}
+J
+wcheck "$P/check.sh" "exit 1"
+p_commit "pi51-baseside"
+PMBIN51="$S/pi51-pmbin"; mkdir -p "$PMBIN51"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$PMBIN51/pnpm"; chmod +x "$PMBIN51/pnpm"
+cat > "$PMBIN51/npm" <<'SH'
+#!/usr/bin/env bash
+# stand-in npm: `npm ci` installs, into the current worktree, exactly what that worktree's lockfile declares.
+[[ "$1" == ci ]] || exit 9
+python3 - <<'PY'
+import json, os
+p = json.load(open("package-lock.json"))["packages"]["node_modules/react"]["version"]
+os.makedirs("node_modules/react", exist_ok=True)
+open("node_modules/react/package.json", "w").write('{"name":"react","version":"%s"}\n' % p)
+PY
+SH
+chmod +x "$PMBIN51/npm"
+
+runp pi51-baseside "$PMBIN51"
+R51=1; [ "$RCP" -eq 1 ] && R51=0
+ok "PI-51 AC3 base — a base tree on a stale shared install falls back to the branch's own red, exit 1" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "attribution unknown: the installed tree at " && hasl "$OUTP" "disagrees with its lockfile" && R51=0
+ok "PI-51 AC3 base — the attribution is refused, and says the base tree was not the lockfile's" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "react — installed 18.2.0, locked 18.3.1" && R51=0
+ok "PI-51 AC3 base — the drifted package is named on the base side too" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "install-drift.sh reinstall $P" && R51=0
+ok "PI-51 AC3 base — and the fix names the shared checkout the base borrowed from" "[ $R51 -eq 0 ]"
+R51=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R51=1
+ok "PI-51 AC3 base — a re-check run against the wrong code never excuses the branch as inherited" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED" && R51=0
+ok "PI-51 AC3 base — the branch's red is still reported, unqualified" "[ $R51 -eq 0 ]"
+
+# the world mutated back, one byte again: the base install matches, the attribution can be performed, and the
+# very same run reaches the opposite verdict — so the red above was the stale install and nothing else.
+setinst 18.3.1
+runp pi51-baseside "$PMBIN51"
+R51=1; [ "$RCP" -eq 3 ] && R51=0
+ok "PI-51 AC3 base — with the base install matching, the same run attributes normally again (exit 3)" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED — inherited" && R51=0
+ok "PI-51 AC3 base — and reports the inherited verdict it could not reach before" "[ $R51 -eq 0 ]"
+R51=0; hasl "$OUTP" "attribution unknown" && R51=1
+ok "PI-51 AC3 base — nothing is unknown any more" "[ $R51 -eq 0 ]"
+
+# ====== PI-51 round 2, F1 — "could not be compared" is a CLASS, and no member of it ever yields a verdict ==
+# The members are read out of the production declaration at run time, never listed here: a comparator added
+# to install-drift.sh joins this loop by itself, and a name dropped from it fails the floor assertions first.
+# Every member is then asserted against the one invariant the task states — an install this pipeline could
+# not compare with its lockfile makes verify refuse the verdict: never GREEN, never exit 0, and not one
+# check executed against a tree nobody compared.
+NPMLOCK='{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"18.3.1"}}}'
+DECL=$(bash "$REPO_ROOT/bin/install-drift.sh" lockfiles)
+DECLPAIRS=$(sed -n 's/^LOCKFILES="\(.*\)"$/\1/p' "$REPO_ROOT/bin/install-drift.sh")
+SUPPPM=$(sed -n 's/^SUPPORTED_PM="\(.*\)"$/\1/p' "$REPO_ROOT/bin/install-drift.sh")
+# the floor: the class may only ever grow. Without this, a shrunken declaration would make every loop below
+# pass by iterating nothing at all.
+for fl in package-lock.json npm-shrinkwrap.json pnpm-lock.yaml yarn.lock bun.lockb bun.lock; do
+  R51=1; printf '%s\n' "$DECL" | grep -qx "$fl" && R51=0
+  ok "PI-51 N1 — the lockfile names verify.sh uses come from install-drift.sh and still include $fl" "[ $R51 -eq 0 ]"
+done
+R51=1; [ "$(printf '%s\n' "$DECL" | grep -c .)" -eq "$(printf '%s\n' $DECLPAIRS | grep -c .)" ] && R51=0
+ok "PI-51 N1 — the \`lockfiles\` subcommand prints the whole declaration, not a subset of it" "[ $R51 -eq 0 ]"
+
+CLSN=0
+cls_case(){ # cls_case <lockfile name> <content> — main carries exactly that lockfile and a green check; the
+            # branch changes no lockfile at all, so its worktree borrows the shared checkout's install, which
+            # is the situation the guard exists for.
+  CLSN=$((CLSN+1)); local lf="$1" body="$2" br="pi51-cls-$CLSN" d
+  q git -C "$P" checkout -q main
+  for d in $DECL; do rm -f "$P/$d"; done
+  printf '%s\n' "$body" > "$P/$lf"
+  wcheck "$P/check.sh" "exit 0"
+  p_commit "pi51 class: $lf"
+  q git -C "$P" checkout -q -b "$br" main
+  pfile "$P/bin/$br.test.sh"; p_commit "$br"
+  setinst 18.2.0
+  CLSBR="$br"
+  runp "$br"
+}
+cls_invariant(){ # the same three assertions for every member of the class
+  R51=1; [ "$RCP" -eq 2 ] && R51=0
+  ok "PI-51 AC3 — $1: exits 2, could-not-run" "[ $R51 -eq 0 ]"
+  R51=0; { hasl "$OUTP" "verify: GREEN" || hasl "$OUTP" "verify: RED"; } && R51=1
+  ok "PI-51 AC3 — $1: no verdict of any kind is printed" "[ $R51 -eq 0 ]"
+  R51=0; [ -s "$CALLLOG" ] && R51=1
+  ok "PI-51 AC3 — $1: not one check was run against the tree nobody compared" "[ $R51 -eq 0 ]"
+}
+for item in $DECLPAIRS; do
+  lf="${item%%:*}"; pm="${item#*:}"
+  cls_case "$lf" "$NPMLOCK"
+  case " $SUPPPM " in
+    *" $pm "*)   # the readable half of the class: compared, and the comparison says the tree is not the lockfile's
+      cls_invariant "$lf, read and disagreeing with the install"
+      R51=1; hasl "$OUTP" "FAIL  install drift — the installed tree is not the one the lockfile declares" && R51=0
+      ok "PI-51 AC3 — $lf: the disagreement is stated by name" "[ $R51 -eq 0 ]" ;;
+    *)           # the unreadable half: no comparison happened at all, which is no better evidence
+      cls_invariant "$lf ($pm), a lockfile this pipeline cannot read"
+      R51=1; hasl "$OUTP" "FAIL  install drift — the installed tree could NOT be compared with the lockfile" && R51=0
+      ok "PI-51 AC3 — $lf ($pm): the failure says the tree was never compared" "[ $R51 -eq 0 ]"
+      R51=1; hasl "$OUTP" "verify: could not run — the installed tree was never compared with the lockfile" && R51=0
+      ok "PI-51 AC3 — $lf ($pm): and the closing line refuses the verdict too" "[ $R51 -eq 0 ]"
+      R51=1; hasl "$OUTP" "drift check not supported for $pm" && R51=0
+      ok "PI-51 AC3 — $lf ($pm): install-drift.sh's own reason is carried through to the reader" "[ $R51 -eq 0 ]" ;;
+  esac
+done
+# the same class from the other direction: a lockfile of a package manager it CAN read, in a shape it cannot.
+# Naming the package manager is not what refuses the verdict — failing to compare is.
+cls_case package-lock.json '{ "name":'
+cls_invariant "a lockfile that cannot be parsed"
+R51=1; hasl "$OUTP" "cannot be parsed" && R51=0
+ok "PI-51 AC3 — an unparsable lockfile says so, instead of being read as an empty one" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "so this branch's checks have to be run by hand until install-drift.sh can compare it" && R51=0
+ok "PI-51 AC3 — the refusal tells the reader what to do instead of printing an unrunnable remedy" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "SUPPORTED_PM" && R51=0
+ok "PI-51 AC3 — and names the one declaration that changes when a comparator is added" "[ $R51 -eq 0 ]"
+cls_case package-lock.json '[]'
+cls_invariant "a lockfile that is not a JSON object"
+R51=1; hasl "$OUTP" "is not a JSON object" && R51=0
+ok "PI-51 AC3 — a lockfile of the wrong JSON type is named as such" "[ $R51 -eq 0 ]"
+cls_case package-lock.json '{"lockfileVersion":9}'
+cls_invariant "a lockfile of an unknown shape"
+R51=1; hasl "$OUTP" 'declares neither "packages" nor "dependencies"' && R51=0
+ok "PI-51 AC3 — a lockfile shape nothing here knows how to read is a refusal, not an empty comparison" "[ $R51 -eq 0 ]"
+
+# AC5 at this end of the chain: what produces the refusals above is one arm of one case, and removing it is
+# exactly the code that stood here before this task — install-drift's "no verdict" matched nothing, the run
+# fell through, and a verdict was published about a tree nobody had compared. The mutant is the proof that
+# the section above is testing that arm and not the mere absence of a check.
+MUTD="$S/pi51-mutant"; mkdir -p "$MUTD"
+sed 's/^  \*) echo "FAIL  install drift — the installed tree could NOT/  9) echo "FAIL  install drift — the installed tree could NOT/' "$SCRIPT" > "$MUTD/verify.sh"
+cp "$REPO_ROOT/bin/install-drift.sh" "$MUTD/install-drift.sh"
+R51=1; ! cmp -s "$SCRIPT" "$MUTD/verify.sh" && R51=0
+ok "PI-51 AC5 — the mutation really changed the script (a sed that matched nothing would prove nothing)" "[ $R51 -eq 0 ]"
+cls_case pnpm-lock.yaml "$NPMLOCK"     # the same world the real script refuses a verdict on, rebuilt
+: > "$CALLLOG"
+MOUT=$(cd "$P" && bash "$MUTD/verify.sh" "$CLSBR" main 2>&1); MRC=$?
+R51=1; [ "$MRC" -eq 0 ] && hasl "$MOUT" "verify: GREEN" && R51=0
+ok "PI-51 AC5 — without that arm the same world is declared GREEN on a tree nobody compared" "[ $R51 -eq 0 ]"
+R51=1; [ -s "$CALLLOG" ] && R51=0
+ok "PI-51 AC5 — and the checks do run against it, which is the damage the arm exists to prevent" "[ $R51 -eq 0 ]"
+
+# --- N1 — the names the borrow decision reads are the same declaration, so a new lockfile is never missed ---
+# The control for this loop is the class loop above: there the branch changes NO lockfile, the worktree
+# borrows, and the run really does measure the shared checkout's 18.2.0. Here the branch changes one, and the
+# borrow must not happen for any name in the declaration.
+q git -C "$P" checkout -q main
+for d in $DECL; do rm -f "$P/$d"; done
+printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"; wcheck "$P/check.sh" "exit 0"
+p_commit "pi51 n1: one readable lockfile on the base"
+N1N=0
+for lf in $DECL; do
+  N1N=$((N1N+1)); br="pi51-n1-$N1N"
+  q git -C "$P" checkout -q -b "$br" main
+  if [[ "$lf" == package-lock.json ]]; then printf '%s\n' "${NPMLOCK/18.3.1/18.4.0}" > "$P/$lf"
+  else printf '%s\n' "$NPMLOCK" > "$P/$lf"; fi
+  pfile "$P/bin/$br.test.sh"; p_commit "$br"
+  setinst 18.2.0
+  runp "$br" "$PMBIN51"
+  R51=1; hasl "$OUTP" "lockfile changed on branch — installing" && R51=0
+  ok "PI-51 N1 — a branch that changes $lf is treated as a lockfile change, not given a borrowed tree" "[ $R51 -eq 0 ]"
+  # everything the run says about the BRANCH's own tree, i.e. before the base side is reached at all: the
+  # shared checkout's 18.2.0 must not appear in it. (The base side legitimately reports that stale tree here,
+  # and refuses to attribute anything to it — which is the section above, not this one.)
+  BRSIDE=$(printf '%s\n' "$OUTP" | sed -n "1,/^verify: $br vs /p")
+  R51=0; hasl "$BRSIDE" "18.2.0" && R51=1
+  ok "PI-51 N1 — $lf: the branch is measured on its own install, not the shared checkout's stale tree" "[ $R51 -eq 0 ]"
+done
+
+# --- the base side, the other half of the same class: a base tree never COMPARED is not evidence either -----
+# The branch replaces an unreadable lockfile with a readable one, so the branch worktree installs its own
+# tree and passes the gate, while the BASE worktree keeps borrowing an install nothing can compare with the
+# base's own lockfile. Without the refusal this run would report the branch's red as "already on main".
+q git -C "$P" checkout -q main
+for d in $DECL; do rm -f "$P/$d"; done
+printf 'lockfileVersion: 9\n' > "$P/pnpm-lock.yaml"
+wcheck "$P/check.sh" "exit 1"
+p_commit "pi51: base on an unreadable lockfile, and red"
+setinst 18.3.1
+q git -C "$P" checkout -q -b pi51-basenc main
+rm -f "$P/pnpm-lock.yaml"; printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"
+wcheck "$P/check.sh" "exit 1"
+pfile "$P/bin/pi51-basenc.test.sh"; p_commit pi51-basenc
+runp pi51-basenc "$PMBIN51"
+R51=1; [ "$RCP" -eq 1 ] && R51=0
+ok "PI-51 F1 base — an uncomparable base install falls back to the branch's own red, exit 1" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "attribution unknown: the installed tree at " && hasl "$OUTP" "was never compared with its lockfile" && R51=0
+ok "PI-51 F1 base — the attribution is refused, and says the base tree was never compared" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "drift check not supported for pnpm" && R51=0
+ok "PI-51 F1 base — with the reason install-drift.sh gave, carried through" "[ $R51 -eq 0 ]"
+R51=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R51=1
+ok "PI-51 F1 base — a re-check on a tree nobody compared never excuses the branch as inherited" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED" && R51=0
+ok "PI-51 F1 base — the branch's red is still reported, unqualified" "[ $R51 -eq 0 ]"
+# the world mutated back: the base gets a lockfile that can be read, and the same run reaches the opposite
+# verdict — so the refusal above was the uncomparable install and nothing else.
+q git -C "$P" checkout -q main
+rm -f "$P/pnpm-lock.yaml"; printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"
+p_commit "pi51: the base lockfile is readable again"
+setinst 18.3.1
+runp pi51-basenc "$PMBIN51"
+R51=1; [ "$RCP" -eq 3 ] && R51=0
+ok "PI-51 F1 base — with a base install that can be compared, the same run attributes again (exit 3)" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED — inherited" && R51=0
+ok "PI-51 F1 base — and reaches the inherited verdict it refused before" "[ $R51 -eq 0 ]"
+R51=0; hasl "$OUTP" "attribution unknown" && R51=1
+ok "PI-51 F1 base — nothing is unknown any more" "[ $R51 -eq 0 ]"
+
+# ====== PI-51 round 2, F2 — the remedy this script prints is run VERBATIM, from the state that printed it ===
+# Not "a reinstall works somewhere": the exact command line verify.sh printed, extracted from its own output,
+# executed in the world that produced it — a drifted shared checkout with the verified PR's own worktree
+# registered against it. That worktree is the reason the remedy carries --except: it is registered at the
+# very moment the line is printed, and a remedy blocked by the situation that produced it is not a remedy.
+q git -C "$P" checkout -q main
+for d in $DECL; do rm -f "$P/$d"; done
+printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"; wcheck "$P/check.sh" "exit 0"
+p_commit "pi51 remedy: a readable lockfile and a green check on the base"
+setinst 18.2.0
+q git -C "$P" checkout -q -b pi51-remedy main
+pfile "$P/bin/pi51-remedy.test.sh"; p_commit pi51-remedy
+FIXWT="$S/pi51-remedy-wt"
+q git -C "$P" worktree add "$FIXWT" pi51-remedy
+runp pi51-remedy
+R51=1; [ "$RCP" -eq 2 ] && R51=0
+ok "PI-51 F2 — the drifted shared install is refused a verdict, as before" "[ $R51 -eq 0 ]"
+FIXCMD=$(printf '%s\n' "$OUTP" | sed -n 's/^ *fix: run `\([^`]*\)`.*/\1/p' | head -1)
+R51=1; [ -n "$FIXCMD" ] && R51=0
+ok "PI-51 F2 — the output carries a remedy command, in backticks, on its own line" "[ $R51 -eq 0 ]"
+R51=1; printf '%s' "$FIXCMD" | grep -qF -- "--except pi51-remedy" && R51=0
+ok "PI-51 F2 — and it excepts the branch being verified, whose worktree is registered right now" "[ $R51 -eq 0 ]"
+FIXOUT=$(cd "$P" && PATH="$PMBIN51:$PATH" bash -c "$FIXCMD" 2>&1); FIXRC=$?
+R51=1; [ "$FIXRC" -eq 0 ] && R51=0
+ok "PI-51 F2 — run exactly as printed, from the checkout it names, the remedy succeeds" "[ $R51 -eq 0 ]"
+R51=0; hasl "$FIXOUT" "DEFERRED" && R51=1
+ok "PI-51 F2 — the verified PR's own registered worktree does not hold its own remedy" "[ $R51 -eq 0 ]"
+R51=1; hasl "$FIXOUT" "install-drift: running" && R51=0
+ok "PI-51 F2 — the install really ran, it was not skipped as unnecessary" "[ $R51 -eq 0 ]"
+R51=1; grep -qF '"version":"18.3.1"' "$P/node_modules/react/package.json" && R51=0
+ok "PI-51 F2 — and the shared checkout's installed tree is the lockfile's afterwards" "[ $R51 -eq 0 ]"
+runp pi51-remedy
+R51=1; [ "$RCP" -eq 0 ] && hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 F2 — the very run that refused a verdict now reaches one: the remedy closed the drift" "[ $R51 -eq 0 ]"
+q git -C "$P" worktree remove --force "$FIXWT" 2>/dev/null
+
+# the guard cannot be lost by accident: verify.sh refuses to run at all without its checker
+NODRIFT="$S/pi51-nodrift"; mkdir -p "$NODRIFT"
+cp "$SCRIPT" "$NODRIFT/verify.sh"
+OUTP=$(cd "$P" && bash "$NODRIFT/verify.sh" pi51-drift main 2>&1); RCP=$?
+R51=1; [ "$RCP" -eq 2 ] && hasl "$OUTP" "install-drift.sh is missing next to verify.sh" && R51=0
+ok "PI-51 — a verify.sh without its drift checker refuses to run, instead of skipping the guard" "[ $R51 -eq 0 ]"
+
+R51=1; grep -qF 'install-drift.sh' "$REPO_ROOT/CLAUDE.md" && R51=0
+ok "PI-51 — CLAUDE.md's script table lists the new script" "[ $R51 -eq 0 ]"
+R51=1; grep -qF 'bash bin/install-drift.test.sh' "$REPO_ROOT/.pocket-it.json" && R51=0
+ok "PI-51 — the new suite is in testCommand, so it runs on every branch and not just once" "[ $R51 -eq 0 ]"
+# the two closing steps that merge PRs must both reinstall, and must both name the harm they wait for
+for SK in .claude/skills/quickfix/SKILL.md .claude/skills/run-wave/SKILL.md; do
+  R51=1; grep -qF 'install-drift.sh reinstall' "$REPO_ROOT/$SK" && R51=0
+  ok "PI-51 AC1 — $(basename "$(dirname "$SK")") reinstalls the shared checkout after a merge" "[ $R51 -eq 0 ]"
+  R51=1; grep -qiF 'running against' "$REPO_ROOT/$SK" && R51=0
+  ok "PI-51 AC2 — $(basename "$(dirname "$SK")") states the harm the deferral avoids, not a place" "[ $R51 -eq 0 ]"
+  R51=1; grep -qF 'handoff.sh log' "$REPO_ROOT/$SK" && R51=0
+  ok "PI-51 AC2 — $(basename "$(dirname "$SK")") leaves the deferred reinstall in the handoff log" "[ $R51 -eq 0 ]"
+done
+
 [[ $fail -eq 0 ]] && echo "verify.test.sh: ALL PASS" || echo "verify.test.sh: FAILURES"
 exit $fail

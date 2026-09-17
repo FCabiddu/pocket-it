@@ -16,6 +16,13 @@
 # F4 every input error (bad args, an unreadable source, a malformed main file, a composer that fails)
 # exits 2, never 0/1; F5 run-wave/quickfix never launch a second retro while one is already open, and
 # retro.md declares the Signals: input, its {scope} value, and writes the mark even without a PR.
+# QF-1: a cause is a property of the finding, not of the verdict — the cause field is read off ANY log
+# line, so one named inside an approval signals on the same terms as one named in a rework (present, not
+# first-round). Its three blocks below take their case lists from declarations, never from examples: the
+# taxonomy from reviewer.md's own prose and its two log templates (compared with each other for drift),
+# the outcome words from this project's real log + archive at run time. The needs-work anchor stays
+# exactly as it was and now governs only the round count and the signal's provenance label, so the
+# R3F2/F2 negatives assert the signal TYPE rather than the absence of a line.
 set -uo pipefail
 cd "$(dirname "$0")"
 SCRIPT="$PWD/retro-due.sh"
@@ -298,16 +305,22 @@ ok "R3F1 — a fact mentioning 'cause:'/'needs work' never affects the Log-deriv
    '[[ "$out21" == "RETRO DUE: 1 segnali"* ]] && grep -q "PI-55" <<<"$out21"'
 rm -rf "$S21"
 
-# --- R3F2 (round 3): the needs-work outcome must be the word right after "PR #<n>" itself, in one of its
-# real qualified forms — not merely present somewhere before the next em-dash on the same line. Positive:
-# every real form from the log (implementing-common.md / reviewer.md); negative: "needs work" named in
-# another outcome's own free text (approved/re-review/merged/draft) ---
+# --- R3F2 (round 3) + QF1: the needs-work outcome must be the word right after "PR #<n>" itself, in one
+# of its real qualified forms — not merely present somewhere before the next em-dash on the same line.
+# Positive: every real form from the log (implementing-common.md / reviewer.md); negative: "needs work"
+# named in another outcome's own free text (approved/re-review/merged/draft).
+# Since QF-1 the discriminator is the signal TYPE, not the absence of a line: every line here carries a
+# real "— cause: …" field of its own, so a false form now signals as a plain "cause" (correct — a cause
+# is read off any line, whatever its outcome word) and must never signal as "needs-work-cause", which is
+# what being read as a review ROUND looks like. Absence could not tell "not a round" from "a round with
+# no cause"; the type can, and it keeps the negative load-bearing after the widening.
 S22=$(mkrepo)
 writelog "$S22" \
   "- 2026-09-10 PI-93 PR #93 draft — needs work fixes applied — 3 tests — cause: other: fake93" \
   "- 2026-09-09 PI-92 PR #92 merged after needs work — ok — cause: other: fake92" \
   "- 2026-09-08 PI-91 PR #91 re-review after needs work fixed — ok — cause: other: fake91" \
   "- 2026-09-07 PI-90 PR #90 approved (delta 3, 2 needs work closed) — merge: orchestrator — cause: other: fake90" \
+  "- 2026-09-06 PI-66 PR #66 needs work (delta) — reason — cause: other: r7" \
   "- 2026-09-06 PI-65 PR #65 delta needs work round 2 — reason — cause: other: r6" \
   "- 2026-09-05 PI-64 PR #64 delta needs work — reason — cause: other: r5" \
   "- 2026-09-04 PI-63 PR #63 needs work round 2 delta — reason — cause: other: r4" \
@@ -321,15 +334,33 @@ ok "R3F2 positive — 'PR #n needs work round n'"              'grep -qE "^PI-62
 ok "R3F2 positive — 'PR #n needs work round n delta'"        'grep -qE "^PI-63 — needs-work-cause —" <<<"$out22"'
 ok "R3F2 positive — 'PR #n delta needs work'"                 'grep -qE "^PI-64 — needs-work-cause —" <<<"$out22"'
 ok "R3F2 positive — 'PR #n delta needs work round n'"         'grep -qE "^PI-65 — needs-work-cause —" <<<"$out22"'
-# each false form also carries a real "— cause: …" field of its own, so if it were wrongly read as a
-# review round it would show up as a visible needs-work-cause signal — an absent line alone cannot tell
-# "correctly not a round" apart from "a round with no cause", so this is what makes the negative load-bearing
-ok "R3F2 negative — 'approved (… 2 needs work closed)' is not a review round" '! grep -q "PI-90" <<<"$out22"'
-ok "R3F2 negative — 're-review after needs work fixed' is not a review round" '! grep -q "PI-91" <<<"$out22"'
-ok "R3F2 negative — 'merged after needs work' is not a review round" '! grep -q "PI-92" <<<"$out22"'
-ok "R3F2 negative — a draft line's own 'needs work fixes' mention is not a review round" '! grep -q "PI-93" <<<"$out22"'
-ok "R3F2 — exactly the 6 real forms signal, nothing else" '[[ "$out22" == "RETRO DUE: 6 segnali"* ]]'
+ok "R3F2 positive — 'PR #n needs work (delta)' with no number"  'grep -qE "^PI-66 — needs-work-cause —" <<<"$out22"'
+# each false form also carries a real "— cause: …" field of its own: read as a review round it would be
+# typed "needs-work-cause", read as what it is it is typed "cause". Asserting the TYPE (not the absence
+# of the line) is what keeps these negatives load-bearing now that a cause is read off any line —
+# an absent line alone cannot tell "correctly not a round" apart from "a round with no cause".
+ok "R3F2 negative — 'approved (… 2 needs work closed)' is not a review round" '! grep -qE "^PI-90 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 negative — 're-review after needs work fixed' is not a review round" '! grep -qE "^PI-91 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 negative — 'merged after needs work' is not a review round" '! grep -qE "^PI-92 — needs-work-cause —" <<<"$out22"'
+ok "R3F2 negative — a draft line's own 'needs work fixes' mention is not a review round" '! grep -qE "^PI-93 — needs-work-cause —" <<<"$out22"'
+ok "R3F2/QF1 positive — those same four lines are still signals, by their own cause field" \
+   'grep -qE "^PI-90 — cause —" <<<"$out22" && grep -qE "^PI-91 — cause —" <<<"$out22" && grep -qE "^PI-92 — cause —" <<<"$out22" && grep -qE "^PI-93 — cause —" <<<"$out22"'
+ok "R3F2 — exactly the 7 real forms are read as rounds, the 4 false ones as plain causes, nothing else" \
+   '[[ "$out22" == "RETRO DUE: 11 segnali"* ]] && [[ $(grep -cE "^[A-Za-z0-9.-]+ — needs-work-cause — " <<<"$out22") -eq 7 ]] && [[ $(grep -cE "^[A-Za-z0-9.-]+ — cause — " <<<"$out22") -eq 4 ]]'
 rm -rf "$S22"
+
+# the same false forms, all three on ONE task: read as rounds they would reach the third-round signal.
+# Its sibling — three REAL rounds on one task producing exactly that signal — is the AC2(c) fixture above.
+S22b=$(mkrepo)
+writelog "$S22b" \
+  "- 2026-09-03 PI-95 PR #95 approved (delta 3, 2 needs work closed) — merge: orchestrator — cause: other: f3" \
+  "- 2026-09-02 PI-95 PR #95 re-review after needs work fixed — ok — cause: other: f2" \
+  "- 2026-09-01 PI-95 PR #95 needs-work — a skill's own closing line — cause: other: f1"
+out22b=$(run "$S22b")
+ok "R3F2 — three false forms on one task never reach the third-round signal" '! grep -q "repeat-needs-work" <<<"$out22b"'
+ok "R3F2 — and each of the three is still counted once, as its own cause" \
+   '[[ "$out22b" == "RETRO DUE: 3 segnali"* ]] && [[ $(grep -cE "^[A-Za-z0-9.-]+ — cause — " <<<"$out22b") -eq 3 ]]'
+rm -rf "$S22b"
 
 # --- R4F1 (round 4): the needs-work qualifier forms are derived from THIS project's own real log +
 # archive at test time, never a hand-copied example list again — round 3's own list (copied from the
@@ -373,17 +404,31 @@ instantiate(){ # instantiate ID N DELTA_SUFFIX CAUSE — fills the extracted tem
   line="${line/\{N\}/$n}"
   line="${line/\{ (delta N)\}/$delta}"
   line="${line/\{first finding, six words\}/a short finding description}"
-  line="${line/\{first-round|example-not-class|base-moved|verification-reintroduced|other: …\}/$cause}"
+  # the cause alternation is the only {…} group left at this point, so it is cut generically: a
+  # hand-copied copy of it here went stale the moment the taxonomy gained a value (QF-1), and the
+  # instantiated line then carried the literal placeholder as its cause — which still signalled, so
+  # three of these assertions stayed green on a fixture that no longer tested anything.
+  line="${line%%\{*}$cause"
   printf -- '- 2026-09-01 %s' "$line"
 }
 
-for cause in "example-not-class" "base-moved" "verification-reintroduced" "other: something specific"; do
+# the values come from the template's own alternation too, so a taxonomy value added to reviewer.md is
+# exercised here the day it is declared, and never because this file happens to quote it
+TAXONOMY=$(printf '%s' "$TEMPLATE" | python3 -c 'import sys,re; m=re.search(r"cause: \{([^}]*)\}", sys.stdin.read()); print("\n".join(v.strip() for v in m.group(1).split("|")) if m else "")')
+ok "R4F2 setup — the taxonomy is derived from the template, not quoted here (>= 4 values)" \
+   '[[ $(printf "%s\n" "$TAXONOMY" | grep -c .) -ge 4 ]]'
+
+while IFS= read -r cause; do
+  [ -n "$cause" ] || continue
+  [ "$cause" = "first-round" ] && continue          # its own negative assertion follows the loop
+  case "$cause" in other*) cause="other: something specific";; esac
   Sx=$(mkrepo)
   writelog "$Sx" "$(instantiate PI-80 80 '' "$cause")"
   outx=$(run "$Sx")
-  ok "R4F2 — the template instantiated with cause: $cause is read as a signal" '[[ "$outx" == "RETRO DUE: 1 segnali"* ]]'
+  ok "R4F2 — the template instantiated with cause: $cause is read as a signal" \
+     '[[ "$outx" == "RETRO DUE: 1 segnali"* ]] && grep -qE "^PI-80 — needs-work-cause — " <<<"$outx"'
   rm -rf "$Sx"
-done
+done <<<"$TAXONOMY"
 
 Sfr=$(mkrepo)
 writelog "$Sfr" "$(instantiate PI-81 81 '' "first-round")"
@@ -444,6 +489,185 @@ out19=$(cd "$S19" && bash "$BINN/retro-due.sh"); rc19=$?
 ok "AC4 fallback — still exercised directly when the sibling handoff.sh has no composer" \
    '[[ "$rc19" -eq 10 ]] && grep -q "PI-71" <<<"$out19"'
 rm -rf "$S19" "$BINN"
+
+# --- QF1 (AC1/AC2/AC5): a cause is a property of the finding, not of the verdict ---
+# Both log templates are extracted from reviewer.md itself and instantiated with the taxonomy values
+# reviewer.md declares, so the class under test is "every cause value a reviewer may write, on either
+# outcome", never the example lines the task quotes: a value added to the taxonomy is exercised the day
+# it is declared. The three places that declare that taxonomy — the Step 0 prose, the NEEDS WORK log
+# template, the APPROVED log template — are also compared with each other, because a value added to one
+# and not the others is exactly how a producer and this consumer drifted apart before.
+QF1_RECORDS=$(python3 - ../.claude/agents/reviewer.md <<'PY'
+import re, sys
+
+src = open(sys.argv[1], encoding="utf-8").read()
+NW = re.search(r'\{ID\} PR #\{N\} needs work\{ \(delta N\)\} — \{first finding, six words\} — cause: \{([^}]*)\}', src)
+AP = re.search(r'\{ID\} PR #\{N\} approved — merge: \{orchestrator\|user\}\{ — cause: \{([^}]*)\}\}', src)
+TAX = re.search(r'using this taxonomy:(.*?)Say this even', src, re.S)
+out = [("meta", "NW_TEMPLATE", "yes" if NW else "no"),
+       ("meta", "AP_TEMPLATE", "yes" if AP else "no"),
+       ("meta", "TAXONOMY_PARAGRAPH", "yes" if TAX else "no")]
+
+
+def members(alt):
+    vals = [v.strip() for v in alt.split("|") if v.strip()]
+    return sorted(v for v in vals if not v.startswith("other")), any(v.startswith("other") for v in vals)
+
+
+if NW and AP and TAX:
+    nw_fixed, nw_free = members(NW.group(1))
+    ap_fixed, ap_free = members(AP.group(1))
+    # each taxonomy member in the prose is a backticked token followed by its parenthesised gloss
+    prose_fixed = sorted(set(re.findall(r'`([a-z][a-z-]+)` \(', TAX.group(1))))
+    prose_free = bool(re.search(r'`other: \{one line\}`', TAX.group(1)))
+    out.append(("meta", "DRIFT_PROSE_VS_NW", "OK" if (prose_fixed == nw_fixed and prose_free and nw_free)
+                else "prose=%s nw=%s" % (prose_fixed, nw_fixed)))
+    out.append(("meta", "DRIFT_AP_VS_NW", "OK" if (ap_fixed == [v for v in nw_fixed if v != "first-round"]
+                                                   and ap_free and nw_free)
+                else "ap=%s nw=%s" % (ap_fixed, nw_fixed)))
+    out.append(("meta", "TAXONOMY_SIZE", str(len(prose_fixed))))
+    out.append(("meta", "FALSE_COVERAGE_EVIDENCE", "yes" if "false-coverage-evidence" in prose_fixed else "no"))
+
+    def ap_line(cause):   # cause None = the whole optional cause group dropped, as an approval with
+        l = AP.group(0).replace("{ID}", "PI-101").replace("{N}", "101")   # nothing to name is written
+        l = l.replace("{orchestrator|user}", "orchestrator")
+        grp = re.search(r'\{ — cause: \{[^}]*\}\}', l).group(0)
+        return "- 2026-09-01 " + l.replace(grp, "" if cause is None else " — cause: " + cause)
+
+    def nw_line(cause):
+        l = NW.group(0).replace("{ID}", "PI-102").replace("{N}", "102")
+        l = l.replace("{ (delta N)}", "").replace("{first finding, six words}", "a short finding description")
+        grp = re.search(r'\{[^}]*\}$', l).group(0)
+        return "- 2026-09-01 " + (l.replace(grp, cause) if cause is not None else l.replace(" — cause: " + grp, ""))
+
+    for v in ap_fixed + (["other: something specific"] if ap_free else []):
+        out.append(("ap-cause", v, ap_line(v)))
+    out.append(("ap-first-round", "first-round", ap_line("first-round")))
+    out.append(("ap-absent", "no cause field at all", ap_line(None)))
+    out.append(("ap-empty", "an empty cause field", ap_line("")))
+    out.append(("ap-empty-mid", "an empty cause field before another field", ap_line("") + "— fix at: task file"))
+    out.append(("nw-absent", "no cause field at all", nw_line(None)))
+
+for r in out:
+    print("|".join(r))
+PY
+)
+ok "QF1 setup — reviewer.md declares a NEEDS WORK log template with its own cause field" 'grep -q "^meta|NW_TEMPLATE|yes$" <<<"$QF1_RECORDS"'
+ok "QF1 setup — reviewer.md declares an APPROVED log template carrying the same cause field" 'grep -q "^meta|AP_TEMPLATE|yes$" <<<"$QF1_RECORDS"'
+ok "QF1 setup — the Step 0 taxonomy paragraph is where those values are declared" 'grep -q "^meta|TAXONOMY_PARAGRAPH|yes$" <<<"$QF1_RECORDS"'
+ok "QF1 setup — the taxonomy is not vacuous (4 fixed values or more)" '[[ "$(sed -n "s/^meta|TAXONOMY_SIZE|//p" <<<"$QF1_RECORDS")" -ge 4 ]]'
+ok "QF1 — prose taxonomy and NEEDS WORK template declare the same set (no drift)" 'grep -q "^meta|DRIFT_PROSE_VS_NW|OK$" <<<"$QF1_RECORDS"'
+ok "QF1/AC5 — the APPROVED template offers that same set minus first-round" 'grep -q "^meta|DRIFT_AP_VS_NW|OK$" <<<"$QF1_RECORDS"'
+ok "QF1 — the taxonomy names false-coverage-evidence" 'grep -q "^meta|FALSE_COVERAGE_EVIDENCE|yes$" <<<"$QF1_RECORDS"'
+
+while IFS='|' read -r kind label logline; do
+  case "$kind" in ""|meta) continue;; esac
+  Sq=$(mkrepo); writelog "$Sq" "$logline"; outq=$(run "$Sq"); rm -rf "$Sq"
+  case "$kind" in
+    ap-cause)
+      ok "QF1/AC2 — an APPROVAL naming cause: $label is a signal, typed as a plain cause" \
+         '[[ "$outq" == "RETRO DUE: 1 segnali"* ]] && grep -qE "^PI-101 — cause — " <<<"$outq"' ;;
+    ap-first-round)
+      ok "QF1/AC2 — an APPROVAL naming cause: first-round is not a signal (the same terms as a rework)" \
+         '[[ "$outq" == "retro-due: nothing" ]]' ;;
+    ap-absent|ap-empty|ap-empty-mid)
+      ok "QF1/AC5 — an APPROVAL with $label is not a signal" '[[ "$outq" == "retro-due: nothing" ]]' ;;
+    nw-absent)
+      ok "QF1/AC5 — a NEEDS WORK with $label is not a signal either (unchanged)" \
+         '[[ "$outq" == "retro-due: nothing" ]]' ;;
+  esac
+done <<<"$QF1_RECORDS"
+
+ok "QF1/AC1 — reviewer.md states the rule this rests on, where the reviewer reads it" \
+   'grep -q "A cause is a property of the finding, not of the verdict" ../.claude/agents/reviewer.md'
+ok "QF1/AC1 — reviewer.md's Step 6 report line carries the cause on the APPROVED branch too" \
+   'grep -q "APPROVED (merge: orchestrator|user){ — cause:" ../.claude/agents/reviewer.md'
+ok "QF1/AC5 — reviewer.md says the approval's cause field is absent when there is nothing to name" \
+   'grep -q "absent entirely when it did not" ../.claude/agents/reviewer.md'
+
+# --- QF1 (AC2/AC6): outcome-independence over the class of outcome words this project really writes,
+# harvested from its own log + archive at run time rather than from the four example lines the task
+# quotes — a new outcome word is covered the day it is first written. Three corpora over the same
+# harvested forms: with a real cause every line must signal, with cause: first-round none may, with no
+# cause field at all none may. The last two are what make the first mean anything: a corpus that
+# signalled whatever it said would come out green on the first assertion alone.
+FORMS=$(grep -hoE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [^ ]+ PR #[0-9]+ [^—]*' ../docs/SESSION_HANDOFF.md ../docs/SESSION_HANDOFF_ARCHIVE.md 2>/dev/null \
+        | sed -E 's/^- [0-9-]+ [^ ]+ PR #[0-9]+ //; s/[[:space:]]+$//' | grep -v '^$' | sort -u)
+form_count=$(printf '%s\n' "$FORMS" | grep -c . || true)
+ok "QF1 setup — this project's own log/archive yields several distinct outcome words (not vacuous)" \
+   '[[ "$form_count" -ge 5 ]]'
+
+corpus(){ # corpus cause|first-round|none — one line per harvested outcome form, with a distinct task id
+          # and a distinct cause on each, so neither (b) nor (c) can add a signal of its own to the count
+  local mode="$1" i=0 f suffix
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    i=$((i+1))
+    case "$mode" in
+      cause) suffix=" — cause: other: c$i" ;;
+      first-round) suffix=" — cause: first-round" ;;
+      none) suffix="" ;;
+    esac
+    printf -- '- 2026-09-01 PI-%d PR #%d %s — a short description%s\n' "$((500+i))" "$((500+i))" "$f" "$suffix"
+  done <<<"$FORMS"
+}
+
+run_corpus(){
+  local d l lines=()
+  d=$(mkrepo)
+  while IFS= read -r l; do lines+=("$l"); done < <(corpus "$1")
+  writelog "$d" "${lines[@]}"
+  run "$d"
+  rm -rf "$d"
+}
+outq1=$(run_corpus cause); outq2=$(run_corpus first-round); outq3=$(run_corpus none)
+ok "QF1/AC2 — every outcome word this project writes carries its cause into exactly one signal" \
+   '[[ "$outq1" == "RETRO DUE: $form_count segnali"* ]]'
+ok "QF1/AC2 — that corpus really spans both provenances, so the equality is not one outcome repeated" \
+   '[[ $(grep -cE "^[A-Za-z0-9.-]+ — needs-work-cause — " <<<"$outq1") -gt 0 ]] && [[ $(grep -cE "^[A-Za-z0-9.-]+ — cause — " <<<"$outq1") -gt 0 ]]'
+ok "QF1/AC2 — the same corpus with cause: first-round raises nothing, whatever the outcome word" \
+   '[[ "$outq2" == "retro-due: nothing" ]]'
+ok "QF1/AC2 — the same corpus with no cause field raises nothing, whatever the outcome word" \
+   '[[ "$outq3" == "retro-due: nothing" ]]'
+
+# --- QF1 (AC4): widening WHICH lines are asked for a cause must not widen HOW one is recognised inside
+# a line. Every negative below sits in a fixture whose sibling line carries the real field, so "no
+# signal" can never come from the fixture not being read at all.
+S24=$(mkrepo)
+writelog "$S24" \
+  "- 2026-09-05 PI-70 PR #70 approved — merge: orchestrator — the false-coverage-evidence cause found in round 2 is closed" \
+  "- 2026-09-04 PI-71 PR #71 draft — retro-due.sh reads a cause on an approval too — 8 tests" \
+  "- 2026-09-03 PI-72 PR #72 approved — merge: orchestrator — root cause: base mossa" \
+  "- 2026-09-02 PI-73 PR #73 merged — because: the evidence row was never run" \
+  "- 2026-09-01 PI-74 PR #74 approved — merge: orchestrator — cause: false-coverage-evidence"
+out24=$(run "$S24")
+ok "AC4 — a taxonomy word named in an approval's own prose is not a cause field" '! grep -q "PI-70" <<<"$out24"'
+ok "AC4 — a PR-title-shaped line describing the cause mechanism is not a cause field" '! grep -q "PI-71" <<<"$out24"'
+ok "AC4 — 'root cause:' on an approval is not a cause field" '! grep -q "PI-72" <<<"$out24"'
+ok "AC4 — 'because:' on a merged line is not a cause field" '! grep -q "PI-73" <<<"$out24"'
+ok "AC4 — the sibling line with the real field, same fixture, IS a signal (the negatives are not vacuous)" \
+   'grep -qE "^PI-74 — cause —" <<<"$out24"'
+ok "AC4 — exactly one signal in this fixture" '[[ "$out24" == "RETRO DUE: 1 segnali"* ]]'
+rm -rf "$S24"
+
+# a fact written in the exact cause-field shape is outside the log section and is never read as a signal;
+# the log line in the same file is, which is what proves the file was read at all
+S25=$(mkrepo)
+mkdir -p "$S25/docs"
+cat > "$S25/docs/SESSION_HANDOFF.md" <<'EOF'
+# Session handoff
+
+## Fatti che non scadono
+- QF-1: a cause is read off any log line now — cause: false-coverage-evidence — a fact is not a log line
+
+## Log (più recente in alto, ultime 40 righe)
+- 2026-09-01 PI-76 PR #76 approved — merge: orchestrator — cause: base-moved
+EOF
+out25=$(cd "$S25" && bash "$SCRIPT")
+ok "AC4 — a fact written in the exact cause-field shape is never read as a signal" '! grep -q "QF-1" <<<"$out25"'
+ok "AC4 — while the approval line in the same file is (the section boundary excludes it, not the shape)" \
+   '[[ "$out25" == "RETRO DUE: 1 segnali"* ]] && grep -qE "^PI-76 — cause —" <<<"$out25"'
+rm -rf "$S25"
 
 # --- AC5/AC6: the wiring this script is read by ---
 ok "AC5 — run-wave/SKILL.md calls retro-due.sh after review" 'grep -q "bin/retro-due.sh" ../.claude/skills/run-wave/SKILL.md'

@@ -1,6 +1,6 @@
 # PI-45 — doctor.test.sh non sa mutare uno script già mutato, e ne incolpa altri test
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: pipeline-improvements
 **Story**: pipeline-improvements
@@ -13,8 +13,8 @@
 **Files**: bin/doctor.test.sh
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/pi-45-doctor-test-self-mutation
+**PR**: https://github.com/FCabiddu/pocket-it/pull/85
 
 ## Goal
 `mutate_has_section()` (`bin/doctor.test.sh`, ~lines 1006-1020) builds its patched copy by reading
@@ -33,20 +33,20 @@ strongest, and worse than fragile: it accuses tests that are fine. The damage to
 failure that names the wrong test.
 
 ## Acceptance criteria
-- [ ] AC1 — Given `bin/doctor.sh` has been modified before the suite runs, in any way and anywhere,
+- [x] AC1 — Given `bin/doctor.sh` has been modified before the suite runs, in any way and anywhere,
       when the suite runs, then no assertion that does not depend on the modified code reports a
       failure caused by it. The invariant is isolation between checks, not the one function named
       here.
-- [ ] AC2 — Given the self-mutation cannot be applied, when that happens, then the suite says so in
+- [x] AC2 — Given the self-mutation cannot be applied, when that happens, then the suite says so in
       its own named error ("cannot self-mutate: source text not found") and fails only that check —
       never an opaque assertion whose failure is indistinguishable from a real regression.
-- [ ] AC3 — Given the suite mutates the script, when it does, then it mutates a copy of the content
+- [x] AC3 — Given the suite mutates the script, when it does, then it mutates a copy of the content
       it captured for itself, not whatever `$SCRIPT` currently contains — so two mutations in the
       same run, or an external one, cannot interfere.
-- [ ] AC4 — Given any other self-mutating block in this file or its siblings makes the same
+- [x] AC4 — Given any other self-mutating block in this file or its siblings makes the same
       assumption, when this task is done, then it has been found and closed too; the fix is the rule,
       not the single call site.
-- [ ] AC5 — Given a genuine regression in `_has_section`, when the suite runs, then it is still
+- [x] AC5 — Given a genuine regression in `_has_section`, when the suite runs, then it is still
       caught and still reported against the right check — the isolation must not buy silence.
 
 ## Tests expected
