@@ -884,5 +884,154 @@ ok "PI-41 caller — CLAUDE.md's script table states the new exit codes" "[ $R41
 # and the script's own header must document the codes a caller is now expected to read
 R41=1; grep -qE '^#   3  RED, inherited' "$SCRIPT" && grep -qE '^#   1  RED, this branch' "$SCRIPT" && R41=0
 ok "PI-41 caller — verify.sh documents every exit code it can return" "[ $R41 -eq 0 ]"
+
+# ============ PI-51 — a verdict about code that is not installed is not a verdict ============================
+# Same disposable repo as PI-41 ($P, its own origin), for the same reason: these cases move the base tree and
+# the shared install under a fixture branch on purpose. The mutation here is of the WORLD, not of the script:
+# one byte of the installed react/package.json is the only thing that changes between the red run and the
+# green one, so neither can pass by accident — and the pair is run in both directions.
+# bin/install-drift.test.sh carries the code-level mutations (the comparison removed, scoped packages ignored).
+q git -C "$P" checkout -q main
+printf 'node_modules/\n' > "$P/.gitignore"
+cat > "$P/package-lock.json" <<'J'
+{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"18.3.1"}}}
+J
+wcheck "$P/check.sh" "exit 0"
+p_commit "pi51: a lockfile on the base"
+# the shared checkout's install, stale: the tree every branch worktree borrows when it changed no lockfile
+mkdir -p "$P/node_modules/react"
+setinst(){ printf '{"name":"react","version":"%s"}\n' "$1" > "$P/node_modules/react/package.json"; }
+setinst 18.2.0
+
+q git -C "$P" checkout -q -b pi51-drift main
+pfile "$P/bin/pi51.test.sh"
+p_commit "pi51-drift"
+
+runp pi51-drift
+R51=1; [ "$RCP" -eq 2 ] && R51=0
+ok "PI-51 AC3 — a branch worktree on a stale shared install exits 2, could-not-run, never a red of the branch" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "FAIL  install drift — the installed tree is not the one the lockfile declares" && R51=0
+ok "PI-51 AC3 — the stale install is stated as the reason, by name" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "drift  react — installed 18.2.0, locked 18.3.1" && R51=0
+ok "PI-51 AC3 — the package, the installed version and the locked one are all named" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "install-drift.sh reinstall $P" && R51=0
+ok "PI-51 AC3 — the fix names the shared checkout, the one place a reinstall can help" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "node_modules is borrowed from $P/node_modules" && R51=0
+ok "PI-51 AC3 — and says where the tree it measured actually came from" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: could not run — the installed tree disagrees with the lockfile (nothing was measured)" && R51=0
+ok "PI-51 AC3 — the verdict line says nothing was measured" "[ $R51 -eq 0 ]"
+R51=0; { hasl "$OUTP" "verify: GREEN" || hasl "$OUTP" "verify: RED"; } && R51=1
+ok "PI-51 AC3 — no verdict of any kind is printed on a tree that was not the lockfile's" "[ $R51 -eq 0 ]"
+R51=0; [ -s "$CALLLOG" ] && R51=1
+ok "PI-51 AC3 — and not one check was executed against it" "[ $R51 -eq 0 ]"
+
+# the world mutated back: the same branch, the same script, one correct version installed
+setinst 18.3.1
+runp pi51-drift
+R51=1; [ "$RCP" -eq 0 ] && R51=0
+ok "PI-51 AC4 — with the install matching the lockfile the same branch runs and exits 0" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 AC4 — a matching install is verified as before, GREEN" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "info  install matches the lockfile: 1 compared entries of package-lock.json" && R51=0
+ok "PI-51 AC4 — and it says what it compared, so a green is never silent about it" "[ $R51 -eq 0 ]"
+R51=1; [ -s "$CALLLOG" ] && R51=0
+ok "PI-51 AC4 — the checks really did run this time" "[ $R51 -eq 0 ]"
+
+# AC4, the two trees with nothing to compare: unchanged behaviour, no new failure mode
+rm -rf "$P/node_modules"
+runp pi51-drift
+R51=1; [ "$RCP" -eq 0 ] && hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 AC4 — a lockfile with nothing installed anywhere is not drift, the run is unchanged" "[ $R51 -eq 0 ]"
+mkdir -p "$P/node_modules/react"; setinst 18.2.0
+q git -C "$P" checkout -q main; q git -C "$P" rm -q package-lock.json
+p_commit "pi51: no lockfile at all"
+q git -C "$P" checkout -q -b pi51-nolock main
+pfile "$P/bin/pi51-nolock.test.sh"
+p_commit "pi51-nolock"
+runp pi51-nolock
+R51=1; [ "$RCP" -eq 0 ] && hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 AC4 — a repository with no lockfile at all is untouched by the guard" "[ $R51 -eq 0 ]"
+R51=0; hasl "$OUTP" "install drift" && R51=1
+ok "PI-51 AC4 — and the guard says nothing about a project it has nothing to check" "[ $R51 -eq 0 ]"
+
+# --- the other borrowing path: the base worktree the attribution runs its re-checks in (PI-41) ---------------
+# The branch changes the lockfile, so verify installs the branch's own tree (a stand-in npm does it here,
+# nothing is downloaded) and the branch side is clean; the BASE worktree is the one left borrowing the shared
+# checkout's stale install. A base whose dependencies are not its own cannot answer "does this fail here too".
+q git -C "$P" checkout -q main
+cat > "$P/package-lock.json" <<'J'
+{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"18.3.1"}}}
+J
+wcheck "$P/check.sh" "exit 1"      # the base is red too: without the stale install this run says "inherited"
+p_commit "pi51: base lockfile back, base check red"
+setinst 18.2.0                      # shared install stale against the base's lockfile
+
+q git -C "$P" checkout -q -b pi51-baseside main
+cat > "$P/package-lock.json" <<'J'
+{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"20.0.0"}}}
+J
+wcheck "$P/check.sh" "exit 1"
+p_commit "pi51-baseside"
+PMBIN51="$S/pi51-pmbin"; mkdir -p "$PMBIN51"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$PMBIN51/pnpm"; chmod +x "$PMBIN51/pnpm"
+cat > "$PMBIN51/npm" <<'SH'
+#!/usr/bin/env bash
+# stand-in npm: `npm ci` installs, into the current worktree, exactly what that worktree's lockfile declares.
+[[ "$1" == ci ]] || exit 9
+python3 - <<'PY'
+import json, os
+p = json.load(open("package-lock.json"))["packages"]["node_modules/react"]["version"]
+os.makedirs("node_modules/react", exist_ok=True)
+open("node_modules/react/package.json", "w").write('{"name":"react","version":"%s"}\n' % p)
+PY
+SH
+chmod +x "$PMBIN51/npm"
+
+runp pi51-baseside "$PMBIN51"
+R51=1; [ "$RCP" -eq 1 ] && R51=0
+ok "PI-51 AC3 base — a base tree on a stale shared install falls back to the branch's own red, exit 1" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "attribution unknown: the installed tree at " && hasl "$OUTP" "disagrees with its lockfile" && R51=0
+ok "PI-51 AC3 base — the attribution is refused, and says the base tree was not the lockfile's" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "react — installed 18.2.0, locked 18.3.1" && R51=0
+ok "PI-51 AC3 base — the drifted package is named on the base side too" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "install-drift.sh reinstall $P" && R51=0
+ok "PI-51 AC3 base — and the fix names the shared checkout the base borrowed from" "[ $R51 -eq 0 ]"
+R51=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R51=1
+ok "PI-51 AC3 base — a re-check run against the wrong code never excuses the branch as inherited" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED" && R51=0
+ok "PI-51 AC3 base — the branch's red is still reported, unqualified" "[ $R51 -eq 0 ]"
+
+# the world mutated back, one byte again: the base install matches, the attribution can be performed, and the
+# very same run reaches the opposite verdict — so the red above was the stale install and nothing else.
+setinst 18.3.1
+runp pi51-baseside "$PMBIN51"
+R51=1; [ "$RCP" -eq 3 ] && R51=0
+ok "PI-51 AC3 base — with the base install matching, the same run attributes normally again (exit 3)" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED — inherited" && R51=0
+ok "PI-51 AC3 base — and reports the inherited verdict it could not reach before" "[ $R51 -eq 0 ]"
+R51=0; hasl "$OUTP" "attribution unknown" && R51=1
+ok "PI-51 AC3 base — nothing is unknown any more" "[ $R51 -eq 0 ]"
+
+# the guard cannot be lost by accident: verify.sh refuses to run at all without its checker
+NODRIFT="$S/pi51-nodrift"; mkdir -p "$NODRIFT"
+cp "$SCRIPT" "$NODRIFT/verify.sh"
+OUTP=$(cd "$P" && bash "$NODRIFT/verify.sh" pi51-drift main 2>&1); RCP=$?
+R51=1; [ "$RCP" -eq 2 ] && hasl "$OUTP" "install-drift.sh is missing next to verify.sh" && R51=0
+ok "PI-51 — a verify.sh without its drift checker refuses to run, instead of skipping the guard" "[ $R51 -eq 0 ]"
+
+R51=1; grep -qF 'install-drift.sh' "$REPO_ROOT/CLAUDE.md" && R51=0
+ok "PI-51 — CLAUDE.md's script table lists the new script" "[ $R51 -eq 0 ]"
+R51=1; grep -qF 'bash bin/install-drift.test.sh' "$REPO_ROOT/.pocket-it.json" && R51=0
+ok "PI-51 — the new suite is in testCommand, so it runs on every branch and not just once" "[ $R51 -eq 0 ]"
+# the two closing steps that merge PRs must both reinstall, and must both name the harm they wait for
+for SK in .claude/skills/quickfix/SKILL.md .claude/skills/run-wave/SKILL.md; do
+  R51=1; grep -qF 'install-drift.sh reinstall' "$REPO_ROOT/$SK" && R51=0
+  ok "PI-51 AC1 — $(basename "$(dirname "$SK")") reinstalls the shared checkout after a merge" "[ $R51 -eq 0 ]"
+  R51=1; grep -qiF 'running against' "$REPO_ROOT/$SK" && R51=0
+  ok "PI-51 AC2 — $(basename "$(dirname "$SK")") states the harm the deferral avoids, not a place" "[ $R51 -eq 0 ]"
+  R51=1; grep -qF 'handoff.sh log' "$REPO_ROOT/$SK" && R51=0
+  ok "PI-51 AC2 — $(basename "$(dirname "$SK")") leaves the deferred reinstall in the handoff log" "[ $R51 -eq 0 ]"
+done
+
 [[ $fail -eq 0 ]] && echo "verify.test.sh: ALL PASS" || echo "verify.test.sh: FAILURES"
 exit $fail

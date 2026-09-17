@@ -278,13 +278,14 @@ PY
 # whose porcelain line cannot be decoded still counts as present, because the wrong answer to defer to is
 # always "wait", never "reinstall under something that is running".
 live_worktrees() {
-  git -C "$DIR" worktree list --porcelain 2>/dev/null | python3 - "$DIR" "$EXCEPT" <<'PY'
-import sys
+  # The porcelain travels in the environment, not on stdin: stdin here is the reader program itself.
+  WT_PORCELAIN="$(git -C "$DIR" worktree list --porcelain 2>/dev/null)" python3 - "$DIR" "$EXCEPT" <<'PY'
+import os, sys
 d = sys.argv[1].rstrip("/")
 except_names = set(sys.argv[2].split())
 except_slugs = set(n.replace("/", "-") for n in except_names)
 entries, cur = [], {}
-for line in sys.stdin.read().splitlines() + [""]:
+for line in os.environ.get("WT_PORCELAIN", "").splitlines() + [""]:
     if not line.strip():
         if cur.get("worktree"):
             entries.append(cur)
@@ -351,7 +352,7 @@ else
          echo "install-drift: SKIP — no lockfile changed since $SINCE and $PM cannot be drift-checked, not reinstalled"
          exit 0
        fi
-       NEEDED=1; WHY="$(printf '%s' "$TOUCHED" | tr '\n' ' ')changed since $SINCE" ;;
+       NEEDED=1; WHY="$(printf '%s\n' "$TOUCHED" | tr '\n' ' ')changed since $SINCE" ;;
   esac
 fi
 [[ $NEEDED -eq 1 ]] || { echo "install-drift: SKIP — nothing indicates a stale install in $DIR"; exit 0; }
@@ -360,8 +361,11 @@ fi
 #    run, it silently changes what it measured. So the answer to any doubt is to wait, never to install.
 BLOCK=""
 [[ -n "$RUNNING" ]] && BLOCK="$RUNNING"
-WTS=$(live_worktrees)
-if [[ -n "$WTS" ]]; then
+WTS=$(live_worktrees); WRC=$?
+if [[ $WRC -ne 0 ]]; then
+  # An unread list is never an empty one: if the reader could not run, assume something is.
+  BLOCK="${BLOCK:+$BLOCK; }the worktree list of this checkout could not be read (reader exited $WRC), so what is running against it is unknown"
+elif [[ -n "$WTS" ]]; then
   N=$(printf '%s\n' "$WTS" | grep -c .)
   BLOCK="${BLOCK:+$BLOCK; }$N worktree(s) of this checkout in use: $(printf '%s\n' "$WTS" | cut -f2 | tr '\n' ' ')"
 fi

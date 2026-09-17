@@ -132,7 +132,16 @@ DRIFT_OUT=$(bash "$DRIFT_SH" check . 2>&1); DRIFT_RC=$?
 case $DRIFT_RC in
   0) printf '%s\n' "$DRIFT_OUT" | grep -E '^install-drift: OK' | sed 's/^install-drift: OK — /info  install matches the lockfile: /';;
   1) echo "FAIL  install drift — the installed tree is not the one the lockfile declares"
-     printf '%s\n' "$DRIFT_OUT" | grep -E '^(drift |install-drift: )' | sed 's/^/      /'
+     printf '%s\n' "$DRIFT_OUT" | grep -E '^(drift |install-drift: (DRIFT|NOT SUPPORTED))' | sed 's/^/      /'
+     # Where the drifted tree actually lives, and a fix that can be run as printed: install-drift's own "run
+     # … in <dir>" names THIS worktree, which is borrowed and about to be deleted — useless to act on.
+     DCMD=$(printf '%s\n' "$DRIFT_OUT" | sed -n 's/^install-drift: run `\([^`]*\)`.*/\1/p' | head -1)
+     if [[ -L node_modules ]]; then
+       echo "      node_modules is borrowed from $(readlink node_modules)"
+       echo "      fix: run \`bash $DRIFT_SH reinstall $ROOT\` (or \`$DCMD\` in $ROOT) once nothing is running against that checkout"
+     else
+       echo "      this install came from the branch's own changed lockfile: re-run \`$DCMD\` on the branch"
+     fi
      echo "verify: could not run — the installed tree disagrees with the lockfile (nothing was measured)"; exit 2;;
   *) printf '%s\n' "$DRIFT_OUT" | grep -E '^install-drift: ' | sed 's/^install-drift: /warn  /';;
 esac
@@ -313,7 +322,7 @@ if [[ $NFAIL -gt 0 ]]; then
       # verify install that tree fresh, while the base keeps borrowing the main checkout's stale one.
       BD_OUT=$(bash "$DRIFT_SH" check . 2>&1); BD_RC=$?
       if [[ $BD_RC -eq 1 ]]; then
-        unattributable "the installed tree at $BASE_AT disagrees with its lockfile — $(printf '%s\n' "$BD_OUT" | grep -m1 '^drift ' | sed 's/^drift  *//')"
+        unattributable "the installed tree at $BASE_AT disagrees with its lockfile — $(printf '%s\n' "$BD_OUT" | grep -m1 '^drift ' | sed 's/^drift  *//') — reinstall the checkout it borrowed node_modules from with \`bash $DRIFT_SH reinstall $ROOT\`"
       else
       for ((i=0; i<NFAIL; i++)); do
         BLOCK=$(base_blockers "${FAIL_CMD[$i]}" "${FAIL_NEEDS[$i]}")
