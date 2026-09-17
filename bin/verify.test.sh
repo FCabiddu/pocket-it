@@ -873,10 +873,13 @@ ok "PI-41 caller — reviewer.md states the limit of what a base-red check excus
 # worktree, whose own absolute path contains /.claude/worktrees/, so an absolute filter would exclude every
 # file in the repo and the assertion would pass no matter what any file said (measured: it did).
 # Excluded on purpose: tasks/ and docs/reports/ are history, .claude/worktrees/ holds other branches.
-# Widened after round 2: one literal phrasing was not the class, and docs/SESSION_HANDOFF* is memory, not
-# an instruction — a fact quoting the old wording must not turn this suite red.
+# Widened after round 2: one literal phrasing was not the class, and the handoff memory is memory, not an
+# instruction — a fact quoting the old wording must not turn this suite red. The memory is excluded by both
+# of its generations: the frozen docs/SESSION_HANDOFF* sources, and the immutable fragments under
+# docs/handoff/ that every write creates since PI-16. Excluding only the first would make this suite red on
+# the next fact that quotes the wording, which is the same false red the exclusion was added to remove.
 STALE=$(cd "$REPO_ROOT" && grep -rniE --include='*.md' 'red = needs work|a red = needs work|red means needs work|red is needs work|any red .{0,20}needs work' . \
-  | grep -vE '^\./(tasks|docs/reports|\.claude/worktrees)/' | grep -v '^\./docs/SESSION_HANDOFF')
+  | grep -vE '^\./(tasks|docs/reports|\.claude/worktrees|docs/handoff)/' | grep -v '^\./docs/SESSION_HANDOFF')
 R41=0; [ -n "$STALE" ] && R41=1
 ok "PI-41 caller — no instruction file still reduces a red to 'red = needs work'" "[ $R41 -eq 0 ]"
 R41=1; grep -qF 'a red that also fails at the base commit it pinned for the run' "$REPO_ROOT/CLAUDE.md" && R41=0

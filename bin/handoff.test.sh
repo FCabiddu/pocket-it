@@ -33,6 +33,17 @@ ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 TODAY=$(date +%Y-%m-%d)
 MONTH=$(date -u +%Y-%m)
+# A clock read once at start-up and compared against a line written minutes later is a test that goes red
+# at a boundary it never chose. handoff.sh dates each line with the LOCAL date at the moment of the write,
+# so a suite that runs across local midnight writes some lines before it and some after, and one $TODAY
+# cannot be right for both — measured on this suite: a run crossing 00:00 went red on the one line written
+# after it, with nothing wrong in the code under test. The two helpers below close the whole class rather
+# than the assertion that happened to catch it: `dated` accepts either date this run can legitimately have
+# written, and `undate` normalises a leading date to $TODAY on BOTH sides of a multiset comparison.
+# (`MONTH` above carries the same hazard at a UTC month boundary; it is not closed here — see the report.)
+dated(){ local a="$1"; shift; local r="$*"
+         [[ "$a" == "- $TODAY${r:+ $r}" ]] || [[ "$a" == "- $(date +%Y-%m-%d)${r:+ $r}" ]]; }
+undate(){ sed -E "s/^- $(date +%Y-%m-%d)( |\$)/- $TODAY\1/"; }
 
 TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/handoff-tests.XXXXXX")
 TMPROOT=$(cd "$TMPROOT" && pwd -P)   # resolve any symlink (e.g. macOS /tmp) so it matches git's resolved toplevel
@@ -166,16 +177,16 @@ S19=$(mkrepo)
 newest19(){ head -1 <<<"$(clog "$S19")"; }   # never `clog | head`: see holds_lines on EPIPE + pipefail
 
 (cd "$S19" && bash "$SCRIPT" log "$TODAY testo uno" >/dev/null 2>&1)
-ok "PI-39 AC1 — prefix equal to today's date is stripped, one date left" '[[ "$(newest19)" == "- $TODAY testo uno" ]]'
+ok "PI-39 AC1 — prefix equal to today's date is stripped, one date left" 'dated "$(newest19)" "testo uno"'
 (cd "$S19" && bash "$SCRIPT" log "2020-01-01 testo due" >/dev/null 2>&1)
-ok "PI-39 AC1 — prefix different from today is stripped, not kept alongside today's" '[[ "$(newest19)" == "- $TODAY testo due" ]]'
+ok "PI-39 AC1 — prefix different from today is stripped, not kept alongside today's" 'dated "$(newest19)" "testo due"'
 (cd "$S19" && bash "$SCRIPT" log "2026-09-01 2026-09-02 testo tre" >/dev/null 2>&1)
-ok "PI-39 AC1 — a repeated double date prefix is stripped entirely, not just the first" '[[ "$(newest19)" == "- $TODAY testo tre" ]]'
+ok "PI-39 AC1 — a repeated double date prefix is stripped entirely, not just the first" 'dated "$(newest19)" "testo tre"'
 (cd "$S19" && bash "$SCRIPT" log "2026-09-01" >/dev/null 2>&1)
-ok "PI-39 AC1 — limit case: the message IS just a date, line still carries a single date" '[[ "$(newest19)" == "- $TODAY" ]]'
+ok "PI-39 AC1 — limit case: the message IS just a date, line still carries a single date" 'dated "$(newest19)"'
 (cd "$S19" && bash "$SCRIPT" log "PI-40 PR #80 approved — regressione del 2026-09-01" >/dev/null 2>&1)
 ok "PI-39 AC2 — a date NOT at the start of the message is left untouched" \
-   '[[ "$(newest19)" == "- $TODAY PI-40 PR #80 approved — regressione del 2026-09-01" ]]'
+   'dated "$(newest19)" "PI-40 PR #80 approved — regressione del 2026-09-01"'
 ok "PI-39 — no fragment line carries two consecutive ISO dates" \
    '! grep -rqE "^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{4}-[0-9]{2}-[0-9]{2} " "$S19/docs/handoff"'
 
@@ -387,7 +398,7 @@ ok "PI-16 AC1 — and git agrees: no unmerged paths left" '[[ -z "$(g ls-files -
 all32=$(clog "$S32")
 expected32=$(printf '%s\n' "- $TODAY evento di a" "- $TODAY evento di a dopo lo squash" "- $TODAY evento di b" "- $TODAY evento di chore-1" "- $TODAY evento di chore-2" | sort)
 ok "PI-16 AC1 — the multiset of recent --all equals exactly the five lines written on the four branches" \
-   '[[ "$(printf "%s\n" "$all32" | sort)" == "$expected32" ]]'
+   '[[ "$(printf "%s\n" "$all32" | undate | sort)" == "$(printf "%s\n" "$expected32" | undate)" ]]'
 facts32=$(cfacts "$S32")
 ok "PI-16 AC1 — both branches' facts survived the merges" \
    'grep -qxF -- "- fatto di a" <<<"$facts32" && grep -qxF -- "- fatto di b" <<<"$facts32"'
@@ -438,7 +449,7 @@ ok "PI-16 AC6 — facts is the awk set plus the new fact, in order, nothing else
    '[[ "$(cfacts "$S34")" == "$(printf "%s\n%s" "$awkfacts34" "- un fatto nuovo sulla memoria vera")" ]]'
 exp34=$(printf '%s\n%s\n%s\n' "$awkmain34" "$awkarch34" "- $TODAY una riga nuova sulla memoria vera" | grep '^- ' | sort)
 ok "PI-16 AC6 — recent --all is the multiset of main log + archive + the new line ($(printf '%s\n' "$exp34" | grep -c '^- ') lines)" \
-   '[[ "$(clog "$S34" | sort)" == "$exp34" ]]'
+   '[[ "$(clog "$S34" | undate | sort)" == "$(printf "%s\n" "$exp34" | undate)" ]]'
 ok "PI-16 AC6 — the two frozen files were not touched by those writes" \
    'cmp -s "$S34/docs/SESSION_HANDOFF.md" "$REPO/docs/SESSION_HANDOFF.md" && cmp -s "$S34/docs/SESSION_HANDOFF_ARCHIVE.md" "$REPO/docs/SESSION_HANDOFF_ARCHIVE.md"'
 
@@ -1045,7 +1056,7 @@ ok "PI-40 F1 — and the next log line lands in the log without hiding the fact 
 # fragment path changes nothing about that, because one_line() runs first there too.
 (cd "$R40" && bash "$SCRIPT" log $'2026-01-01\nfoo') >/dev/null 2>&1
 ok "PI-40 F1 + PI-39 — a caller date followed by a newline is still stripped: one date on the line" \
-   '[[ "$(head -1 <<<"$(clog "$R40")")" == "- $TODAY foo" ]]'
+   'dated "$(head -1 <<<"$(clog "$R40")")" "foo"'
 ok "PI-40 F1 + PI-39 — no line on disk carries two consecutive ISO dates" \
    '! grep -rqE "^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{4}-[0-9]{2}-[0-9]{2}" "$R40/docs/handoff"'
 ok "PI-40 F1 — ADR-2 holds on the poisoned memory: reading it changes nothing on disk" \
@@ -1118,8 +1129,42 @@ ok "AC8 — retro.md prunes facts with retract" \
    'grep -qi "retract" "$REPO/.claude/agents/retro.md"'
 ok "AC8 — the developer, the shared rules and the skills name handoff.sh, not the file it used to write" \
    'grep -q "handoff.sh log" "$REPO/.claude/agents/developer.md" && grep -q "handoff.sh" "$REPO/.claude/agents/shared/implementing-common.md"'
+# The base is `origin/main` when it is there, `main` only as a fallback. A local `main` ref is whatever the
+# last `git fetch` of whichever checkout left behind, so a branch that is simply BEHIND its base fails this
+# assertion for a file it never touched — measured on this branch: the base moved 34 commits, one of them
+# editing reviewer.md, and the assertion went red while the branch's own diff of that file was empty.
+BASEREF=$(cd "$REPO" && git rev-parse --verify -q origin/main >/dev/null 2>&1 && echo origin/main || echo main)
 ok "AC8 — reviewer.md is untouched by this task (a separate change is queued for it)" \
-   '[[ -z "$(cd "$REPO" && git diff main --name-only -- .claude/agents/reviewer.md 2>/dev/null)" ]]'
+   '[[ -z "$(cd "$REPO" && git diff "$BASEREF" --name-only -- .claude/agents/reviewer.md 2>/dev/null)" ]]'
+
+# =================================================================================================
+# AC8 (coexistence) — this branch and its base each changed the same instructions. The merge has to keep
+# BOTH, and that is a property of the text, not of the merge commit: the base brought a RULE (a write
+# stays off the feature branches when more than one is open, and is replayed on the base with the tool,
+# never by hand) and this task brings a MECHANIC (a write is a new immutable file, so tool writes merge
+# as a union). Dropping either side is a silent, plausible-looking resolution — the rule alone leaves an
+# agent grepping for a file nothing writes, the mechanic alone re-authorises the hand-written entries
+# that corrupted the memory. Each assertion below names the side it protects, and each is checked INSIDE
+# the section that owns it, so a sentence surviving somewhere else in the file does not answer for it.
+sec6=$(awk '/^## 6\. /,/^## 7\. /' "$REPO/.claude/agents/shared/implementing-common.md")
+ok "AC8 coexistence — §6 keeps the base's rule: a write stays off the feature branches" \
+   'grep -qF "every write stays off the feature branches" <<<"$sec6"'
+ok "AC8 coexistence — §6 keeps the base's rule: the replay is with the tool, never by hand" \
+   'grep -qF "never by hand, never reconciled by hand, never rotated by size" <<<"$sec6"'
+ok "AC8 coexistence — §6 keeps the base's forward pointer to the task that makes it a refusal" \
+   'grep -qF "tasks/PI-52" <<<"$sec6"'
+ok "AC8 coexistence — §6 keeps this task's mechanic: one new file per write, under docs/handoff/" \
+   'grep -qF "**Every write creates one new file**" <<<"$sec6" && grep -qF "docs/handoff/" <<<"$sec6"'
+ok "AC8 coexistence — §6 says what the mechanic does and does not settle, in the same section" \
+   'grep -qiE "made with the tool. now creates a new file|merge as a union" <<<"$sec6"'
+ok "AC8 coexistence — sibling: the §6 extraction really returned the section, so the checks are not vacuous" \
+   '[[ "$(grep -c . <<<"$sec6")" -ge 8 ]] && grep -qF "## 6. Branch, commit, PR" <<<"$sec6"'
+row=$(grep -F "| Learning loop |" "$REPO/CLAUDE.md")
+ok "AC8 coexistence — the learning-loop row keeps the base's lesson promotion and this task's facts source" \
+   '[[ -n "$row" ]] && grep -qF "docs/handoff/" <<<"$row" && grep -qiE "promot" <<<"$row" && ! grep -qF "SESSION_HANDOFF" <<<"$row"'
+front=$(sed -n '1,12p' "$REPO/.claude/agents/retro.md")
+ok "AC8 coexistence — retro.md's front matter keeps the base's method lessons and names no frozen file" \
+   'grep -qiE "method lessons|lesson" <<<"$front" && ! grep -qF "SESSION_HANDOFF" <<<"$front"'
 
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"

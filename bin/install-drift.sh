@@ -470,10 +470,10 @@ log_deferral() {
     return 0
   fi
   root=$(git -C "$DIR" rev-parse --show-toplevel 2>/dev/null)
-  # The evidence is that the file gained a line, not that it contains one: a deferral repeats verbatim run
+  # The evidence is that the memory gained a line, not that it contains one: a deferral repeats verbatim run
   # after run, so "the text is in there" is also true when this write failed and last week's succeeded. The
-  # count spans the archive too, because handoff.sh moves old log lines there (it never drops them), and a
-  # write that pushed its own older twin out would otherwise look like no write at all.
+  # count is taken over the whole composed memory — fragments and frozen sources — so no line is invisible
+  # to it and a write that landed in a brand new fragment is seen exactly like any other.
   local before after
   before=$(count_logged "$root" "$key")
   out=$(cd "$DIR" && bash "$hs" log "$msg" 2>&1); rc=$?
@@ -485,10 +485,21 @@ log_deferral() {
   fi
 }
 
-# count_logged <repo root> <key> — how many log lines carrying <key> exist in the handoff, archive included.
+# count_logged <repo root> <key> — how many log lines carrying <key> the handoff memory holds, all of it.
+# The evidence is the COMPOSED log (`handoff.sh recent --all`), never a grep of a particular file: since
+# PI-16 a write creates a new immutable fragment under docs/handoff/ and docs/SESSION_HANDOFF.md and its
+# archive are frozen sources that no write touches again. Grepping those two would therefore count every
+# generation of the memory except the one this write lands in, and a write that succeeded would read as a
+# silence — the exact inversion of the defect this guard exists for. The composer spans fragments and
+# frozen sources alike, so it is what every reader of the memory sees. Only when it is not available — a
+# sibling handoff.sh older than the composer — is the frozen pair read directly, as it was before.
 count_logged() {
-  local root="$1" key="$2" n=0 f
+  local root="$1" key="$2" hs="$SELF_DIR/handoff.sh" out n=0 f
   [[ -n "$root" ]] || { echo 0; return; }
+  if out=$(cd "$root" && bash "$hs" recent --all 2>/dev/null); then
+    printf '%s\n' "$out" | grep -cF "$key" || true
+    return
+  fi
   for f in "$root/docs/SESSION_HANDOFF.md" "$root/docs/SESSION_HANDOFF_ARCHIVE.md"; do
     [[ -f "$f" ]] && n=$((n + $(grep -cF "$key" "$f" 2>/dev/null || echo 0)))
   done

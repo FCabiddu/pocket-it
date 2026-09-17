@@ -354,8 +354,14 @@ ok "AC2 — and names the live process, by pid and by the directory it is in" "h
 ok "AC2 — nothing was installed" "[ ! -s '$NPMLOG' ]"
 ok "AC2 — the tree is left drifted, exactly as it was" "grep -q '18.2.0' '$R/node_modules/react/package.json'"
 ok "AC2 — the command to run once they report is printed in full" "has \"\$OUT\" 'install-drift: run \`npm ci\` in $R (or this script again) once they report'"
-ok "AC2 — the deferral is written to the handoff log" "grep -q 'DEFERRED REINSTALL — npm ci in $R' '$R/docs/SESSION_HANDOFF.md'"
-ok "AC2 — the log line says why it did not run" "grep -q 'no reinstall while anything is running' '$R/docs/SESSION_HANDOFF.md' || grep -q 'live process' '$R/docs/SESSION_HANDOFF.md'"
+# Read through the composer, never out of a named file: since PI-16 a write lands in a new immutable
+# fragment under docs/handoff/ and docs/SESSION_HANDOFF.md is a frozen source no write touches, so a
+# grep of that file answers "no" to a deferral that was logged perfectly well. `handoff.sh recent --all`
+# is what every reader of the memory sees, whichever generation wrote the line.
+memlog(){ (cd "$R" && bash "$(dirname "$SCRIPT")/handoff.sh" recent --all 2>/dev/null); }
+ok "AC2 — the deferral is written to the handoff log" "memlog | grep -q 'DEFERRED REINSTALL — npm ci in $R'"
+ok "AC2 — the log line says why it did not run" "memlog | grep -q 'no reinstall while anything is running' || memlog | grep -q 'live process'"
+ok "AC2 — sibling: the composed log is not empty, so the two checks above are not vacuous" "[ \"\$(memlog | grep -c .)\" -ge 1 ]"
 ok "AC2 — and the run claims the log only because the line is there" "has \"\$OUT\" 'install-drift: logged the deferred reinstall with handoff.sh log'"
 
 # --running: the caller knows it launched agents this session, and that alone is enough
@@ -461,17 +467,45 @@ ok "AC6 — and it says out loud that the deferral was not logged, naming where 
 ok "AC6 — it never claims a log it did not write" "! has \"\$OUT\" 'logged the deferred reinstall'"
 ok "AC6 — nothing was installed" "[ ! -s '$NPMLOG' ]"
 
-# the log file cannot be written: handoff.sh still exits 0 and still prints its own success line
-chmod a-w "$R/docs/SESSION_HANDOFF.md" "$R/docs"
+# the memory cannot be written at all. Since PI-16 a write creates a NEW file under docs/handoff/ and
+# docs/SESSION_HANDOFF.md is a frozen source nothing writes any more, so closing only that file leaves
+# the real target writable and this case exercises nothing — measured: every assertion below stayed
+# green while the write was landing normally in a fragment. The whole docs/ tree is what has to be shut.
+FRAGS_BEFORE=$(find "$R/docs/handoff" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+chmod -R a-w "$R/docs"
 OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
-HS_LIES=0; (cd "$R" && bash "$(dirname "$SCRIPT")/handoff.sh" log "AC6 probe" >/dev/null 2>&1) && HS_LIES=1
-chmod u+w "$R/docs"; chmod u+w "$R/docs/SESSION_HANDOFF.md"
-ok "AC6 — an unwritable handoff log still leaves the deferral at exit 4" "[ $RC -eq 4 ]"
+FRAGS_AFTER=$(find "$R/docs/handoff" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+chmod -R u+w "$R/docs"
+ok "AC6 — an unwritable handoff memory still leaves the deferral at exit 4" "[ $RC -eq 4 ]"
+ok "AC6 — the write really was refused: the memory gained no fragment" "[ '$FRAGS_AFTER' = '$FRAGS_BEFORE' ]"
 ok "AC6 — the run says NOT LOGGED instead of claiming a write that did not happen" "has \"\$OUT\" 'install-drift: NOT LOGGED — the deferral above could not be written to the handoff log'"
 ok "AC6 — and no success line is printed alongside it" "! has \"\$OUT\" 'logged the deferred reinstall'"
-ok "AC6 — the claim cannot rest on handoff.sh's exit code, which is 0 on a refused write" "[ $HS_LIES -eq 1 ]"
 ok "AC6 — the deferral line itself is still printed, whatever the log did" "has \"\$OUT\" 'install-drift: DEFERRED'"
 ok "AC6 — and nothing was installed" "[ ! -s '$NPMLOG' ]"
+
+# and the claim never rests on what handoff.sh says about itself. The PI-51 round measured one generation
+# of that script printing its success line and exiting 0 on a write that raised; asserting that particular
+# script still lies would be a test of handoff.sh, and it stops being true the moment handoff.sh is fixed.
+# The property install-drift.sh owns is the one stated as a mutation here: a sibling that reports success
+# while writing nothing must still be reported as NOT LOGGED, whatever its exit code and output say.
+LIAR="$S/liar"; mkdir -p "$LIAR"; cp "$SCRIPT" "$LIAR/install-drift.sh"
+cat > "$LIAR/handoff.sh" <<'SH'
+#!/usr/bin/env bash
+# stand-in handoff.sh: writes nothing at all, and reports a successful write anyway.
+case "${1:-}" in
+  log|fact) echo "handoff: logged — docs/handoff/2026-09/never-written.md"; exit 0 ;;
+  *)        exit 0 ;;
+esac
+SH
+chmod +x "$LIAR/handoff.sh"
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$LIAR/install-drift.sh" reinstall "$R" 2>&1); RC=$?
+ok "AC6 — a handoff.sh that reports success while writing nothing is still NOT LOGGED, exit 4" \
+   "[ $RC -eq 4 ] && has \"\$OUT\" 'install-drift: NOT LOGGED — the deferral above could not be written to the handoff log'"
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
+ok "AC6 — sibling: with the real handoff.sh beside it the very same run does claim the log" \
+   "[ $RC -eq 4 ] && has \"\$OUT\" 'install-drift: logged the deferred reinstall with handoff.sh log'"
 stop "$ORPHANPID"
 
 OUT=$(PATH="$NPMFAIL:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
