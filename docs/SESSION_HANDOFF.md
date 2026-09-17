@@ -70,6 +70,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - a worktree being registered is not an agent running: liveness is a live process whose working directory is inside the checkout; registered-but-idle worktrees are reported, never waited for
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-18 PI-47 PR #94 needs work — report and PR body claim PI-52 merged, it is Todo — cause: other: a task id cited in shared/implementing-common.md as an existing mechanism was read as merged and asserted as fact
 - 2026-09-17 retro-mark 2026-09-17 signals-2026-09-17b
 - 2026-09-17 PI-51 round 3 — F6 the duplicated lesson line deleted (the rule at implementing-common.md §9 is the promotion), F7 the Effort lines put in the prescribed shape, F8 this section put in command form; no code, test or skill touched
 - 2026-09-17 PI-51 round 2b — PR body rewritten to the head; the rule for it is in implementing-common.md §9, Resume report format
@@ -109,4 +110,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
 - 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
 - 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
-- 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test

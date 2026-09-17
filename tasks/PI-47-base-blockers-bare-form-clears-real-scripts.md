@@ -1,6 +1,6 @@
 # PI-47 — The bare `<pm> <script>` form must not clear a script that shares a subcommand's name
 
-**Status**: Todo
+**Status**: Needs Work
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
