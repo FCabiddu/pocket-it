@@ -30,89 +30,12 @@ fail=0
 ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 has(){ grep -qF "$1" <<<"$OUT"; }
 
-# --- PI-45: the gate every self-mutation in this file must pass ---------------------------------
-# Threat model. Each "mutation ...: proves the test is not vacuous" block below builds a patched copy
-# of doctor.sh by matching source text, runs that copy, and asserts on what it printed. The text it
-# matches can be gone, edited in place or doubled -- most often because bin/doctor.sh was modified
-# outside this run, which is exactly what a reviewer does to prove this suite is not vacuous. When
-# that happens the patched copy must never reach the downstream assertion: that assertion would then
-# report a real-looking regression against a check that never ran -- a test failure naming the wrong
-# test, which is the damage PI-45 exists to close. Covered here: the mutation did not apply, applied
-# to a different span than its address assumes, or produced a fragment instead of a script.
-# Deliberately left to the assertions themselves: a mutation that lands exactly where it was aimed
-# but whose intent has gone stale. Left to doctor.sh's own checks: any defect in doctor.sh.
-#
-# The rule, and why the obvious check is not it. "The marker text is in the output" is evidence a
-# TRUNCATION also satisfies. `sed '/A/,/B/c\...'` whose B no longer matches does not fail: the range
-# opens at A, never closes, and runs to end of file -- sed prints the replacement and drops every
-# line after A. Measured on this file's own _classify_base block, with one trailing comment appended
-# to the closing anchor in bin/doctor.sh and nothing else touched: 446 lines in, 74 out, the `PY`
-# heredoc terminator gone, the marker present in all of it, and `bash -n` on that fragment still
-# exiting 0. A doubled opening anchor does the same thing one range later; a doubled closing anchor
-# closes the range early, over a span the block never meant. So no block may conclude "applied" from
-# its own output alone. Every block declares the anchors its address uses, they are counted in the
-# SOURCE before sed runs (src_anchors), the address is then built from those same strings (sed_lit,
-# so the line counted and the line matched cannot drift apart), and what came out is checked to
-# still be a whole script (mutant_whole). Both layers, at every site: the count catches the doubled
-# anchor that produces a perfectly whole file over the wrong span, and mutant_whole catches the
-# runaway of a future block whose author forgets to declare an anchor at all.
-MUT_WHY=""   # why the last gate refused -- quoted verbatim in that block's own named failure
-sed_lit(){ # sed_lit <literal> -- BRE-escape <literal> so /^<it>$/ matches exactly that line and
-           # nothing else. Used to build every address from the same string src_anchors counted.
-  printf '%s' "$1" | sed 's|[][\.*^$/]|\\&|g'
-}
-src_anchors(){ # src_anchors <file> <line|substr> <count> <anchor>... -- 0 iff every <anchor> occurs
-  # exactly <count> times in <file>, matched the way sed matches the address built from it: `line`
-  # for /^...$/ (whole line, grep -x, so a comment appended to that line does NOT count -- the
-  # substring match a plain grep -F does would accept it and let the range run away), `substr` for
-  # /.../ (anywhere on the line). A range address declares BOTH of its anchors here, or the gate is
-  # only guessing which lines the range will actually span.
-  local f="$1" mode="$2" want="$3"; shift 3
-  local a n
-  for a in "$@"; do
-    if [[ "$mode" == line ]]; then n=$(grep -cxF -- "$a" "$f"); else n=$(grep -cF -- "$a" "$f"); fi
-    if [[ "$n" != "$want" ]]; then
-      MUT_WHY="anchor found $n times, not $want, in the captured bin/doctor.sh: ${a:0:60}"
-      return 1
-    fi
-  done
-  MUT_WHY=""
-}
-mutant_whole(){ # mutant_whole <file> -- <file> is still a whole doctor.sh and not a fragment: it
-  # parses as bash, the python heredoc it opens is closed by its own delimiter, and that python
-  # still compiles. Anchor-independent on purpose -- being whole is the property a runaway range
-  # destroys whatever anchors it used, so this also covers an address whose anchors nobody declared.
-  local f="$1" why
-  if ! bash -n "$f" 2>/dev/null; then MUT_WHY="the patched copy no longer parses as bash"; return 1; fi
-  why=$(python3 - "$f" <<'MWEOF'
-import re, sys
-lines = open(sys.argv[1], errors="ignore").read().splitlines(True)
-start = delim = None
-for i, line in enumerate(lines):
-    m = re.match(r"^python3 .*<<'([A-Za-z_][A-Za-z0-9_]*)'\s*$", line)
-    if m:
-        start, delim = i + 1, m.group(1); break
-if start is None:
-    print("the patched copy no longer opens a python heredoc at all"); sys.exit(1)
-end = None
-for j in range(start, len(lines)):
-    if lines[j].rstrip("\n") == delim:
-        end = j; break
-if end is None:
-    print("the patched copy is a fragment: its python heredoc is never closed by %s" % delim); sys.exit(1)
-try:
-    compile("".join(lines[start:end]), "<mutant>", "exec")
-except SyntaxError as e:
-    print("the patched copy's python no longer compiles: line %s: %s" % (e.lineno, e.msg)); sys.exit(1)
-MWEOF
-  ) || { MUT_WHY="$why"; return 1; }
-  MUT_WHY=""
-}
-mutation_applied(){ # mutation_applied <mutant> <marker> -- the only way a block below may conclude
-  # the mutation applied: the marker landed AND what carries it is still a whole script.
-  if ! grep -qF -- "$2" "$1"; then MUT_WHY="the mutation marker never landed in the patched copy"; return 1; fi
-  mutant_whole "$1"
-}
+# --- PI-45 / PI-48: the gate every self-mutation in this file (and in cleanup-merged.test.sh) must
+# pass. Shared, not reimplemented in either file — see bin/self-mutation-gate.sh for the threat model,
+# the rule, and the one measured limit no version of it covers. Sourced after SCRIPT_SRC above, which
+# mutant_whole and mutation_applied default their pristine-source comparison to when the caller gives
+# none.
+source "$(pwd -P)/self-mutation-gate.sh"
 
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
 q(){ "$@" >/dev/null 2>&1; }
@@ -1319,7 +1242,7 @@ gate_src "$G/pristine.sh"; gate_mutate "$G/pristine.sh" "$G/pristine.mut.sh"
 ok "gate control: both anchors present exactly once — src_anchors accepts (the sibling that proves the rejections below are not vacuous)" \
   'src_anchors "$G/pristine.sh" line 1 "$gate_open" "$gate_close"'
 ok "gate control: on that source the range mutation lands, stays a whole script, and keeps every line after the range" \
-  'mutation_applied "$G/pristine.mut.sh" "GATE MUTATED" && grep -qF "def omega(x):" "$G/pristine.mut.sh"'
+  'mutation_applied "$G/pristine.mut.sh" "GATE MUTATED" "$G/pristine.sh" && grep -qF "def omega(x):" "$G/pristine.mut.sh"'
 
 # the class, one row per anchor x loss. src_anchors must reject every one of them.
 for gcase in open-removed open-edited open-doubled close-removed close-edited close-doubled; do
@@ -1332,17 +1255,17 @@ done
 ok "gate class (close-edited): the ungated sed runs the range to EOF — the marker IS in the output (the old evidence says 'applied') yet everything after the range is gone" \
   'grep -qF "GATE MUTATED" "$G/close-edited.mut.sh" && ! grep -qF "def omega(x):" "$G/close-edited.mut.sh"'
 ok "gate class (close-edited): mutant_whole catches that truncation on its own, without knowing any anchor" \
-  '! mutant_whole "$G/close-edited.mut.sh" && grep -q "fragment" <<<"$MUT_WHY"'
+  '! mutant_whole "$G/close-edited.mut.sh" "$G/close-edited.sh" && grep -q "fragment" <<<"$MUT_WHY"'
 ok "gate class (close-removed): same truncation, same independent catch" \
-  'grep -qF "GATE MUTATED" "$G/close-removed.mut.sh" && ! mutant_whole "$G/close-removed.mut.sh"'
+  'grep -qF "GATE MUTATED" "$G/close-removed.mut.sh" && ! mutant_whole "$G/close-removed.mut.sh" "$G/close-removed.sh"'
 ok "gate class (open-doubled): the second range opens after the first closed and runs to EOF — caught by mutant_whole too" \
-  '! mutant_whole "$G/open-doubled.mut.sh"'
+  '! mutant_whole "$G/open-doubled.mut.sh" "$G/open-doubled.sh"'
 ok "gate class (open-removed): the range never opens, the marker never lands — mutation_applied refuses" \
-  '! mutation_applied "$G/open-removed.mut.sh" "GATE MUTATED" && grep -q "marker never landed" <<<"$MUT_WHY"'
+  '! mutation_applied "$G/open-removed.mut.sh" "GATE MUTATED" "$G/open-removed.sh" && grep -q "marker never landed" <<<"$MUT_WHY"'
 ok "gate class (open-edited): a comment appended to the opening anchor is the same loss — /^…$/ no longer matches it" \
-  '! mutation_applied "$G/open-edited.mut.sh" "GATE MUTATED"'
+  '! mutation_applied "$G/open-edited.mut.sh" "GATE MUTATED" "$G/open-edited.sh"'
 ok "gate class (close-doubled): the ONLY loss mutant_whole cannot see — the range closes early, the copy is whole and carries the marker, and the span it replaced is not the one the block meant (the real closing line is left behind); the anchor COUNT is what rejects it" \
-  'mutation_applied "$G/close-doubled.mut.sh" "GATE MUTATED" && grep -qxF "    return \"tail\", y" "$G/close-doubled.mut.sh" && ! src_anchors "$G/close-doubled.sh" line 1 "$gate_open" "$gate_close"'
+  'mutation_applied "$G/close-doubled.mut.sh" "GATE MUTATED" "$G/close-doubled.sh" && grep -qxF "    return \"tail\", y" "$G/close-doubled.mut.sh" && ! src_anchors "$G/close-doubled.sh" line 1 "$gate_open" "$gate_close"'
 
 # the two matching modes are not interchangeable: `line` mirrors /^…$/, `substr` mirrors /…/.
 gate_src "$G/modes.sh"
