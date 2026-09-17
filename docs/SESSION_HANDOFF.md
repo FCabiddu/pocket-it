@@ -68,6 +68,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - bin/doctor.test.sh's mutant_whole post-flight (PI-45) proves a mutant is still a whole script via compile(), so a mutation that removes a function the script still calls passes it — the NameError surfaces only at run time. Measured by the PI-45 delta review 2026-09-17: real but non-blocking, none of the six live mutation sites is exposed to it. If a seventh site mutates by deleting a definition rather than editing a body, this gate will not see it.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-17 PI-51 PR #96 needs work (delta 2) — lessons.md keeps a copy of the rule its own commit wrote — cause: other: the fix round added a shared-file line that file's rules forbid
 - 2026-09-17 PI-51 PR #96 needs-work (delta 2) — corpo della PR fermo al giro 1 e ora falso; cause: other: il giro 2 ha aggiornato report e commento di review ma non il corpo
 - 2026-09-17 PI-51 PR #96 needs work — verify: GREEN on a tree it never compared — cause: first-round
 - 2026-09-17 QF-1 PR #92 approved — cause read off every log line, real-corpus check 56/56 and 60/60 with zero new fires — merge: orchestrator
@@ -107,4 +108,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-15 PI-15 PR #71 approved (delta round 2) — AC1 grep verified 0/exit1, two-directional probe by reviewer, status.test.sh 16/16, verify GREEN — merge: orchestrator
 - 2026-09-15 PI-37 PR #74 needs work — verify.sh RED on retro-due R4F1, pre-existing on main — cause: base-moved
 - 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
-- 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
