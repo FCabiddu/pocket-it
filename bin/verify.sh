@@ -8,7 +8,11 @@
 #   0  GREEN — every check passed.
 #   1  RED, this branch's own — at least one failing check passes at the base tip, or its attribution could
 #      not be established (an unknown is always reported as this branch's own red).
-#   2  verify could not run at all — not a git repo, branch not checked out, guard tripped.
+#   2  verify could not run at all — not a git repo, branch not checked out, guard tripped, or the installed
+#      dependency tree disagrees with the lockfile OR could not be compared with it (PI-51: a verdict about
+#      code that is not installed is not a verdict at all, so it is refused before any check runs rather than
+#      reported as green or red; and a tree nobody compared is not a clean tree, so a lockfile format this
+#      pocket-it cannot read — pnpm, yarn, bun today — also ends here, never in a GREEN).
 #   3  RED, inherited — every failing check also fails at the base tip, and for every one of them the base
 #      was positively established as able to run that check.
 # 1 is the WORSE of the two reds, not 3: a branch that introduces its own defect is never excused by also
@@ -70,6 +74,8 @@ on_signal(){ trap - EXIT INT TERM HUP; cleanup; exit "$1"; }
 trap 'on_signal 130' INT
 trap 'on_signal 143' TERM
 trap 'on_signal 129' HUP
+# resolved before the first cd, so the sibling script is found however this script was invoked
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TARGET="${1:?branch or PR number}"; BASE="${2:-}"
 ROOT=$(git rev-parse --show-toplevel) || { echo "not a git repo"; exit 2; }
 cd "$ROOT"
@@ -107,10 +113,67 @@ WT_REAL=$(pwd -P)
 EXPECT_WT="$WT_REAL"
 guard(){ [[ -n "$EXPECT_WT" && "$(pwd -P)" == "$EXPECT_WT" ]] || { echo "not inside the throwaway worktree — aborting before running anything against the main checkout"; exit 2; }; }
 guard
-# reuse the main checkout's node_modules when the lockfile is unchanged
+# --- stale install guard (PI-51) ---------------------------------------------------------------------------
+# Threat model, at the top of the guard: this protects against a verdict — green or red — about code that is
+# not the code the lockfile declares. The borrowed node_modules just below is how that gap opens: the main
+# checkout is installed once and nothing reinstalls it when a dependency bump merges, so every later run
+# measures the previous versions and stays green about a tree nobody ships.
+# THE RULE, in one line: this script never reaches a verdict about a tree it did not compare. Three outcomes,
+# no fourth — the install matches the lockfile and the checks run; it disagrees and the run is refused
+# (exit 2); or it COULD NOT BE COMPARED and the run is refused too, with the same exit 2 and "nothing was
+# measured". A tree that was not compared is not a clean tree: round 1 of this task printed "NOT SUPPORTED"
+# and then "verify: GREEN", exit 0, on an install two minor versions behind its lockfile — measured twice —
+# which is the original silence with one extra line of text in front of it.
+# What the third outcome costs, stated because it is a real cost and not an oversight: a project whose
+# lockfile this checker cannot read (pnpm, yarn, bun today — see install-drift.sh's SUPPORTED_PM) can no
+# longer be verified by this script at all, on any PR, until a comparator for that lockfile exists. That is
+# the deliberate trade: a reviewer who is told "verify could not run" re-runs the checks by hand and knows
+# it; a reviewer handed a GREEN from an uncompared tree knows nothing at all. install-drift.sh's own exit 3
+# is the same refusal on the same grounds.
+# Fail-closed on its own absence: a missing drift check is a broken install of pocket-it, not a clean tree.
+# Not covered, deliberately: file CONTENTS (a package edited in place at the version it declares).
+DRIFT_SH="$SELF_DIR/install-drift.sh"
+[[ -f "$DRIFT_SH" ]] || { echo "verify: could not run — install-drift.sh is missing next to verify.sh, so the installed tree cannot be checked against the lockfile"; exit 2; }
+# reuse the main checkout's node_modules when the lockfile is unchanged. The lockfile names come from
+# install-drift.sh's single declaration (N1): a second list here goes stale the day one is added there, and a
+# branch changing a lockfile this line does not know would silently borrow another checkout's tree.
+LOCKNAMES=$(bash "$DRIFT_SH" lockfiles 2>/dev/null | tr '\n' ' ')
+[[ -n "${LOCKNAMES// /}" ]] || { echo "verify: could not run — install-drift.sh did not name the lockfiles it knows, so a lockfile change on this branch cannot be told from none"; exit 2; }
 if [[ -d "$ROOT/node_modules" && ! -d node_modules ]]; then
-  if git diff --quiet "$BASE_REF" -- pnpm-lock.yaml package-lock.json yarn.lock bun.lockb 2>/dev/null; then ln -s "$ROOT/node_modules" node_modules; else echo "lockfile changed on branch — installing"; (pnpm install --frozen-lockfile >/dev/null 2>&1 || npm ci >/dev/null 2>&1) || echo "install failed"; fi
+  # shellcheck disable=SC2086
+  if git diff --quiet "$BASE_REF" -- $LOCKNAMES 2>/dev/null; then ln -s "$ROOT/node_modules" node_modules; else echo "lockfile changed on branch — installing"; (pnpm install --frozen-lockfile >/dev/null 2>&1 || npm ci >/dev/null 2>&1) || echo "install failed"; fi
 fi
+DRIFT_OUT=$(bash "$DRIFT_SH" check . 2>&1); DRIFT_RC=$?
+# drift_where — the two lines that turn a refusal into something the reader can act on: where the tree it
+# measured actually came from, and a remedy that works when run EXACTLY as printed. install-drift's own
+# "run … in <dir>" names THIS worktree, which is borrowed and about to be deleted — useless to act on. The
+# reinstall carries --except "$BRANCH": the worktree of the PR being verified is registered at the very
+# moment this line is printed, and the remedy must not be blocked by the situation that produced it.
+drift_where(){
+  local dcmd; dcmd=$(printf '%s\n' "$DRIFT_OUT" | sed -n 's/^install-drift: run `\([^`]*\)`.*/\1/p' | head -1)
+  if [[ -L node_modules ]]; then
+    echo "      node_modules is borrowed from $(readlink node_modules)"
+    echo "      fix: run \`bash $DRIFT_SH reinstall $ROOT --except $BRANCH\` once nothing is running against that checkout"
+  elif [[ -n "$dcmd" ]]; then
+    echo "      this install came from the branch's own changed lockfile: re-run \`$dcmd\` on the branch"
+  else
+    echo "      fix: install this worktree's dependencies from its own lockfile, then run verify again"
+  fi
+}
+case $DRIFT_RC in
+  0) printf '%s\n' "$DRIFT_OUT" | grep -E '^install-drift: OK' | sed 's/^install-drift: OK — /info  install matches the lockfile: /';;
+  1) echo "FAIL  install drift — the installed tree is not the one the lockfile declares"
+     printf '%s\n' "$DRIFT_OUT" | grep -E '^(drift |install-drift: (DRIFT|NOT SUPPORTED))' | sed 's/^/      /'
+     drift_where
+     echo "verify: could not run — the installed tree disagrees with the lockfile (nothing was measured)"; exit 2;;
+  *) echo "FAIL  install drift — the installed tree could NOT be compared with the lockfile, so nothing measured here would mean anything"
+     printf '%s\n' "$DRIFT_OUT" | grep -E '^install-drift: ' | sed 's/^/      /'
+     [[ -L node_modules ]] && echo "      node_modules is borrowed from $(readlink node_modules)"
+     echo "      there is no remedy to run here: the lockfile above is a format install-drift.sh cannot read,"
+     echo "      so this branch's checks have to be run by hand until install-drift.sh can compare it"
+     echo "      (its SUPPORTED_PM declaration is the one place that changes when a comparator is added)"
+     echo "verify: could not run — the installed tree was never compared with the lockfile (nothing was measured, no verdict is possible)"; exit 2;;
+esac
 PM=pnpm; [[ -f package-lock.json ]] && PM=npm; [[ -f yarn.lock ]] && PM=yarn; [[ -f bun.lockb ]] && PM=bun
 # --- base-runnability helpers (PI-41 round 2) — verify.test.sh extracts THIS BLOCK verbatim and calls
 # the functions in it directly, so what the suite exercises is the production code, not a copy. ------
@@ -325,6 +388,19 @@ if [[ $NFAIL -gt 0 ]]; then
       # only when the base worktree has none of its own. No install is ever attempted here — a check that
       # cannot run on the base is refused by base_blockers, never reported as a defect of the base.
       [[ -d "$ROOT/node_modules" && ! -d node_modules ]] && ln -s "$ROOT/node_modules" node_modules 2>/dev/null
+      # PI-51, the same stale-install rule on this side: a base tree whose installed dependencies are not its
+      # own lockfile's cannot answer "does this check fail here too" — whatever it answers is about other
+      # code. That doubt goes to unknown, never to "base", like every other rule in base_blockers. It is
+      # reachable although the branch tree passed the same gate: the branch's own lockfile change makes
+      # verify install that tree fresh, while the base keeps borrowing the main checkout's stale one.
+      BD_OUT=$(bash "$DRIFT_SH" check . 2>&1); BD_RC=$?
+      if [[ $BD_RC -eq 1 ]]; then
+        unattributable "the installed tree at $BASE_AT disagrees with its lockfile — $(printf '%s\n' "$BD_OUT" | grep -m1 '^drift ' | sed 's/^drift  *//') — reinstall the checkout it borrowed node_modules from with \`bash $DRIFT_SH reinstall $ROOT --except $BRANCH\`"
+      elif [[ $BD_RC -ne 0 ]]; then
+        # Same rule, the other half of the class: a base tree that was never COMPARED with its lockfile is no
+        # more evidence than one that disagrees with it. Unknown, never "base" — the branch keeps its red.
+        unattributable "the installed tree at $BASE_AT was never compared with its lockfile — $(printf '%s\n' "$BD_OUT" | grep -m1 '^install-drift: ' | sed 's/^install-drift: *//') — so it cannot answer whether this check fails there too"
+      else
       for ((i=0; i<NFAIL; i++)); do
         BLOCK=$(base_blockers "${FAIL_CMD[$i]}" "${FAIL_NEEDS[$i]}")
         if [[ -n "$BLOCK" ]]; then
@@ -339,6 +415,7 @@ if [[ $NFAIL -gt 0 ]]; then
           *)       ATTR[$i]=base; ATTR_BASE=$((ATTR_BASE+1));;
         esac
       done
+      fi
       cd "$WT_REAL" || { echo "cannot return to the worktree $WT_REAL"; exit 2; }
       EXPECT_WT="$WT_REAL"; guard
       git -C "$ROOT" worktree remove --force "$WT_BASE" >/dev/null 2>&1 || { rm -rf "$WT_BASE" 2>/dev/null; git -C "$ROOT" worktree prune >/dev/null 2>&1; }

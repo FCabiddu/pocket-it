@@ -1,6 +1,6 @@
 # QF-1 — A cause found inside an approval must raise a signal too
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/retro-due.sh, bin/retro-due.test.sh, .claude/agents/reviewer.md
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/qf-1-cause-inside-approval
+**PR**: 92
 
 ## Goal
 `reviewer.md:21` orders the cause taxonomy to be named **"on every NEEDS WORK"**, and `bin/retro-due.sh`

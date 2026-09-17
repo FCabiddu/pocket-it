@@ -5,10 +5,31 @@
 # Reads the handoff log — via bin/handoff.sh's read-only composer (`recent --all`, PI-14) when this
 # install declares one, else directly from docs/SESSION_HANDOFF.md's "## Log" section plus
 # docs/SESSION_HANDOFF_ARCHIVE.md — and counts signals since the last retro-mark line. A signal is any of:
-#   (a) a "needs work" line whose cause is present and is not "first-round"
+#   (a) any log line whose own " — cause: …" field is present and is not "first-round", whatever that
+#       line's outcome word is — "needs work", "approved", "merged", "draft", "fix pushed", anything
 #   (b) the same cause recurring on two different tasks (first-round excluded, same as (a))
 #   (c) a task reaching three or more "needs work" lines (signalled once, at the third)
 #   (d) any BUDGET or STALL line
+#
+# (a) is deliberately outcome-blind (QF-1): a cause is a property of the FINDING, not of the verdict.
+# Until QF-1 it was read only out of a line already recognised as a review round, so a defect found and
+# reported inside an APPROVAL carried a cause nowhere and raised nothing at all — the pipeline learned
+# only from the failures loud enough to block a merge, and the quiet ones reached a retro only when a
+# human relayed them by hand. The two directions of error are not symmetric: over-firing launches a
+# retro on noise and is visible, under-firing prints "retro-due: nothing", which is also what a healthy
+# run prints, and silently disarms the loop (how PI-43 was found, months late). The signal TYPE records
+# where the cause was found — "needs-work-cause" on a real review round, "cause" on every other line —
+# but the terms are one and the same in both cases (present, and not "first-round"): the type is
+# provenance for the retro to read, never a second rule. Only (c) still consults the needs-work anchor,
+# because counting review ROUNDS is the one thing that anchor is for.
+#
+# What QF-1 did NOT relax: a cause is still read only from its own " — cause: <value>" field (CAUSE_RE
+# below, unchanged), and only out of the sources this script already froze — the "## Log" section and the
+# archive, never the facts section. Widening WHICH lines are asked for a cause is not the same as
+# widening HOW a cause is recognised inside one, and the second was left exactly as it was. The three
+# anchoring defects recorded below all lived in the OUTCOME anchor, which QF-1 does not touch and which
+# now governs (c) and the provenance label only.
+#
 # retro-mark line: written by the retro agent (see .claude/agents/retro.md), in the EXACT anchored shape
 # "- <log date> retro-mark <date> <scope>" — a real signature, not a word that happens to appear in prose,
 # a log line's own description, a fact or a PR title (round 2 finding: the plain \bretro-mark\b word match
@@ -70,7 +91,8 @@ STALL_RE = re.compile(rf'^- {DATE} STALL\b')
 NEEDS_WORK_RE = re.compile(
     rf'^- {DATE} \S+ PR #\d+ (?:delta )?needs work(?: \([^)]*\)| round \d+(?: delta)?)?(?:\s—|$)'
 )
-# The cause value is read only from its own field, "<sep> cause: <value><sep>" where <sep> is " — " —
+# The cause value is read from EVERY line in scope, whatever its outcome word (QF-1), and only from its
+# own field, "<sep> cause: <value><sep>" where <sep> is " — " —
 # never the first "cause:" substring anywhere in the line. Round 2's `cause:\s*([^—]+)` still matched
 # inside "because: …" (a real substring of "be" + "cause:") and "root cause: …" (no separating em-dash of
 # its own), so the wrong, earlier "cause:" won when the real field came later on the same line. `findall`
@@ -204,22 +226,29 @@ def run():
         if MARK_RE.match(line):
             continue
         tid = extract_id(line)
+        is_round = bool(NEEDS_WORK_RE.match(line))
+
+        # (a) and (b) first, and on every line: the cause is asked of the line itself, never of its
+        # outcome word (QF-1). An absent field and an empty one both read as None here and raise
+        # nothing — neither is "first-round", which is a cause a reviewer chose to name.
+        cause = extract_cause(line)
+        if cause and cause != "first-round":
+            signals.append((tid, "needs-work-cause" if is_round else "cause", line))
+            prior = cause_first_task.get(cause)
+            if prior is None:
+                cause_first_task[cause] = tid
+            elif prior != tid:
+                signals.append((tid, "same-cause", line))
+
         if BUDGET_RE.match(line):
             signals.append((tid, "budget", line))
             continue
         if STALL_RE.match(line):
             signals.append((tid, "stall", line))
             continue
-        if NEEDS_WORK_RE.match(line):
+        # (c) counts review ROUNDS, so it — and only it — still depends on the outcome anchor.
+        if is_round:
             needs_work_count[tid] = needs_work_count.get(tid, 0) + 1
-            cause = extract_cause(line)
-            if cause and cause != "first-round":
-                signals.append((tid, "needs-work-cause", line))
-                prior = cause_first_task.get(cause)
-                if prior is None:
-                    cause_first_task[cause] = tid
-                elif prior != tid:
-                    signals.append((tid, "same-cause", line))
             if needs_work_count[tid] == 3:
                 signals.append((tid, "repeat-needs-work", line))
 
