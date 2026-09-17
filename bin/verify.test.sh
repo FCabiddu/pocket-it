@@ -711,7 +711,11 @@ done
 ok "PI-47 AC4 — the four measured bare-form cases (npm pack / publish / version / update) are each refused by name" "[ $R47 -eq 0 ]"
 # AC4 mutation — the assertion above must be able to go red. Re-eval a copy of the production helpers with the
 # PI-47 region cut out (awk, on the region's own marker lines) in a SUBSHELL, and require the four to come back
-# CLEARED there: that is the behaviour PI-46 measured, and it is what the assertion above would be reporting.
+# CLEARED there. The cut removes the whole `pm)` body, so it clears every bare token that reaches it, not only
+# these four (a control word on no list would be cleared here too, which PI-46's own code would have refused) —
+# it is broader than PI-46's measured behaviour, not a reproduction of it; that reproduction is external
+# mutation #2, below, run against origin/main's own unmodified verify.sh. This cut only has to make the
+# assertion above go red, which it does.
 MUT_NOFIX=$(printf '%s\n' "$HELPERS" | awk '/PI-47 bare-form region begins/{skip=1} !skip; /PI-47 bare-form region ends/{skip=0}')
 R47=1; [ "$(printf '%s\n' "$MUT_NOFIX" | wc -l)" -lt "$(printf '%s\n' "$HELPERS" | wc -l)" ] && R47=0
 ok "PI-47 AC4 mutation — the region markers really cut something out of the production helpers" "[ $R47 -eq 0 ]"
