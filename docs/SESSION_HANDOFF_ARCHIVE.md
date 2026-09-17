@@ -189,3 +189,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
 - 2026-09-15 PI-15 PR #71 needs work — AC1 grep not actually empty, status.test.sh matches
+- 2026-09-15 PI-15 PR #71 needs work — AC1 dichiara zero occorrenze del grep ma non e' vero; causa di primo giro: bin/status.test.sh vuole la stessa indirezione per variabile gia' applicata a retro-due.test.sh. Secondo giro lanciato
