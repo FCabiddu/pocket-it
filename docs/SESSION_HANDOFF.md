@@ -70,6 +70,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - a worktree being registered is not an agent running: liveness is a live process whose working directory is inside the checkout; registered-but-idle worktrees are reported, never waited for
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-17 retro-mark 2026-09-17 signals-2026-09-17b
 - 2026-09-17 PI-51 round 3 — F6 the duplicated lesson line deleted (the rule at implementing-common.md §9 is the promotion), F7 the Effort lines put in the prescribed shape, F8 this section put in command form; no code, test or skill touched
 - 2026-09-17 PI-51 round 2b — PR body rewritten to the head; the rule for it is in implementing-common.md §9, Resume report format
 - 2026-09-17 PI-51 round 2 pushed on #96 — F1 verdict refused for the whole uncompared class (verify.sh reads the lockfile names from install-drift.sh), F2 liveness from live processes with --except and the reinstall moved after cleanup-merged.sh, F3 three-state worktree read, F4/AC6 NOT LOGGED on stderr — 130 + 262 assertions, full suite 1524, doctor clean
@@ -109,4 +110,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
 - 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
 - 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
-- 2026-09-15 PI-38 PR #76 needs work — AC1 unmet: remote branch deferred one run — cause: first-round
