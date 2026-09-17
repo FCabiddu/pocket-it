@@ -1,6 +1,6 @@
 # PI-51 — Reinstall the shared checkout after a lockfile merge, and fail verify on a stale install
 
-**Status**: In Progress
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix

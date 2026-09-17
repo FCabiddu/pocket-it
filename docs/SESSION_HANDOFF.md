@@ -68,8 +68,11 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - bin/doctor.test.sh's mutant_whole post-flight (PI-45) proves a mutant is still a whole script via compile(), so a mutation that removes a function the script still calls passes it — the NameError surfaces only at run time. Measured by the PI-45 delta review 2026-09-17: real but non-blocking, none of the six live mutation sites is exposed to it. If a seventh site mutates by deleting a definition rather than editing a body, this gate will not see it.
 - A pipeline feeding data to an inline python heredoc (cmd | python3 - args <<'PY') loses: the pipe wins stdin and python executes the piped data as its program. Pass the data in an env var or argv.
 - verify.sh borrows the main checkout's node_modules; install-drift.sh check runs before the first check and exit 2 (could not run) means the installed tree disagrees with the lockfile — reinstall the shared checkout, it is not the branch's red.
+- lsof lists itself and inherits the caller's working directory: any liveness probe that reads process cwds must record and exclude its own prober pid, or a check run from inside the directory it guards always sees a phantom process there
+- a worktree being registered is not an agent running: liveness is a live process whose working directory is inside the checkout; registered-but-idle worktrees are reported, never waited for
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-17 PI-51 round 2 pushed on #96 — F1 verdict refused for the whole uncompared class (verify.sh reads the lockfile names from install-drift.sh), F2 liveness from live processes with --except and the reinstall moved after cleanup-merged.sh, F3 three-state worktree read, F4/AC6 NOT LOGGED on stderr — 130 + 262 assertions, full suite 1524, doctor clean
 - 2026-09-17 PI-51 PR #96 needs work — verify: GREEN on a tree it never compared — cause: first-round
 - 2026-09-17 PI-51 PR #96 draft — install-drift.sh (check + reinstall), verify.sh refuses a stale install (exit 2) on the branch and base worktrees, quickfix/run-wave reinstall the shared checkout after a lockfile merge — 123 tests (90 new suite + 33 in verify.test.sh)
 - 2026-09-17 QF-1 PR #92 approved — cause read off every log line, real-corpus check 56/56 and 60/60 with zero new fires — merge: orchestrator
@@ -109,5 +112,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-15 PI-15 PR #71 approved (delta round 2) — AC1 grep verified 0/exit1, two-directional probe by reviewer, status.test.sh 16/16, verify GREEN — merge: orchestrator
 - 2026-09-15 PI-37 PR #74 needs work — verify.sh RED on retro-due R4F1, pre-existing on main — cause: base-moved
 - 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
-- 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
-- 2026-09-15 PI-15 PR #71 round 2 fix pushed — AC1 grep false-green in bin/status.test.sh (needed same variable indirection as retro-due.test.sh), fixed and re-verified 0 matches, still needs-work label off for reviewer to re-check
