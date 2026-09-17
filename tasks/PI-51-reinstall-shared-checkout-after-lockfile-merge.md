@@ -1,6 +1,6 @@
 # PI-51 — Reinstall the shared checkout after a lockfile merge, and fail verify on a stale install
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: bin/verify.sh, bin/verify.test.sh, .claude/skills/quickfix/SKILL.md, .claude/skills/run-wave/SKILL.md, possibly a new bin/install-drift.sh + bin/install-drift.test.sh (add it to `testCommand` in .pocket-it.json if created)
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**: 
+**Branch**: task/pi-51-reinstall-shared-checkout
 **PR**: 
 
 ## Goal
