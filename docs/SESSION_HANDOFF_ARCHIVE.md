@@ -192,3 +192,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 PI-15 PR #71 needs work — AC1 dichiara zero occorrenze del grep ma non e' vero; causa di primo giro: bin/status.test.sh vuole la stessa indirezione per variabile gia' applicata a retro-due.test.sh. Secondo giro lanciato
 - 2026-09-15 PI-15 PR #71 round 2 fix pushed — AC1 grep false-green in bin/status.test.sh (needed same variable indirection as retro-due.test.sh), fixed and re-verified 0 matches, still needs-work label off for reviewer to re-check
 - 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
+- 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
