@@ -328,44 +328,151 @@ ok "AC1 — a second run on an already-matching tree reinstalls nothing, exit 0"
 ok "AC1 — it says the tree already matches" "has \"\$OUT\" 'already matches package-lock.json, not reinstalled'"
 ok "AC1 — and the install command was not run at all" "[ ! -s '$NPMLOG' ]"
 
-# AC2 — an agent's worktree on this checkout: the reinstall is deferred, never run
+# --- AC2 — what "running" means: a live process, never a directory entry ------------------------------------
+# Round 2 (F2). The first round deferred on a REGISTERED worktree. worktree.sh registers and locks one at
+# creation and only cleanup-merged.sh releases it, so registration outlives its agent by days: on the repo
+# this script lives in, 9 worktrees were registered and 7 locked while nothing at all was running, and every
+# reinstall deferred forever — including the one verify.sh prints as its own remedy, whose blocker was the
+# worktree of the PR being reviewed. So the evidence is a PROCESS. The pair below is the same world twice,
+# with one live `sleep` as the only difference, run in both directions so neither side can pass by accident.
+# spawn_in <dir> — a live process whose working directory is <dir>. `exec` makes the backgrounded pid the
+# process itself, so the pid this prints is the one whose cwd the prober has to see.
+# stdout and stderr go to /dev/null on purpose: a backgrounded process that inherits the pipe of a command
+# substitution keeps it open, and `PID=$(spawn_in …)` would wait for the sleep instead of for the pid.
+spawn_in(){ ( cd "$1" && exec sleep 120 ) >/dev/null 2>&1 & printf '%s' "$!"; }
+stop(){ [ -n "${1:-}" ] && kill "$1" 2>/dev/null; wait "$1" 2>/dev/null; return 0; }
+
 drift_repo
 q git -C "$R" branch agent-work
 q git -C "$R" worktree add -q "$R/.claude/worktrees/agent-work" agent-work
+AGENTPID=$(spawn_in "$R/.claude/worktrees/agent-work")
 : > "$NPMLOG"
 OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
-ok "AC2 — a worktree in use defers the reinstall, exit 4" "[ $RC -eq 4 ]"
+ok "AC2 — an agent running in a worktree of this checkout defers the reinstall, exit 4" "[ $RC -eq 4 ]"
 ok "AC2 — the reason names the harm, not the place" "has \"\$OUT\" 'no reinstall while anything is running against this checkout: it would swap the installed code under a run in progress and corrupt what that run measured'"
-ok "AC2 — and names what is running" "has \"\$OUT\" 'agent-work'"
+ok "AC2 — and names the live process, by pid and by the directory it is in" "has \"\$OUT\" 'live process(es) with their working directory in this checkout' && has \"\$OUT\" '(pid $AGENTPID)' && has \"\$OUT\" '$R/.claude/worktrees/agent-work'"
 ok "AC2 — nothing was installed" "[ ! -s '$NPMLOG' ]"
 ok "AC2 — the tree is left drifted, exactly as it was" "grep -q '18.2.0' '$R/node_modules/react/package.json'"
 ok "AC2 — the command to run once they report is printed in full" "has \"\$OUT\" 'install-drift: run \`npm ci\` in $R (or this script again) once they report'"
 ok "AC2 — the deferral is written to the handoff log" "grep -q 'DEFERRED REINSTALL — npm ci in $R' '$R/docs/SESSION_HANDOFF.md'"
-ok "AC2 — and the log line says why it did not run" "grep -q 'no reinstall while anything is running' '$R/docs/SESSION_HANDOFF.md' || grep -q 'worktree(s) of this checkout in use' '$R/docs/SESSION_HANDOFF.md'"
+ok "AC2 — the log line says why it did not run" "grep -q 'no reinstall while anything is running' '$R/docs/SESSION_HANDOFF.md' || grep -q 'live process' '$R/docs/SESSION_HANDOFF.md'"
+ok "AC2 — and the run claims the log only because the line is there" "has \"\$OUT\" 'install-drift: logged the deferred reinstall with handoff.sh log'"
 
+# --running: the caller knows it launched agents this session, and that alone is enough
 : > "$NPMLOG"
-OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" --except agent-work 2>&1); RC=$?
-ok "AC2 — the merged PR's own worktree is excluded by name and the reinstall proceeds" "[ $RC -eq 0 ] && grep -qF 'ci | ' '$NPMLOG'"
-
-drift_repo
-: > "$NPMLOG"
-OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" --except agent-work --running "two developers launched in this session" 2>&1); RC=$?
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" --running "two developers launched in this session" 2>&1); RC=$?
 ok "AC2 — a caller that knows it launched agents defers with --running, exit 4" "[ $RC -eq 4 ]"
 ok "AC2 — and its own words are in the reason" "has \"\$OUT\" 'two developers launched in this session'"
 ok "AC2 — --running also stops the install" "[ ! -s '$NPMLOG' ]"
+
+# the same world, one process later: the worktree is still registered and still locked, nothing runs in it
+stop "$AGENTPID"
+q git -C "$R" worktree lock "$R/.claude/worktrees/agent-work"
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
+ok "AC2 — a registered, locked worktree with nothing running in it does NOT hold the reinstall" "[ $RC -eq 0 ] && grep -qF \"ci | $R\" '$NPMLOG'"
+ok "AC2 — and the reinstall says the worktrees it decided not to wait for, so the decision is visible" "has \"\$OUT\" 'registered but nothing is running in them' && has \"\$OUT\" 'agent-work'"
+ok "AC2 — the tree really was brought back to the lockfile" "grep -q '18.3.1' '$R/node_modules/react/package.json'"
+q git -C "$R" worktree unlock "$R/.claude/worktrees/agent-work"
+
+# --except: the caller declares the PR it has just merged finished. It drops that worktree from the
+# registered list; a process still alive inside it is not something a caller can declare away.
+drift_repo
+AGENTPID=$(spawn_in "$R/.claude/worktrees/agent-work")
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" --except agent-work 2>&1); RC=$?
+ok "AC2 — --except does not silence a live process inside the excepted worktree, exit 4" "[ $RC -eq 4 ] && [ ! -s '$NPMLOG' ]"
+stop "$AGENTPID"
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" --except agent-work 2>&1); RC=$?
+ok "AC1 — the merged PR's own worktree is excluded by name and the reinstall proceeds" "[ $RC -eq 0 ] && grep -qF \"ci | $R\" '$NPMLOG'"
+ok "AC1 — an excepted worktree is not even listed as one it decided not to wait for" "! has \"\$OUT\" 'registered but nothing is running in them'"
 q git -C "$R" worktree remove --force "$R/.claude/worktrees/agent-work"
 
-# the reader itself cannot run: an unread list of running worktrees must never be read as an empty one
+# a process in the MAIN checkout, with no worktree registered at all: the same harm, the same answer
+drift_repo
+MAINPID=$(spawn_in "$R")
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
+ok "AC2 — a process running in the checkout itself defers it too, worktrees or no worktrees" "[ $RC -eq 4 ] && [ ! -s '$NPMLOG' ]"
+ok "AC2 — and it is named with its own directory" "has \"\$OUT\" '(pid $MAINPID)'"
+stop "$MAINPID"
+
+# --- the readers themselves: three states, never two (F3) ---------------------------------------------------
 TOOLBIN="$S/toolsonly"; mkdir -p "$TOOLBIN"
-for t in bash git grep sed head cut tr cat dirname mkdir rm ln printf; do
+for t in bash git grep sed head cut tr cat awk dirname mkdir rm ln printf ps lsof; do
   p=$(command -v "$t" 2>/dev/null) && ln -sf "$p" "$TOOLBIN/$t"
 done
-NOLOCK="$S/reader-down"; mkdir -p "$NOLOCK"; v3lock > "$NOLOCK/package-lock.json"   # nothing installed: no python needed to decide
+NOLOCK="$S/reader-down"; mkdir -p "$NOLOCK"; v3lock > "$NOLOCK/package-lock.json"   # nothing installed: a reinstall is needed
 : > "$NPMLOG"
 OUT=$(PATH="$STUB:$TOOLBIN" bash "$SCRIPT" reinstall "$NOLOCK" 2>&1); RC=$?
-ok "AC2 — with no way to read what is running, the reinstall is deferred, not risked (exit 4)" "[ $RC -eq 4 ]"
-ok "AC2 — and it says the list could not be read" "has \"\$OUT\" 'could not be read'"
-ok "AC2 — nothing was installed on an unreadable list" "[ ! -s '$NPMLOG' ]"
+ok "AC2 — with no python to read what is running, the reinstall is deferred, not risked (exit 4)" "[ $RC -eq 4 ]"
+ok "AC2 — and it says what could not be read" "has \"\$OUT\" 'could not be read'"
+ok "AC2 — nothing was installed while the prober was down" "[ ! -s '$NPMLOG' ]"
+
+# git missing: the worktree list is UNREADABLE, which is not the same answer as "no worktrees" (F3, measured:
+# the first round installed here, because `git … 2>/dev/null` losing its status reads as an empty list).
+NOGIT="$S/nogitbin"; mkdir -p "$NOGIT"
+for t in bash grep sed head cut tr cat awk dirname mkdir rm ln printf python3 ps lsof; do
+  p=$(command -v "$t" 2>/dev/null) && ln -sf "$p" "$NOGIT/$t"
+done
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$NOGIT" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
+ok "AC2 git-down — without git, what is registered against the checkout is unknown: exit 4" "[ $RC -eq 4 ]"
+ok "AC2 git-down — and it says git is the reader that could not answer" "has \"\$OUT\" 'git is not on PATH'"
+ok "AC2 git-down — nothing was installed on an unknown" "[ ! -s '$NPMLOG' ]"
+
+# git present but unable to list worktrees: still unreadable, still a deferral — and told apart from both
+# "not a repository" (below) and "no worktrees".
+GITSTUB="$S/gitstub"; mkdir -p "$GITSTUB"
+REALGIT=$(command -v git)
+cat > "$GITSTUB/git" <<SH
+#!/usr/bin/env bash
+for a in "\$@"; do [[ "\$a" == worktree ]] && exit 3; done
+exec "$REALGIT" "\$@"
+SH
+chmod +x "$GITSTUB/git"
+: > "$NPMLOG"
+OUT=$(PATH="$GITSTUB:$STUB:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
+ok "AC2 git-down — a git that cannot list worktrees defers, exit 4" "[ $RC -eq 4 ]"
+ok "AC2 git-down — and the reason is the failed listing, with its exit code" "has \"\$OUT\" 'exited 3, so what is registered against this checkout is unknown'"
+ok "AC2 git-down — nothing was installed" "[ ! -s '$NPMLOG' ]"
+
+# not a repository at all: nothing CAN be registered, so this is an answer and not an unknown — a plain
+# directory with a lockfile must not defer forever (the third state; without it the two above would be met
+# by blocking on any non-zero git status, which would never install in a non-repo project again).
+PLAIN="$S/plaindir"; mkdir -p "$PLAIN"; v3lock > "$PLAIN/package-lock.json"; install_v3 "$PLAIN" 18.2.0
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$PLAIN" 2>&1); RC=$?
+ok "AC2 no-repo — a plain directory with a lockfile is reinstalled, not deferred, exit 0" "[ $RC -eq 0 ] && grep -qF \"ci | $PLAIN\" '$NPMLOG'"
+ok "AC2 no-repo — and its drift really was closed" "grep -q '18.3.1' '$PLAIN/node_modules/react/package.json'"
+
+# --- AC6 — a deferral is never a silence: the log is claimed only when it happened ---------------------------
+# Measured in the round-1 review: `handoff.sh log` prints its success line and exits 0 even when its own
+# write raised, and the first round discarded its output entirely — so a deferral could vanish while the run
+# said it had been logged. Both failure paths are exercised here, not only the happy one.
+ORPHAN="$S/orphan"; mkdir -p "$ORPHAN"; cp "$SCRIPT" "$ORPHAN/install-drift.sh"   # no handoff.sh beside it
+drift_repo
+ORPHANPID=$(spawn_in "$R")
+: > "$NPMLOG"
+OUT=$(PATH="$STUB:$PATH" bash "$ORPHAN/install-drift.sh" reinstall "$R" 2>&1); RC=$?
+ok "AC6 — with no handoff.sh beside it the deferral still exits non-zero (4)" "[ $RC -eq 4 ]"
+ok "AC6 — and it says out loud that the deferral was not logged, naming where it looked" "has \"\$OUT\" 'install-drift: NOT LOGGED — handoff.sh is not next to this script (looked in $ORPHAN)'"
+ok "AC6 — it never claims a log it did not write" "! has \"\$OUT\" 'logged the deferred reinstall'"
+ok "AC6 — nothing was installed" "[ ! -s '$NPMLOG' ]"
+
+# the log file cannot be written: handoff.sh still exits 0 and still prints its own success line
+chmod a-w "$R/docs/SESSION_HANDOFF.md" "$R/docs"
+OUT=$(PATH="$STUB:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
+HS_LIES=0; (cd "$R" && bash "$(dirname "$SCRIPT")/handoff.sh" log "AC6 probe" >/dev/null 2>&1) && HS_LIES=1
+chmod u+w "$R/docs"; chmod u+w "$R/docs/SESSION_HANDOFF.md"
+ok "AC6 — an unwritable handoff log still leaves the deferral at exit 4" "[ $RC -eq 4 ]"
+ok "AC6 — the run says NOT LOGGED instead of claiming a write that did not happen" "has \"\$OUT\" 'install-drift: NOT LOGGED — the deferral above could not be written to the handoff log'"
+ok "AC6 — and no success line is printed alongside it" "! has \"\$OUT\" 'logged the deferred reinstall'"
+ok "AC6 — the claim cannot rest on handoff.sh's exit code, which is 0 on a refused write" "[ $HS_LIES -eq 1 ]"
+ok "AC6 — the deferral line itself is still printed, whatever the log did" "has \"\$OUT\" 'install-drift: DEFERRED'"
+ok "AC6 — and nothing was installed" "[ ! -s '$NPMLOG' ]"
+stop "$ORPHANPID"
 
 OUT=$(PATH="$NPMFAIL:$PATH" bash "$SCRIPT" reinstall "$R" 2>&1); RC=$?
 ok "install failure — an install that exits non-zero is reported, exit 1" "[ $RC -eq 1 ]"
@@ -402,6 +509,69 @@ runr "$P" --since "$AFTER" --dry-run
 ok "AC1 — a merge that touched no lockfile reinstalls nothing, exit 0" "[ $RC -eq 0 ] && has \"\$OUT\" 'no lockfile changed since'"
 runr "$P" --since deadbeefdeadbeef --dry-run
 ok "no verdict — a --since that cannot be resolved is never read as 'no change', exit 3" "[ $RC -eq 3 ] && has \"\$OUT\" 'cannot be resolved'"
+
+
+# =========================== 7. AC1 end to end, in the closing step's REAL order =============================
+# Round 2 (F2). Asserting this script in isolation proved nothing about the flow it was written for: both
+# skills ran the reinstall BEFORE cleanup-merged.sh, so the merged PR's own worktree was always still
+# registered and the reinstall deferred every single time. This section therefore takes the commands out of
+# the two SKILL.md files as they are written there, in the order they are written, and runs them on a
+# fixture repository that is in exactly the state a closing step finds: a dependency bump merged into main,
+# the merged PR's worktree still on disk, and this checkout's node_modules still holding the old versions.
+REPO=$(cd "$(dirname "$SCRIPT")/.." && pwd -P)
+CLEANUP="$REPO/bin/cleanup-merged.sh"
+# bullet_line <file> <pattern> — the 1-based line number of the closing bullet that carries <pattern>.
+bullet_line(){ grep -nF "$2" "$1" | grep -E '^[0-9]+:- ' | head -1 | cut -d: -f1; }
+# skill_cmd <file> — the reinstall command as the skill writes it, between its backticks.
+skill_cmd(){ grep -o '`bash ~/\.claude/agents/pocket-it/bin/install-drift\.sh reinstall [^`]*`' "$1" | head -1 | tr -d '`'; }
+
+for SK in .claude/skills/quickfix/SKILL.md .claude/skills/run-wave/SKILL.md; do
+  SKF="$REPO/$SK"; NAME=$(basename "$(dirname "$SK")")
+  LC=$(bullet_line "$SKF" 'cleanup-merged.sh'); LR=$(bullet_line "$SKF" 'install-drift.sh reinstall')
+  ok "AC1 $NAME — the reinstall bullet comes after cleanup-merged.sh, which is what removes the merged PR's worktree" "[ -n '$LC' ] && [ -n '$LR' ] && [ '$LR' -gt '$LC' ]"
+  RAW=$(skill_cmd "$SKF")
+  ok "AC1 $NAME — the skill's command excepts the branch it has just merged" "printf '%s' \"\$RAW\" | grep -q -- '--except'"
+
+  # the world a closing step finds: origin, a merged dependency bump, its worktree still registered
+  E="$S/e2e-$NAME"; q git init -q --bare "$E-origin.git"; q git init -q -b main "$E"; E=$(cd "$E" && pwd -P)
+  v3lock > "$E/package-lock.json"; printf 'node_modules/\n' > "$E/.gitignore"
+  q git -C "$E" add -A; q git -C "$E" commit -qm base
+  q git -C "$E" remote add origin "$S/e2e-$NAME-origin.git"; q git -C "$E" push -q -u origin main
+  q git -C "$E" worktree add -q -b task/dep-bump "$E/.claude/worktrees/task-dep-bump" main
+  echo bump > "$E/.claude/worktrees/task-dep-bump/dep.txt"
+  q git -C "$E/.claude/worktrees/task-dep-bump" add -A
+  q git -C "$E/.claude/worktrees/task-dep-bump" commit -qm "bump a dependency"
+  BUMPSHA=$(git -C "$E" rev-parse task/dep-bump)
+  q git -C "$E" push -q origin task/dep-bump
+  q git -C "$E" merge --no-ff -q -m "merge task/dep-bump" task/dep-bump
+  q git -C "$E" push -q origin main
+  install_v3 "$E" 18.2.0                      # the shared checkout, still on the versions before the bump
+  GHB="$S/gh-$NAME"; mkdir -p "$GHB"
+  cat > "$GHB/gh" <<GH
+#!/usr/bin/env bash
+# stand-in gh: the one merged PR of this fixture, in the two shapes cleanup-merged.sh asks for.
+h=""; prev=""; for a in "\$@"; do [[ "\$prev" == --head ]] && h="\$a"; prev="\$a"; done
+if [[ -n "\$h" ]]; then [[ "\$h" == task/dep-bump ]] && echo "7 $BUMPSHA"; exit 0; fi
+printf 'task/dep-bump\t%s\n' "$BUMPSHA"
+exit 0
+GH
+  chmod +x "$GHB/gh"
+
+  # the closing step, in the skill's own order: cleanup-merged.sh first, then the skill's own command line,
+  # with only the tool path and the placeholders resolved — every flag is the skill's.
+  COUT=$(cd "$E" && PATH="$GHB:$STUB:$PATH" bash "$CLEANUP" 2>&1)
+  ok "AC1 $NAME — cleanup-merged.sh removed the merged PR's worktree first" "[ ! -d '$E/.claude/worktrees/task-dep-bump' ]"
+  CMD=$(printf '%s' "$RAW" | sed "s#~/\.claude/agents/pocket-it/bin/install-drift\.sh#$SCRIPT#; s#reinstall \. #reinstall $E #; s#reinstall \.\$#reinstall $E#; s#{[^}]*}#task/dep-bump#g")
+  : > "$NPMLOG"
+  OUT=$(cd "$E" && PATH="$GHB:$STUB:$PATH" eval "$CMD" 2>&1); RC=$?
+  ok "AC1 $NAME — and the skill's own reinstall command then ran the frozen install, exit 0" "[ $RC -eq 0 ] && grep -qF \"ci | $E\" '$NPMLOG'"
+  ok "AC1 $NAME — the shared checkout now holds the version the merged lockfile declares" "grep -q '18.3.1' '$E/node_modules/react/package.json'"
+  ok "AC1 $NAME — it did not defer on the PR it had just merged" "! has \"\$OUT\" 'install-drift: DEFERRED'"
+  ok "AC1 $NAME — and it says what it did, in the line the skill tells the operator to report" "has \"\$OUT\" 'install-drift: REINSTALLED'"
+done
+
+# The same proof for the remedy verify.sh prints is in bin/verify.test.sh, where the line is extracted from a
+# real run of verify.sh and executed in the world that printed it.
 
 [[ $fail -eq 0 ]] && echo "install-drift.test.sh: ALL PASS" || echo "install-drift.test.sh: FAILURES"
 exit $fail

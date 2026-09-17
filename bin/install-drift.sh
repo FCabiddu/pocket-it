@@ -5,6 +5,7 @@
 # Usage (from anywhere; <dir> defaults to the current directory):
 #   bash install-drift.sh check     [<dir>]
 #   bash install-drift.sh reinstall [<dir>] [--since <ref>] [--except <branch>] [--running <what>] [--dry-run]
+#   bash install-drift.sh lockfiles          # the lockfile names this script knows, one per line
 #
 # THREAT MODEL — stated here because a guard whose failure mode is silence is worth nothing without one.
 # What it protects against: a verification passing while the installed tree is NOT the tree the lockfile
@@ -19,9 +20,14 @@
 #    their own formats, which no standard-library parser on this machine can read; they are reported
 #    "NOT SUPPORTED", by name, on their own line, and the exit code says so. They are never called clean.
 #  * an entry the lockfile carries without a version (a workspace link) is counted and reported, not compared.
-#  * `reinstall` sees the worktrees of this repository, never processes: something running directly in the
-#    main checkout, or in a worktree outside the pipeline's own directories, is invisible to it — which is
-#    why --running exists, for a caller that knows it launched one.
+#  * `reinstall` decides "is something running against this checkout" from LIVE PROCESSES (see live_runs),
+#    never from the mere existence of a worktree: worktree.sh registers and locks one at creation and only
+#    cleanup-merged.sh releases it, so a registered worktree routinely outlives the agent that owned it by
+#    days, and treating registration as liveness defers every reinstall forever (measured on this repo's own
+#    checkout: 9 worktrees registered, 7 locked, most of them of branches merged long before). What it can
+#    read is this user's own processes, and only their current directory: an agent that has chdir'd out of
+#    the checkout while still using its node_modules is invisible to it — which is why --running exists, for
+#    a caller that knows it launched one, and why an unreadable process list defers instead of installing.
 #
 # Exit codes, both subcommands:
 #   0  nothing to do — the install matches the lockfile, or there is nothing to compare (no lockfile, no
@@ -46,8 +52,10 @@ usage() {
   cat >&2 <<'U'
 usage: install-drift.sh check     [<dir>]
        install-drift.sh reinstall [<dir>] [--since <ref>] [--except <branch>] [--running <what>] [--dry-run]
+       install-drift.sh lockfiles
   check      compares the installed tree in <dir> with its lockfile (exit 0 match / 1 drift / 3 no verdict)
   reinstall  runs the lockfile's own frozen install in <dir> when it is needed and nothing is running there
+  lockfiles  prints the lockfile names this script knows, one per line, for callers that need the same list
 U
   exit 2
 }
@@ -68,7 +76,14 @@ install_cmd() {
 }
 
 SUB="${1:-}"; [[ $# -gt 0 ]] && shift
-case "$SUB" in check|reinstall) ;; *) usage;; esac
+case "$SUB" in
+  check|reinstall) ;;
+  # N1: one declaration, readable from outside. verify.sh asks for it instead of keeping a second list that
+  # goes stale the day a lockfile is added here — which is how a branch that changes bun.lock or
+  # npm-shrinkwrap.json reads as "lockfile unchanged" and borrows another checkout's node_modules.
+  lockfiles) for item in $LOCKFILES; do printf '%s\n' "${item%%:*}"; done; exit 0;;
+  *) usage;;
+esac
 
 DIR="."; SINCE=""; EXCEPT=""; RUNNING=""; DRYRUN=0; DOLOG=1
 while [[ $# -gt 0 ]]; do
@@ -273,13 +288,34 @@ sys.exit(0)
 PY
 }
 
-# live_worktrees — one "<path>\t<branch>" per worktree of this repository, other than $DIR itself, that sits
-# in a directory the pipeline runs agents and verifications in. Conservative by construction: a worktree
-# whose porcelain line cannot be decoded still counts as present, because the wrong answer to defer to is
-# always "wait", never "reinstall under something that is running".
-live_worktrees() {
+# --- is anything RUNNING against this checkout? -------------------------------------------------------------
+# Three states, never two. "Nothing is registered" and "nobody could tell me what is registered" are different
+# answers and only one of them is safe to install on; the same for processes. Every reader below therefore
+# reports WHICH of the three it reached, and an unknown always ends in a deferral (§2 of the reinstall path).
+#
+# WT_STATE is set by read_worktrees: norepo (nothing can be registered here — a plain directory with a
+# lockfile is a supported input and must not defer forever), read (the list is the truth below), unreadable
+# (git is absent, or it could not answer: defer). $DIR itself is never in WT_PATHS.
+WT_STATE=""; WT_WHY=""; WT_PATHS=""; WT_NAMED=""
+read_worktrees() {
+  local gerr grc
+  if ! command -v git >/dev/null 2>&1; then
+    WT_STATE=unreadable; WT_WHY="git is not on PATH, so the worktrees of this checkout cannot be listed"; return
+  fi
+  gerr=$(git -C "$DIR" rev-parse --git-dir 2>&1 >/dev/null); grc=$?
+  if [[ $grc -ne 0 ]]; then
+    # "not a git repository" is an ANSWER (nothing can be registered); anything else is git failing to answer.
+    if printf '%s' "$gerr" | grep -qi 'not a git repository'; then WT_STATE=norepo; return; fi
+    WT_STATE=unreadable; WT_WHY="git could not say whether $DIR is a repository (exit $grc: $(printf '%s' "$gerr" | tr '\n' ' ' | cut -c1-90))"; return
+  fi
+  local porcelain prc
+  porcelain=$(git -C "$DIR" worktree list --porcelain 2>/dev/null); prc=$?
+  if [[ $prc -ne 0 ]]; then
+    WT_STATE=unreadable; WT_WHY="\`git worktree list\` in $DIR exited $prc, so what is registered against this checkout is unknown"; return
+  fi
   # The porcelain travels in the environment, not on stdin: stdin here is the reader program itself.
-  WT_PORCELAIN="$(git -C "$DIR" worktree list --porcelain 2>/dev/null)" python3 - "$DIR" "$EXCEPT" <<'PY'
+  local decoded drc
+  decoded=$(WT_PORCELAIN="$porcelain" python3 - "$DIR" "$EXCEPT" <<'PY'
 import os, sys
 d = sys.argv[1].rstrip("/")
 except_names = set(sys.argv[2].split())
@@ -297,13 +333,166 @@ for w in entries:
     p = w["worktree"]
     if p.rstrip("/") == d:
         continue
-    if "/.claude/worktrees/" not in p + "/" and "/.worktrees/" not in p + "/":
-        continue
     br = w.get("branch", "").replace("refs/heads/", "") or "(detached)"
-    if br in except_names or p.rstrip("/").split("/")[-1] in except_slugs:
-        continue
-    print(p + "\t" + br)
+    # --except names a worktree the CALLER has declared finished (the PR it has just merged). It removes it
+    # from the registered list — the "I cannot tell" dimension — and from nothing else: a live process
+    # inside it still blocks below, because the caller can declare an agent done, not a process gone.
+    excepted = br in except_names or p.rstrip("/").split("/")[-1] in except_slugs
+    print(("-" if excepted else "+") + "\t" + p + "\t" + br)
 PY
+  ); drc=$?
+  if [[ $drc -ne 0 ]]; then
+    WT_STATE=unreadable; WT_WHY="the worktree list of $DIR could not be decoded (reader exited $drc)"; return
+  fi
+  WT_STATE=read
+  WT_PATHS=$(printf '%s\n' "$decoded" | grep -v '^$' | cut -f2)
+  WT_NAMED=$(printf '%s\n' "$decoded" | grep '^+' | cut -f3 | grep -v '^$')
+}
+
+# live_runs — one "<pid>\t<command>\t<directory>" per LIVE process of this user, other than this script's own
+# ancestors and descendants, whose current directory is inside the checkout or inside one of its worktrees.
+# This is the evidence the deferral rests on: a process, not a directory entry. Exit 3 = no prober could run,
+# which is an unknown and defers, never an empty answer.
+live_runs() {
+  WT_ROOTS="$WT_PATHS" python3 - "$DIR" "$$" <<'PY'
+import os, shutil, subprocess, sys
+
+d = sys.argv[1].rstrip("/")
+me = int(sys.argv[2])
+roots = sorted({r.rstrip("/") for r in os.environ.get("WT_ROOTS", "").splitlines() if r.strip()} | {d})
+
+
+def ps_map():
+    """{pid: (ppid, command)} — or None when ps could not answer."""
+    try:
+        r = subprocess.run(["ps", "-Ao", "pid=,ppid=,comm="], capture_output=True, text=True, timeout=30)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    m = {}
+    for line in r.stdout.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) < 2:
+            continue
+        try:
+            m[int(parts[0])] = (int(parts[1]), parts[2] if len(parts) > 2 else "?")
+        except ValueError:
+            continue
+    return m or None
+
+
+spawned = set()                                      # the pids of the probers themselves — see below
+
+
+def cwds():
+    """{pid: current directory} — or None when no prober is available on this machine."""
+    if os.path.isdir("/proc"):                      # Linux: exact, and needs no external command
+        out, ok = {}, False
+        for e in os.listdir("/proc"):
+            if not e.isdigit():
+                continue
+            try:
+                out[int(e)] = os.readlink("/proc/%s/cwd" % e)
+                ok = True
+            except Exception:
+                continue                            # a process of another user, or one that just exited
+        if ok:
+            return out
+    exe = shutil.which("lsof")                      # macOS/BSD: this user's own processes
+    if not exe:
+        return None
+    # Popen, not run(), for one reason: lsof LISTS ITSELF, and it inherits this script's working directory —
+    # which is inside the checkout whenever the closing step is run from the repository root. Without its own
+    # pid recorded here it looks exactly like an agent running in the checkout and defers every reinstall
+    # forever (measured on the end-to-end fixture of this task).
+    try:
+        p = subprocess.Popen([exe, "-a", "-d", "cwd", "-w", "-F", "pn", "-u", str(os.getuid())],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        spawned.add(p.pid)
+        stdout, _ = p.communicate(timeout=120)
+    except Exception:
+        return None
+    if not stdout or not stdout.strip():             # lsof exits 1 on partial information; empty is no answer
+        return None
+    out, pid = {}, None
+    for line in stdout.splitlines():
+        if line[:1] == "p":
+            try:
+                pid = int(line[1:])
+            except ValueError:
+                pid = None
+        elif line[:1] == "n" and pid is not None:
+            out.setdefault(pid, line[1:])
+    return out or None
+
+
+# Order matters: the directory snapshot first, the process table SECOND. A pid the first reader saw and the
+# second one no longer knows has exited in between — a process that is gone is not a run in progress, and
+# taking the tables the other way round would report it as one.
+cw = cwds()
+pm = ps_map()
+if pm is None or cw is None:
+    sys.exit(3)
+
+
+def ancestry(p):
+    seen = set()
+    while p and p > 0 and p not in seen:
+        seen.add(p)
+        p = pm.get(p, (0, ""))[0]
+    return seen
+
+
+mine = ancestry(me)                                  # this run and everything that launched it
+for pid in sorted(cw):
+    if pid in spawned or pid not in pm:              # a prober of ours, or a process that has since exited
+        continue
+    if pid in mine or me in ancestry(pid):           # ours, or launched by us
+        continue
+    c = cw[pid].rstrip("/")
+    for r in roots:
+        if c == r or c.startswith(r + "/"):
+            print("%d\t%s\t%s" % (pid, pm.get(pid, (0, "?"))[1], c))
+            break
+PY
+}
+
+# log_deferral <message> — write the deferral to the handoff log, and say out loud what actually happened.
+# A deferral that is not logged is the silence this whole script exists to remove, so the claim is made only
+# when the line is IN the file: `handoff.sh log` prints its own success line and exits 0 even when its write
+# raised (measured in the PI-51 review), so neither its exit code nor its output is evidence of a write.
+log_deferral() {
+  local msg="$1" key="$2" hs="$SELF_DIR/handoff.sh" root out rc
+  [[ $DOLOG -eq 1 ]] || return 0
+  if [[ ! -f "$hs" ]]; then
+    echo "install-drift: NOT LOGGED — handoff.sh is not next to this script (looked in $SELF_DIR): the deferral above is in this output only, record it by hand" >&2
+    return 0
+  fi
+  root=$(git -C "$DIR" rev-parse --show-toplevel 2>/dev/null)
+  # The evidence is that the file gained a line, not that it contains one: a deferral repeats verbatim run
+  # after run, so "the text is in there" is also true when this write failed and last week's succeeded. The
+  # count spans the archive too, because handoff.sh moves old log lines there (it never drops them), and a
+  # write that pushed its own older twin out would otherwise look like no write at all.
+  local before after
+  before=$(count_logged "$root" "$key")
+  out=$(cd "$DIR" && bash "$hs" log "$msg" 2>&1); rc=$?
+  after=$(count_logged "$root" "$key")
+  if [[ -n "$root" && "$after" -gt "$before" ]]; then
+    echo "install-drift: logged the deferred reinstall with handoff.sh log"
+  else
+    echo "install-drift: NOT LOGGED — the deferral above could not be written to the handoff log (handoff.sh exited $rc: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-120)): record it by hand" >&2
+  fi
+}
+
+# count_logged <repo root> <key> — how many log lines carrying <key> exist in the handoff, archive included.
+count_logged() {
+  local root="$1" key="$2" n=0 f
+  [[ -n "$root" ]] || { echo 0; return; }
+  for f in "$root/docs/SESSION_HANDOFF.md" "$root/docs/SESSION_HANDOFF_ARCHIVE.md"; do
+    [[ -f "$f" ]] && n=$((n + $(grep -cF "$key" "$f" 2>/dev/null || echo 0)))
+  done
+  echo "$n"
 }
 
 # ---------------------------------------------------------------------------------------------------------
@@ -359,24 +548,38 @@ fi
 
 # 2. May it run now? A reinstall replaces the very code a running check is executing: it does not fail that
 #    run, it silently changes what it measured. So the answer to any doubt is to wait, never to install.
+#    Three sources of evidence, any one of them blocks; a worktree that is merely REGISTERED is not one of
+#    them (see the threat model at the top) — it is reported, and it only blocks while nobody could tell us
+#    whether anything is alive inside it.
 BLOCK=""
 [[ -n "$RUNNING" ]] && BLOCK="$RUNNING"
-WTS=$(live_worktrees); WRC=$?
-if [[ $WRC -ne 0 ]]; then
-  # An unread list is never an empty one: if the reader could not run, assume something is.
-  BLOCK="${BLOCK:+$BLOCK; }the worktree list of this checkout could not be read (reader exited $WRC), so what is running against it is unknown"
-elif [[ -n "$WTS" ]]; then
-  N=$(printf '%s\n' "$WTS" | grep -c .)
-  BLOCK="${BLOCK:+$BLOCK; }$N worktree(s) of this checkout in use: $(printf '%s\n' "$WTS" | cut -f2 | tr '\n' ' ')"
+read_worktrees
+case "$WT_STATE" in
+  unreadable) BLOCK="${BLOCK:+$BLOCK; }$WT_WHY" ;;
+esac
+RUNS=""; RRC=0
+if [[ "$WT_STATE" != unreadable ]]; then
+  RUNS=$(live_runs); RRC=$?
+  if [[ $RRC -ne 0 ]]; then
+    # An unread list is never an empty one: if the prober could not run, assume something is.
+    BLOCK="${BLOCK:+$BLOCK; }what is running in $DIR could not be read (no usable process list on this machine), so a run in progress cannot be ruled out"
+  elif [[ -n "$RUNS" ]]; then
+    N=$(printf '%s\n' "$RUNS" | grep -c .)
+    BLOCK="${BLOCK:+$BLOCK; }$N live process(es) with their working directory in this checkout: $(printf '%s\n' "$RUNS" | awk -F'\t' '{printf "%s(pid %s) in %s; ", $2, $1, $3}')"
+  fi
 fi
 if [[ -n "$BLOCK" ]]; then
   echo "install-drift: DEFERRED — no reinstall while anything is running against this checkout: it would swap the installed code under a run in progress and corrupt what that run measured — $BLOCK"
   echo "install-drift: run \`$CMD\` in $DIR (or this script again) once they report — $WHY"
-  if [[ $DOLOG -eq 1 && -f "$SELF_DIR/handoff.sh" ]]; then
-    (cd "$DIR" && bash "$SELF_DIR/handoff.sh" log "DEFERRED REINSTALL — $CMD in $DIR — $WHY — not run: $BLOCK" >/dev/null 2>&1) \
-      && echo "install-drift: logged the deferred reinstall with handoff.sh log"
-  fi
+  LOGKEY="DEFERRED REINSTALL — $CMD in $DIR"
+  log_deferral "$LOGKEY — $WHY — not run: $BLOCK" "$LOGKEY"
   exit 4
+fi
+# Nothing is running. Registered worktrees, if any, are said out loud anyway: they are what this script used
+# to defer on, and an operator who sees the reinstall go ahead with agent worktrees on disk must be able to
+# tell that it was a decision and not an oversight.
+if [[ -n "$WT_NAMED" ]]; then
+  echo "install-drift: note — $(printf '%s\n' "$WT_NAMED" | grep -c .) worktree(s) of this checkout are registered but nothing is running in them, so they do not hold the reinstall: $(printf '%s\n' "$WT_NAMED" | tr '\n' ' ')"
 fi
 
 # 3. Run it.

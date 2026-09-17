@@ -1012,6 +1012,205 @@ ok "PI-51 AC3 base — and reports the inherited verdict it could not reach befo
 R51=0; hasl "$OUTP" "attribution unknown" && R51=1
 ok "PI-51 AC3 base — nothing is unknown any more" "[ $R51 -eq 0 ]"
 
+# ====== PI-51 round 2, F1 — "could not be compared" is a CLASS, and no member of it ever yields a verdict ==
+# The members are read out of the production declaration at run time, never listed here: a comparator added
+# to install-drift.sh joins this loop by itself, and a name dropped from it fails the floor assertions first.
+# Every member is then asserted against the one invariant the task states — an install this pipeline could
+# not compare with its lockfile makes verify refuse the verdict: never GREEN, never exit 0, and not one
+# check executed against a tree nobody compared.
+NPMLOCK='{"name":"pi51","lockfileVersion":3,"packages":{"":{"name":"pi51"},"node_modules/react":{"version":"18.3.1"}}}'
+DECL=$(bash "$REPO_ROOT/bin/install-drift.sh" lockfiles)
+DECLPAIRS=$(sed -n 's/^LOCKFILES="\(.*\)"$/\1/p' "$REPO_ROOT/bin/install-drift.sh")
+SUPPPM=$(sed -n 's/^SUPPORTED_PM="\(.*\)"$/\1/p' "$REPO_ROOT/bin/install-drift.sh")
+# the floor: the class may only ever grow. Without this, a shrunken declaration would make every loop below
+# pass by iterating nothing at all.
+for fl in package-lock.json npm-shrinkwrap.json pnpm-lock.yaml yarn.lock bun.lockb bun.lock; do
+  R51=1; printf '%s\n' "$DECL" | grep -qx "$fl" && R51=0
+  ok "PI-51 N1 — the lockfile names verify.sh uses come from install-drift.sh and still include $fl" "[ $R51 -eq 0 ]"
+done
+R51=1; [ "$(printf '%s\n' "$DECL" | grep -c .)" -eq "$(printf '%s\n' $DECLPAIRS | grep -c .)" ] && R51=0
+ok "PI-51 N1 — the \`lockfiles\` subcommand prints the whole declaration, not a subset of it" "[ $R51 -eq 0 ]"
+
+CLSN=0
+cls_case(){ # cls_case <lockfile name> <content> — main carries exactly that lockfile and a green check; the
+            # branch changes no lockfile at all, so its worktree borrows the shared checkout's install, which
+            # is the situation the guard exists for.
+  CLSN=$((CLSN+1)); local lf="$1" body="$2" br="pi51-cls-$CLSN" d
+  q git -C "$P" checkout -q main
+  for d in $DECL; do rm -f "$P/$d"; done
+  printf '%s\n' "$body" > "$P/$lf"
+  wcheck "$P/check.sh" "exit 0"
+  p_commit "pi51 class: $lf"
+  q git -C "$P" checkout -q -b "$br" main
+  pfile "$P/bin/$br.test.sh"; p_commit "$br"
+  setinst 18.2.0
+  CLSBR="$br"
+  runp "$br"
+}
+cls_invariant(){ # the same three assertions for every member of the class
+  R51=1; [ "$RCP" -eq 2 ] && R51=0
+  ok "PI-51 AC3 — $1: exits 2, could-not-run" "[ $R51 -eq 0 ]"
+  R51=0; { hasl "$OUTP" "verify: GREEN" || hasl "$OUTP" "verify: RED"; } && R51=1
+  ok "PI-51 AC3 — $1: no verdict of any kind is printed" "[ $R51 -eq 0 ]"
+  R51=0; [ -s "$CALLLOG" ] && R51=1
+  ok "PI-51 AC3 — $1: not one check was run against the tree nobody compared" "[ $R51 -eq 0 ]"
+}
+for item in $DECLPAIRS; do
+  lf="${item%%:*}"; pm="${item#*:}"
+  cls_case "$lf" "$NPMLOCK"
+  case " $SUPPPM " in
+    *" $pm "*)   # the readable half of the class: compared, and the comparison says the tree is not the lockfile's
+      cls_invariant "$lf, read and disagreeing with the install"
+      R51=1; hasl "$OUTP" "FAIL  install drift — the installed tree is not the one the lockfile declares" && R51=0
+      ok "PI-51 AC3 — $lf: the disagreement is stated by name" "[ $R51 -eq 0 ]" ;;
+    *)           # the unreadable half: no comparison happened at all, which is no better evidence
+      cls_invariant "$lf ($pm), a lockfile this pipeline cannot read"
+      R51=1; hasl "$OUTP" "FAIL  install drift — the installed tree could NOT be compared with the lockfile" && R51=0
+      ok "PI-51 AC3 — $lf ($pm): the failure says the tree was never compared" "[ $R51 -eq 0 ]"
+      R51=1; hasl "$OUTP" "verify: could not run — the installed tree was never compared with the lockfile" && R51=0
+      ok "PI-51 AC3 — $lf ($pm): and the closing line refuses the verdict too" "[ $R51 -eq 0 ]"
+      R51=1; hasl "$OUTP" "drift check not supported for $pm" && R51=0
+      ok "PI-51 AC3 — $lf ($pm): install-drift.sh's own reason is carried through to the reader" "[ $R51 -eq 0 ]" ;;
+  esac
+done
+# the same class from the other direction: a lockfile of a package manager it CAN read, in a shape it cannot.
+# Naming the package manager is not what refuses the verdict — failing to compare is.
+cls_case package-lock.json '{ "name":'
+cls_invariant "a lockfile that cannot be parsed"
+R51=1; hasl "$OUTP" "cannot be parsed" && R51=0
+ok "PI-51 AC3 — an unparsable lockfile says so, instead of being read as an empty one" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "so this branch's checks have to be run by hand until install-drift.sh can compare it" && R51=0
+ok "PI-51 AC3 — the refusal tells the reader what to do instead of printing an unrunnable remedy" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "SUPPORTED_PM" && R51=0
+ok "PI-51 AC3 — and names the one declaration that changes when a comparator is added" "[ $R51 -eq 0 ]"
+cls_case package-lock.json '[]'
+cls_invariant "a lockfile that is not a JSON object"
+R51=1; hasl "$OUTP" "is not a JSON object" && R51=0
+ok "PI-51 AC3 — a lockfile of the wrong JSON type is named as such" "[ $R51 -eq 0 ]"
+cls_case package-lock.json '{"lockfileVersion":9}'
+cls_invariant "a lockfile of an unknown shape"
+R51=1; hasl "$OUTP" 'declares neither "packages" nor "dependencies"' && R51=0
+ok "PI-51 AC3 — a lockfile shape nothing here knows how to read is a refusal, not an empty comparison" "[ $R51 -eq 0 ]"
+
+# AC5 at this end of the chain: what produces the refusals above is one arm of one case, and removing it is
+# exactly the code that stood here before this task — install-drift's "no verdict" matched nothing, the run
+# fell through, and a verdict was published about a tree nobody had compared. The mutant is the proof that
+# the section above is testing that arm and not the mere absence of a check.
+MUTD="$S/pi51-mutant"; mkdir -p "$MUTD"
+sed 's/^  \*) echo "FAIL  install drift — the installed tree could NOT/  9) echo "FAIL  install drift — the installed tree could NOT/' "$SCRIPT" > "$MUTD/verify.sh"
+cp "$REPO_ROOT/bin/install-drift.sh" "$MUTD/install-drift.sh"
+R51=1; ! cmp -s "$SCRIPT" "$MUTD/verify.sh" && R51=0
+ok "PI-51 AC5 — the mutation really changed the script (a sed that matched nothing would prove nothing)" "[ $R51 -eq 0 ]"
+cls_case pnpm-lock.yaml "$NPMLOCK"     # the same world the real script refuses a verdict on, rebuilt
+: > "$CALLLOG"
+MOUT=$(cd "$P" && bash "$MUTD/verify.sh" "$CLSBR" main 2>&1); MRC=$?
+R51=1; [ "$MRC" -eq 0 ] && hasl "$MOUT" "verify: GREEN" && R51=0
+ok "PI-51 AC5 — without that arm the same world is declared GREEN on a tree nobody compared" "[ $R51 -eq 0 ]"
+R51=1; [ -s "$CALLLOG" ] && R51=0
+ok "PI-51 AC5 — and the checks do run against it, which is the damage the arm exists to prevent" "[ $R51 -eq 0 ]"
+
+# --- N1 — the names the borrow decision reads are the same declaration, so a new lockfile is never missed ---
+# The control for this loop is the class loop above: there the branch changes NO lockfile, the worktree
+# borrows, and the run really does measure the shared checkout's 18.2.0. Here the branch changes one, and the
+# borrow must not happen for any name in the declaration.
+q git -C "$P" checkout -q main
+for d in $DECL; do rm -f "$P/$d"; done
+printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"; wcheck "$P/check.sh" "exit 0"
+p_commit "pi51 n1: one readable lockfile on the base"
+N1N=0
+for lf in $DECL; do
+  N1N=$((N1N+1)); br="pi51-n1-$N1N"
+  q git -C "$P" checkout -q -b "$br" main
+  if [[ "$lf" == package-lock.json ]]; then printf '%s\n' "${NPMLOCK/18.3.1/18.4.0}" > "$P/$lf"
+  else printf '%s\n' "$NPMLOCK" > "$P/$lf"; fi
+  pfile "$P/bin/$br.test.sh"; p_commit "$br"
+  setinst 18.2.0
+  runp "$br" "$PMBIN51"
+  R51=1; hasl "$OUTP" "lockfile changed on branch — installing" && R51=0
+  ok "PI-51 N1 — a branch that changes $lf is treated as a lockfile change, not given a borrowed tree" "[ $R51 -eq 0 ]"
+  # everything the run says about the BRANCH's own tree, i.e. before the base side is reached at all: the
+  # shared checkout's 18.2.0 must not appear in it. (The base side legitimately reports that stale tree here,
+  # and refuses to attribute anything to it — which is the section above, not this one.)
+  BRSIDE=$(printf '%s\n' "$OUTP" | sed -n "1,/^verify: $br vs /p")
+  R51=0; hasl "$BRSIDE" "18.2.0" && R51=1
+  ok "PI-51 N1 — $lf: the branch is measured on its own install, not the shared checkout's stale tree" "[ $R51 -eq 0 ]"
+done
+
+# --- the base side, the other half of the same class: a base tree never COMPARED is not evidence either -----
+# The branch replaces an unreadable lockfile with a readable one, so the branch worktree installs its own
+# tree and passes the gate, while the BASE worktree keeps borrowing an install nothing can compare with the
+# base's own lockfile. Without the refusal this run would report the branch's red as "already on main".
+q git -C "$P" checkout -q main
+for d in $DECL; do rm -f "$P/$d"; done
+printf 'lockfileVersion: 9\n' > "$P/pnpm-lock.yaml"
+wcheck "$P/check.sh" "exit 1"
+p_commit "pi51: base on an unreadable lockfile, and red"
+setinst 18.3.1
+q git -C "$P" checkout -q -b pi51-basenc main
+rm -f "$P/pnpm-lock.yaml"; printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"
+wcheck "$P/check.sh" "exit 1"
+pfile "$P/bin/pi51-basenc.test.sh"; p_commit pi51-basenc
+runp pi51-basenc "$PMBIN51"
+R51=1; [ "$RCP" -eq 1 ] && R51=0
+ok "PI-51 F1 base — an uncomparable base install falls back to the branch's own red, exit 1" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "attribution unknown: the installed tree at " && hasl "$OUTP" "was never compared with its lockfile" && R51=0
+ok "PI-51 F1 base — the attribution is refused, and says the base tree was never compared" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "drift check not supported for pnpm" && R51=0
+ok "PI-51 F1 base — with the reason install-drift.sh gave, carried through" "[ $R51 -eq 0 ]"
+R51=0; { hasl "$OUTP" "also fails at" || hasl "$OUTP" "pre-existing"; } && R51=1
+ok "PI-51 F1 base — a re-check on a tree nobody compared never excuses the branch as inherited" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED" && R51=0
+ok "PI-51 F1 base — the branch's red is still reported, unqualified" "[ $R51 -eq 0 ]"
+# the world mutated back: the base gets a lockfile that can be read, and the same run reaches the opposite
+# verdict — so the refusal above was the uncomparable install and nothing else.
+q git -C "$P" checkout -q main
+rm -f "$P/pnpm-lock.yaml"; printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"
+p_commit "pi51: the base lockfile is readable again"
+setinst 18.3.1
+runp pi51-basenc "$PMBIN51"
+R51=1; [ "$RCP" -eq 3 ] && R51=0
+ok "PI-51 F1 base — with a base install that can be compared, the same run attributes again (exit 3)" "[ $R51 -eq 0 ]"
+R51=1; hasl "$OUTP" "verify: RED — inherited" && R51=0
+ok "PI-51 F1 base — and reaches the inherited verdict it refused before" "[ $R51 -eq 0 ]"
+R51=0; hasl "$OUTP" "attribution unknown" && R51=1
+ok "PI-51 F1 base — nothing is unknown any more" "[ $R51 -eq 0 ]"
+
+# ====== PI-51 round 2, F2 — the remedy this script prints is run VERBATIM, from the state that printed it ===
+# Not "a reinstall works somewhere": the exact command line verify.sh printed, extracted from its own output,
+# executed in the world that produced it — a drifted shared checkout with the verified PR's own worktree
+# registered against it. That worktree is the reason the remedy carries --except: it is registered at the
+# very moment the line is printed, and a remedy blocked by the situation that produced it is not a remedy.
+q git -C "$P" checkout -q main
+for d in $DECL; do rm -f "$P/$d"; done
+printf '%s\n' "$NPMLOCK" > "$P/package-lock.json"; wcheck "$P/check.sh" "exit 0"
+p_commit "pi51 remedy: a readable lockfile and a green check on the base"
+setinst 18.2.0
+q git -C "$P" checkout -q -b pi51-remedy main
+pfile "$P/bin/pi51-remedy.test.sh"; p_commit pi51-remedy
+FIXWT="$S/pi51-remedy-wt"
+q git -C "$P" worktree add "$FIXWT" pi51-remedy
+runp pi51-remedy
+R51=1; [ "$RCP" -eq 2 ] && R51=0
+ok "PI-51 F2 — the drifted shared install is refused a verdict, as before" "[ $R51 -eq 0 ]"
+FIXCMD=$(printf '%s\n' "$OUTP" | sed -n 's/^ *fix: run `\([^`]*\)`.*/\1/p' | head -1)
+R51=1; [ -n "$FIXCMD" ] && R51=0
+ok "PI-51 F2 — the output carries a remedy command, in backticks, on its own line" "[ $R51 -eq 0 ]"
+R51=1; printf '%s' "$FIXCMD" | grep -qF -- "--except pi51-remedy" && R51=0
+ok "PI-51 F2 — and it excepts the branch being verified, whose worktree is registered right now" "[ $R51 -eq 0 ]"
+FIXOUT=$(cd "$P" && PATH="$PMBIN51:$PATH" bash -c "$FIXCMD" 2>&1); FIXRC=$?
+R51=1; [ "$FIXRC" -eq 0 ] && R51=0
+ok "PI-51 F2 — run exactly as printed, from the checkout it names, the remedy succeeds" "[ $R51 -eq 0 ]"
+R51=0; hasl "$FIXOUT" "DEFERRED" && R51=1
+ok "PI-51 F2 — the verified PR's own registered worktree does not hold its own remedy" "[ $R51 -eq 0 ]"
+R51=1; hasl "$FIXOUT" "install-drift: running" && R51=0
+ok "PI-51 F2 — the install really ran, it was not skipped as unnecessary" "[ $R51 -eq 0 ]"
+R51=1; grep -qF '"version":"18.3.1"' "$P/node_modules/react/package.json" && R51=0
+ok "PI-51 F2 — and the shared checkout's installed tree is the lockfile's afterwards" "[ $R51 -eq 0 ]"
+runp pi51-remedy
+R51=1; [ "$RCP" -eq 0 ] && hasl "$OUTP" "verify: GREEN" && R51=0
+ok "PI-51 F2 — the very run that refused a verdict now reaches one: the remedy closed the drift" "[ $R51 -eq 0 ]"
+q git -C "$P" worktree remove --force "$FIXWT" 2>/dev/null
+
 # the guard cannot be lost by accident: verify.sh refuses to run at all without its checker
 NODRIFT="$S/pi51-nodrift"; mkdir -p "$NODRIFT"
 cp "$SCRIPT" "$NODRIFT/verify.sh"
