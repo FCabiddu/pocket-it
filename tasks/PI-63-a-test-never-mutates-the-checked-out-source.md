@@ -14,7 +14,7 @@
 **TAD**: none — segui le convenzioni già presenti negli altri `bin/*.test.sh`
 **Contract**: none
 **Branch**: task/PI-63-a-test-never-mutates-the-checked-out-source
-**PR**:
+**PR**: https://github.com/FCabiddu/pocket-it/pull/108
 
 ## Goal
 `bin/doctor.test.sh` imposta `SCRIPT="$(pwd -P)/doctor.sh"` — il file sorgente del checkout, mai una
