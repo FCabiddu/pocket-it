@@ -1,6 +1,6 @@
 # PI-62 — doctor fails when tasks/INDEX.md no longer matches the task files
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: `bin/doctor.sh`, `bin/tasks-index.sh`, `bin/doctor.test.sh`
 **TAD**: none — follow the conventions already in `bin/doctor.sh`
 **Contract**: none
-**Branch**:
+**Branch**: task/PI-62-doctor-catches-a-stale-board-index
 **PR**:
 
 ## Goal
