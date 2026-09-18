@@ -1185,7 +1185,12 @@ ok "AC8 coexistence — sibling: the §6 extraction really returned the section,
 row=$(grep -F "| Learning loop |" "$REPO/CLAUDE.md")
 ok "AC8 coexistence — the learning-loop row keeps the base's lesson promotion and this task's facts source" \
    '[[ -n "$row" ]] && grep -qF "docs/handoff/" <<<"$row" && grep -qiE "promot" <<<"$row" && ! grep -qF "SESSION_HANDOFF" <<<"$row"'
-front=$(sed -n '1,12p' "$REPO/.claude/agents/retro.md")
+# The front matter is taken by its own delimiters, never by a line count: a line range is an anchor any
+# edit to the block above it invalidates in silence, and the block it is meant to name is the YAML one
+# between the first two `---` lines. The sibling below proves the extraction really returned it.
+front=$(awk 'NR==1 && $0=="---"{inb=1;next} inb && $0=="---"{exit} inb' "$REPO/.claude/agents/retro.md")
+ok "AC8 coexistence — sibling: the retro.md front-matter extraction really returned the YAML block" \
+   'grep -qE "^name: retro$" <<<"$front" && grep -qE "^description: " <<<"$front"'
 # Same repair as the pair above, applied to this one before it could become the next false-coverage row:
 # it read `grep -qiE "method lessons|lesson"`, and the second alternative subsumes the first, so the
 # alternation could only ever be satisfied by the weaker of the two. The base's side is named literally —
