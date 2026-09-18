@@ -14,7 +14,7 @@
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: task/pi-48-cleanup-test-reuses-gate
-**PR**:
+**PR**: https://github.com/FCabiddu/pocket-it/pull/112
 
 ## Goal
 Two blocks in `bin/cleanup-merged.test.sh` build a mutant from the live `$SCRIPT` and then run assertions
