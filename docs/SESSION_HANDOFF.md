@@ -69,8 +69,13 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - lsof lists itself and inherits the caller's working directory: any liveness probe that reads process cwds must record and exclude its own prober pid, or a check run from inside the directory it guards always sees a phantom process there
 - a worktree being registered is not an agent running: liveness is a live process whose working directory is inside the checkout; registered-but-idle worktrees are reported, never waited for
 - qualsiasi consumatore della memoria ancorato a un nome di file (guardia, corpus di test, conteggio) smette di vedere le scritture quando il target cambia, e resta verde: terza istanza trovata in PI-16 (install-drift.sh, la sua fixture AC6, retro-due.test.sh:594 — quest'ultima misurata: 'parked' 0 volte nel grep, 1 volta via handoff.sh recent --all). Leggere sempre attraverso il compositore.
+- verify.sh base_blockers: in the bare "<pm> <token>" form (no run) the token is a script OR the manager's own verb, and the manager decides from the package.json of the tree it runs in, by a per-manager, per-version precedence rule the script does not encode (npm runs its own version verb but runs test/start/stop/restart bare). PI-47: it clears only when the branch tree and the base tree AGREE on whether that script is declared - that holds whatever the precedence rule is; a disagreement in either direction is a blocker (PI-41 one-sidedness), and $pmsub is consulted only in the "neither declares" cell, so shrinking the list cannot re-open the hole. Measured before the fix (bash probe on the extracted helpers): npm pack/publish/version/update all cleared against a base with no scripts, npm run pack refused.
+- shared/implementing-common.md:111 names tasks/PI-52 as an existing mechanism ('moves this from discipline to a refusal in handoff.sh itself'), read at present tense; PI-52 is Status: Todo with no branch or PR (checked 2026-09-18). A task cited in that file as a future task, not a shipped one, is easy to misread as already merged — check tasks/{ID}'s own Status before citing it as settled.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-18 PI-47 mergiato su main (#94) — verify.sh: la forma bare <pm> <token> viene liberata solo quando branch e base concordano sulla dichiarazione dello script
+- 2026-09-18 PI-47 review round 1 fix pushed — corrected a false PI-52-merged claim in report and PR body, kept both Effort numbers, fixed a mutation comment — PR #94
+- 2026-09-18 PI-47 PR #94 draft — verify.sh bare pm form: clear only when branch and base agree on the script — 10 assertions, merged with origin/main round 2
 - 2026-09-18 PI-16 PR #93 needs work — un terzo lettore ancorato al file congelato — cause: first-round
 - 2026-09-18 PI-47 PR #94 approved — merge: orchestrator — cause: example-not-class
 - 2026-09-18 PI-47 PR #94 needs work — report and PR body claim PI-52 merged, it is Todo — cause: other: a task id cited in shared/implementing-common.md as an existing mechanism was read as merged and asserted as fact
@@ -108,6 +113,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
 - 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
-- 2026-09-15 PI-37 mergiato su main (#74) — un task la cui PR e' stata mergiata non resta piu' in stato diverso da Done
-- 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
-- 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15

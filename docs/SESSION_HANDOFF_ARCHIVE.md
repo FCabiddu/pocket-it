@@ -200,3 +200,6 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
 - 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
 - 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
+- 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
+- 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
+- 2026-09-15 PI-37 mergiato su main (#74) — un task la cui PR e' stata mergiata non resta piu' in stato diverso da Done
