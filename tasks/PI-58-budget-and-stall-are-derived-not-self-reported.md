@@ -10,7 +10,7 @@
 **Risk**: low
 **Depends on**: none
 **Wave**: 1
-**Files**: bin/usage-report.py, bin/verify.sh, bin/verify.test.sh, possibly a new bin/ script and its test
+**Files**: bin/usage-report.py, bin/verify.sh, bin/verify.test.sh, bin/doctor.sh, bin/doctor.test.sh, possibly a new bin/ script and its test
 **TAD**: none — follow existing conventions
 **Contract**: none
 **Branch**: 
@@ -41,3 +41,18 @@ Unit tests for the derivation (over/under/at the budget boundary, and the unmeas
 - AC5's failure mode is already known to be real: `usage-report.py --days 14 .` has returned no transcript for a project three passes in a row, and each time the retrospective carried on with the other signals. That is the right behaviour for a report and the wrong behaviour for a gate.
 - Estimate is M, not S, because the honest answer to AC3 may be "not derivable", and finding that out is most of the work.
 - pocket-it is public: mechanism only, no consumer-project names, paths or anecdotes in code, tests, commits or PR text.
+
+## Second correction, measured 2026-09-18 — the input side of AC7, and what `elapsed` cannot see
+
+Three measurements from the retrospective of 2026-09-18. None of them changes this task's purpose; two of them make an existing AC unsatisfiable as written, so they arrive as ACs rather than as notes.
+
+**1. The board does not name the unit, so AC7 has nothing to compare against.** `**Budget**` is specified in **minutes** by the planner template and by the shared rules §8, but **58 of the 61 task files on this board carry a bare number** (`grep -cE '^\*\*Budget\*\*: [0-9]+$'` over `tasks/*.md` = 58; with an explicit `min` = 3), and the bare values are the old turn-era table (60 / 120 / 200), not the minute table (45 / 90 / 150 / 240). The cause was a one-line contradiction between templates — the quickfix skill still emitted `turns from the estimate` while two other start-read files said minutes — and it is fixed in the same retrospective PR that adds this section. The **existing 58 files keep their bare numbers**: this task is what stops the next one.
+
+- [ ] AC9 — Given a task file whose `**Budget**` value carries no unit, when `bin/doctor.sh` runs, then it is a **warning naming the file** (not an error: 58 such files exist and they are history, so an error would make `doctor.sh` unusable and it would be switched off — the failure mode this whole task exists to avoid). Given a `**Budget**` value that does carry a unit, nothing is said. Mutation: add a unitless `Budget` to a fixture task → the warning appears and names it; remove it → silent.
+- [ ] AC10 — Given the gate of AC1 reading a bare `**Budget**: N`, when it compares, then it converts at the documented 47 s/turn rate rather than reading `N` as minutes, and the emitted line names **both** the raw field and the converted value ("140 min worked against a budget of 200 turns = 157 min"). This is AC7's requirement applied to the side the board owns; without it AC7 can only be satisfied by guessing.
+
+**2. `elapsed` is not a measure of the agent, which is why AC3's honest answer may be "not derivable".** The one `BUDGET` line this correction was written from declares **238 min against 157**, and its own subtraction removes **~99** of them as a suspended machine — leaving roughly **140 worked, inside budget**. The 99 minutes are real and measurable (two consecutive commits, 01:34:05 and 03:13:21), but *what they were* is not: by §8's own definition — 20 minutes with no commit and no new passing test — that same gap is a **stall**, and nothing in the data distinguishes a stalled agent from a closed laptop. Only the agent's word separates them, and an agent's word about its own exception is precisely what this task replaces.
+
+- [ ] AC11 — Given a gap in a task's timeline that no commit and no test result explains, when the derivation runs, then it is **excluded from the worked figure and reported as unattributed time with its length**, never silently counted as work and never silently counted as idle. If `usage-report.py` can attribute the gap by agent id (AC8), attribute it; if it cannot, the line says `unattributed: N min` and the retrospective treats the overrun as unproven. An overrun computed from wall clock that contains an unexplained gap is not evidence, and the first line of this kind ever acted on would have produced a wrong estimate correction in exactly this way.
+
+**3. The premise "zero such lines" is no longer true here, and the lines that exist are not comparable.** This repo's own memory holds **three** `BUDGET` lines (`handoff.sh grep "BUDGET|STALL"`), dated 2026-09-13 (x2) and 2026-09-18. Two are written in **turns** ("~100 turns vs 120", "4 review rounds vs S(120)") and one in **minutes**. So the instrumentation is not merely silent — when it does fire it fires in whichever unit the agent chose, which is the same defect as the Goal's and makes a trend across the three impossible to compute. AC7's "the unit is named in the emitted line" is what fixes this; keep it.
