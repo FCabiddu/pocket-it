@@ -73,6 +73,7 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - shared/implementing-common.md:111 names tasks/PI-52 as an existing mechanism ('moves this from discipline to a refusal in handoff.sh itself'), read at present tense; PI-52 is Status: Todo with no branch or PR (checked 2026-09-18). A task cited in that file as a future task, not a shipped one, is easy to misread as already merged — check tasks/{ID}'s own Status before citing it as settled.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-18 retro-mark 2026-09-18 signals-2026-09-18
 - 2026-09-18 PI-47 mergiato su main (#94) — verify.sh: la forma bare <pm> <token> viene liberata solo quando branch e base concordano sulla dichiarazione dello script
 - 2026-09-18 PI-47 review round 1 fix pushed — corrected a false PI-52-merged claim in report and PR body, kept both Effort numbers, fixed a mutation comment — PR #94
 - 2026-09-18 PI-47 PR #94 draft — verify.sh bare pm form: clear only when branch and base agree on the script — 10 assertions, merged with origin/main round 2
@@ -112,4 +113,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-16 PI-42 PR #82 draft — doctor derives TAD subsection checks from citations — 15 tests
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
-- 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
