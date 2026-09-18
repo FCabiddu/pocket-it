@@ -1,6 +1,6 @@
 # PI-62 — doctor fails when tasks/INDEX.md no longer matches the task files
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: `bin/doctor.sh`, `bin/tasks-index.sh`, `bin/doctor.test.sh`
 **TAD**: none — follow the conventions already in `bin/doctor.sh`
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/PI-62-doctor-catches-a-stale-board-index
+**PR**: https://github.com/FCabiddu/pocket-it/pull/107
 
 ## Goal
 `tasks/INDEX.md` is generated from the task files by `bin/tasks-index.sh`, and every lane is supposed to
