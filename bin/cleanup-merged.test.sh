@@ -22,6 +22,7 @@
 #   lock reasons git prints C-quoted are read back, so such worktrees are still released on a merged PR.
 cd "$(dirname "$0")" || exit 2
 SCRIPT="$PWD/cleanup-merged.sh"
+SELF="$PWD/cleanup-merged.test.sh"   # PI-48: this file itself, read by the static census at the end of it
 S=$(mktemp -d "${TMPDIR:-/tmp}/cleanup-merged-test.XXXXXX")
 SCRATCH_WT="/tmp/pocket-it-cleanup-test-$$"
 cleanup(){ rm -rf "$S" "$SCRATCH_WT"; }
@@ -31,6 +32,83 @@ ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 has(){ grep -qE "$1" <<<"$OUT"; }
 branch_exists(){ git -C "$M" rev-parse --verify -q "refs/heads/$1" >/dev/null 2>&1; }
 remote_exists(){ git -C "${2:-$M}" rev-parse --verify -q "refs/remotes/origin/$1" >/dev/null 2>&1; }   # after a run: its own fetch --prune already ran
+
+# --- PI-48: every self-mutating block in this file goes through the SHARED gate -------------------
+# Four blocks here run a patched copy of cleanup-merged.sh and assert on what it printed (PI-31 AC5,
+# PI-44 AC1, PI-44 review round 2, PI-38 AC5). PI-45 built the gate that makes such a block fail under
+# its own name when its mutation does not apply, inside bin/doctor.test.sh; PI-48 moved it to
+# bin/self-mutation-gate.sh so this file USES it. Not a second copy: a copy that happens to be correct
+# today is the defect one layer up, and the two would drift the first time either file's author fixed
+# only their own. The threat model, the rule and the one measured limit live in that file, once.
+#
+# Two things this file adds on top of the shared functions, both for AC1's damage — an assertion that
+# reports a real-looking regression against a check that never ran:
+#   mut_site()   builds the patched copy from ONE declaration per site (mode, anchor, replacement), so
+#                the text counted and the text sed matches cannot drift apart, and
+#   run_mutant() refuses to execute any copy the gate did not approve, read from the gate's own ledger.
+# The second is what makes "never under a downstream assertion's name" mechanical rather than a habit:
+# a block that forgets the `if` still cannot reach a downstream assertion with a copy that is not what
+# it meant, because there is nothing to run.
+SCRIPT_SRC="$S/.cleanup-merged.sh.src"   # captured ONCE: every mutation below patches this copy, never
+cp "$SCRIPT" "$SCRIPT_SRC"               # MUTANT-WRITER: the pristine capture itself, not a mutation —
+                                         # the checked-out bin/cleanup-merged.sh is never written to
+                                         # (PI-63's rule), and the gate counts anchors in the very copy
+                                         # sed then reads, so the two cannot drift apart
+MUT_LEDGER="$S/.mut-ledger"; : > "$MUT_LEDGER"   # the gate appends every copy it APPROVES here
+MUT_RAN="$S/.mut-sites-run"; : > "$MUT_RAN"      # and mut_site records which declared site really ran
+source "$PWD/self-mutation-gate.sh"
+mut_decl(){ # mut_decl <site> — the one declaration of each self-mutating block in this file: matching
+  # mode (`line` = /^…$/ whole-line, `occur` = a plain s/…/…/ counted in occurrences — the two units sed
+  # itself uses, see src_anchors), the anchor, and the replacement,
+  # which is also the marker proving the patch landed. One anchor per site: every block here is a
+  # single-line substitution, never a range address, so there is no closing anchor to lose — the gate's
+  # range cases are exercised where a range is actually used, over these same shared functions, by
+  # bin/doctor.test.sh's gate-class matrix.
+  case "$1" in
+    pi31)  printf '%s\t%s\t%s\n' occur  'if (( own )); then echo own'          'if true; then echo own';;
+    pi44a) printf '%s\t%s\t%s\n' occur  'keep "branch $1" "delete failed"'     'echo "kept branch $1 (delete failed)"';;
+    pi44b) printf '%s\t%s\t%s\n' occur  'else keep "branch $branch" "$why"; fi' 'else : "PI-48 silent keep"; fi';;
+    pi38)  printf '%s\t%s\t%s\n' line   '    found=""'                        '    found=1';;
+    *) return 1;;
+  esac
+}
+MUT_DECLARED="pi31 pi44a pi44b pi38"   # the declared sites, as a list — one side of the AC4 census
+mut_site(){ # mut_site <site> <src> <out> — write <out>: the copy of <src> patched the way <site>
+  # declares, through the shared gate. 0 only when the mutation really applied: the anchor occurs
+  # exactly once in <src>, counted the way sed will address it (src_anchors); the replacement is not
+  # text <src> already carried, or "the marker is in the copy" would prove nothing; the address and the
+  # replacement are built from those same declared strings (sed_lit / sed_rhs); and what came out is
+  # still a whole script carrying the marker (mutation_applied). Otherwise MUT_WHY says which of those
+  # failed, <out> is not approved, and run_mutant will not execute it.
+  local site="$1" src="$2" out="$3" mode anchor repl decl lhs
+  decl=$(mut_decl "$site") || { MUT_WHY="no self-mutation site is declared under the name $site"; return 1; }
+  IFS=$'\t' read -r mode anchor repl <<<"$decl"
+  src_anchors "$src" "$mode" 1 "$anchor" || return 1
+  if grep -qF -- "$repl" "$src"; then
+    MUT_WHY="the replacement is already in the source, so finding it in the copy would prove nothing: ${repl:0:60}"
+    return 1
+  fi
+  if [[ "$mode" == line ]]; then lhs="^$(sed_lit "$anchor")\$"; else lhs="$(sed_lit "$anchor")"; fi
+  rm -f "$out"
+  sed "s/$lhs/$(sed_rhs "$repl")/" "$src" > "$out" || { MUT_WHY="sed could not write the patched copy"; return 1; }   # MUTANT-WRITER: the only one, and it is the gated one
+  mutation_applied "$out" "$repl" "$src" || return 1
+  [[ "$src" == "$SCRIPT_SRC" ]] && printf '%s\n' "$site" >> "$MUT_RAN"
+  return 0
+}
+run_mutant(){ # run_mutant <mutant> <cwd> — run a patched copy only if the gate approved it, read from
+  # the gate's own ledger; prints its output on stdout exactly as `bash <mutant>` would. A copy the gate
+  # refused — or one a future block built without the gate — is never executed (99, nothing on stdout),
+  # so no downstream assertion can run against a copy that is not what its block meant and then report
+  # the difference as a regression of its own.
+  grep -qxF -- "$1" "$MUT_LEDGER" || { echo "run_mutant: refused to run a patched copy the gate never approved: $1" >&2; return 99; }
+  ( cd "$2" && bash "$1" )
+}
+mut_refused_name(){ # the name of the check a gated block reports when its mutation did not apply — one
+  # implementation, used by the live blocks and executed by the AC3 matrix, so the matrix proves the
+  # real text and not a copy of it. It names self-mutation and the site, never the downstream check.
+  printf 'self-mutation refused at site %s (would have proved: %s): %s' "$1" "$2" "$MUT_WHY"
+}
+mut_refused(){ ok "$(mut_refused_name "$1" "$2")" 'false'; }
 # PI-44 AC1 — the invariant is the equality, not a list of call sites: count every "kept " line $OUT actually
 # printed and compare it with the number the summary line itself reports, both read from $OUT alone, so a
 # kept-path added to the script later is covered here without this test ever being edited for it.
@@ -367,12 +445,17 @@ ok "PI-31 locked and missing on disk, not merged: entry pruned, branch kept" "ha
 ok "PI-31 unlocked twin at the base tip: kept by the reflog criterion" "has 'kept .*task-lockctl \(no commits of its own \(created from origin/main\)\)'"
 HINT=$(grep 'task-lockancestry (locked' <<<"$OUT" | sed -E 's/.*release if abandoned or merged without a PR: (.*)\)$/\1/')
 ok "PI-31 the release hint in the kept line is a command that really releases the lock" "[[ \"$HINT\" == bash\ *worktree.sh\ --unlock\ * ]] && eval \"$HINT\" >/dev/null 2>&1 && [[ -z \"\$(lockof task-lockancestry)\" ]]"
-# AC5 — break the PI-22 criterion (every branch reads as having commits of its own) in a copy of the script
-sed 's/if (( own )); then echo own/if true; then echo own/' "$SCRIPT" > "$S/mutant.sh"
-ok "PI-31 AC5 mutant really differs from the script" "grep -q 'if true; then echo own' $S/mutant.sh && ! cmp -s $SCRIPT $S/mutant.sh"
-OUT=$(cd "$M" && bash "$S/mutant.sh")
-ok "PI-31 AC5 mutant removes the unlocked twin (the reflog criterion is really broken)" "has 'removed worktree .*task-lockctl \(merged into (origin/)?main\)' && [[ ! -d $L_CTL ]]"
-ok "PI-31 AC5 mutant still keeps the locked worktree at the base tip" "has \"kept .*task-lockfresh \\($LOCKED task/lockfresh $WHEN; no merged PR contains its tip; $REL task/lockfresh\\)\" && [[ -d $L_FRESH && -n \"\$(lockof task-lockfresh)\" ]]"
+# AC5 — break the PI-22 criterion (every branch reads as having commits of its own) in a copy of the script.
+# PI-48: built and run through the shared gate (site pi31), so a mutation that does not apply fails here,
+# under a name that says self-mutation, instead of surfacing as a false regression of the two checks below.
+if mut_site pi31 "$SCRIPT_SRC" "$S/mutant.sh"; then
+  ok "PI-31 AC5 mutant really differs from the script" "grep -q 'if true; then echo own' $S/mutant.sh && ! cmp -s $SCRIPT_SRC $S/mutant.sh"
+  OUT=$(run_mutant "$S/mutant.sh" "$M")
+  ok "PI-31 AC5 mutant removes the unlocked twin (the reflog criterion is really broken)" "has 'removed worktree .*task-lockctl \(merged into (origin/)?main\)' && [[ ! -d $L_CTL ]]"
+  ok "PI-31 AC5 mutant still keeps the locked worktree at the base tip" "has \"kept .*task-lockfresh \\($LOCKED task/lockfresh $WHEN; no merged PR contains its tip; $REL task/lockfresh\\)\" && [[ -d $L_FRESH && -n \"\$(lockof task-lockfresh)\" ]]"
+else
+  mut_refused pi31 "a broken reflog criterion removes the unlocked twin and still keeps the locked worktree"
+fi
 # 7. PI-31 round 3 — printed commands run as printed, for any valid branch name and repo path, from any folder
 check(){ local name="$1"; shift; if "$@"; then echo "ok    $name"; else echo "FAIL  $name"; fail=1; fi; }
 R7="$S/repo (7) \$x 'q' \"d\""
@@ -604,16 +687,19 @@ ok "AC1 kept count equals the kept lines actually printed (drop_branch's own fai
 # form — a raw, uncounted echo instead of a call through keep() — and prove the generic invariant catches it
 # without any test naming this call site: reusing the same kept_equals_summary this suite already trusts
 # everywhere else is enough to turn the suite red the moment any kept-path stops incrementing the counter.
-sed 's/keep "branch $1" "delete failed"/echo "kept branch $1 (delete failed)"/' "$SCRIPT" > "$S/mutant9.sh"
-ok "PI-44 AC1 mutant really differs from the script (drop_branch's counted keep reverted to a raw echo)" "grep -q 'echo \"kept branch \$1 (delete failed)\"' \"$S/mutant9.sh\" && ! cmp -s \"$SCRIPT\" \"$S/mutant9.sh\""
-q git -C "$R9" worktree add -q -b task/r9merged2 "$S/r9wt2" main
-commit "$S/r9wt2" task/r9merged2
-q git -C "$R9" merge -q --no-ff task/r9merged2 -m "merge task/r9merged2"
-chmod a-w "$R9/.git/refs/heads/task"
-OUT=$(cd "$R9" && bash "$S/mutant9.sh")
-chmod u+w "$R9/.git/refs/heads/task"
-ok "PI-44 AC1 mutant: the raw echo still announces it (this is what the fix removed, not the message)" "has 'kept branch task/r9merged2 \(delete failed\)'"
-ok "PI-44 AC1 mutant: the invariant catches the regression — kept count no longer equals the lines printed" "! kept_equals_summary"
+if mut_site pi44a "$SCRIPT_SRC" "$S/mutant9.sh"; then   # PI-48: same mutation, through the shared gate
+  ok "PI-44 AC1 mutant really differs from the script (drop_branch's counted keep reverted to a raw echo)" "grep -q 'echo \"kept branch \$1 (delete failed)\"' \"$S/mutant9.sh\" && ! cmp -s \"$SCRIPT_SRC\" \"$S/mutant9.sh\""
+  q git -C "$R9" worktree add -q -b task/r9merged2 "$S/r9wt2" main
+  commit "$S/r9wt2" task/r9merged2
+  q git -C "$R9" merge -q --no-ff task/r9merged2 -m "merge task/r9merged2"
+  chmod a-w "$R9/.git/refs/heads/task"
+  OUT=$(run_mutant "$S/mutant9.sh" "$R9")
+  chmod u+w "$R9/.git/refs/heads/task"
+  ok "PI-44 AC1 mutant: the raw echo still announces it (this is what the fix removed, not the message)" "has 'kept branch task/r9merged2 \(delete failed\)'"
+  ok "PI-44 AC1 mutant: the invariant catches the regression — kept count no longer equals the lines printed" "! kept_equals_summary"
+else
+  mut_refused pi44a "an uncounted raw echo in drop_branch breaks the kept-count invariant"
+fi
 
 # PI-44 review round 2 — the actual finding: kept_equals_summary is fooled by a path that keeps a branch by
 # printing NOTHING, since it only compares two things $OUT prints and a silent path grows neither. Revert
@@ -627,22 +713,175 @@ echo base > "$R10/f"; q git -C "$R10" add f; q git -C "$R10" commit -qm base
 q git -C "$R10" worktree add -q -b task/r10silent "$S/r10wt" main   # no commits of its own: decide() fails, branch would be kept
 BEFORE_R10="$S/before_r10.txt"; snapshot_wt "$R10" > "$BEFORE_R10"
 rm -rf "$S/r10wt"
-sed 's/else keep "branch $branch" "$why"; fi/else :; fi/' "$SCRIPT" > "$S/mutant10.sh"
-ok "PI-44 round 2 mutant really differs from the script (the prunable decide-fails keep() call really gone)" "grep -q 'else :; fi' \"$S/mutant10.sh\" && ! cmp -s \"$SCRIPT\" \"$S/mutant10.sh\""
-OUT=$(cd "$R10" && bash "$S/mutant10.sh")
-ok "PI-44 round 2 mutant: branch still exists — nothing was actually removed, only left undecided" "git -C \"$R10\" rev-parse --verify -q refs/heads/task/r10silent >/dev/null"
-ok "PI-44 round 2 mutant: kept_equals_summary alone is fooled — it stays green over a silent keep" "kept_equals_summary"
-ok "PI-44 round 2 mutant: no_branch_silently_kept catches it where kept_equals_summary could not" "! no_branch_silently_kept \"$R10\" \"$BEFORE_R10\""
+if mut_site pi44b "$SCRIPT_SRC" "$S/mutant10.sh"; then   # PI-48: same silence, through the shared gate
+  ok "PI-44 round 2 mutant really differs from the script (the prunable decide-fails keep() call really gone)" "grep -q 'else : \"PI-48 silent keep\"; fi' \"$S/mutant10.sh\" && ! cmp -s \"$SCRIPT_SRC\" \"$S/mutant10.sh\""
+  OUT=$(run_mutant "$S/mutant10.sh" "$R10")
+  ok "PI-44 round 2 mutant: branch still exists — nothing was actually removed, only left undecided" "git -C \"$R10\" rev-parse --verify -q refs/heads/task/r10silent >/dev/null"
+  ok "PI-44 round 2 mutant: kept_equals_summary alone is fooled — it stays green over a silent keep" "kept_equals_summary"
+  ok "PI-44 round 2 mutant: no_branch_silently_kept catches it where kept_equals_summary could not" "! no_branch_silently_kept \"$R10\" \"$BEFORE_R10\""
+else
+  mut_refused pi44b "a keep path that prints nothing fools kept_equals_summary and is caught by no_branch_silently_kept"
+fi
 
 # AC5 — mutation: remove the PR-state match itself (not just skip it) so every non-active, non-protected
 # remote branch is treated as matched, regardless of any merged PR — the negative AC2 cases must now start
 # getting wrongly deleted.
-sed 's/^    found=""$/    found=1/' "$SCRIPT" > "$S/mutant8.sh"
-ok "PI-38 AC5 mutant really differs from the script (the PR-state match is really gone)" "grep -q '    found=1$' \"$S/mutant8.sh\" && ! grep -q '    found=\"\"$' \"$S/mutant8.sh\" && ! cmp -s \"$SCRIPT\" \"$S/mutant8.sh\""
-OUT=$(cd "$R8" && bash "$S/mutant8.sh")
-ok "PI-38 AC5 mutant wrongly deletes the open-PR stand-in (AC2 negative broken)" "has 'deleted remote branch r8/openpr \(merged\)' && ! remote_exists r8/openpr \"$R8\""
-ok "PI-38 AC5 mutant wrongly deletes the closed-unmerged stand-in (AC2 negative broken)" "has 'deleted remote branch r8/closedunmerged \(merged\)' && ! remote_exists r8/closedunmerged \"$R8\""
-ok "PI-38 AC5 mutant wrongly deletes the no-PR-at-all stand-in (AC2 negative broken)" "has 'deleted remote branch r8/nopr \(merged\)' && ! remote_exists r8/nopr \"$R8\""
-ok "PI-38 AC5 mutant still leaves main alone (protected() is a separate, still-intact guard)" "! has 'remote branch main' && remote_exists main \"$R8\""
+if mut_site pi38 "$SCRIPT_SRC" "$S/mutant8.sh"; then   # PI-48: same mutation, through the shared gate
+  ok "PI-38 AC5 mutant really differs from the script (the PR-state match is really gone)" "grep -q '    found=1$' \"$S/mutant8.sh\" && ! grep -q '    found=\"\"$' \"$S/mutant8.sh\" && ! cmp -s \"$SCRIPT_SRC\" \"$S/mutant8.sh\""
+  OUT=$(run_mutant "$S/mutant8.sh" "$R8")
+  ok "PI-38 AC5 mutant wrongly deletes the open-PR stand-in (AC2 negative broken)" "has 'deleted remote branch r8/openpr \(merged\)' && ! remote_exists r8/openpr \"$R8\""
+  ok "PI-38 AC5 mutant wrongly deletes the closed-unmerged stand-in (AC2 negative broken)" "has 'deleted remote branch r8/closedunmerged \(merged\)' && ! remote_exists r8/closedunmerged \"$R8\""
+  ok "PI-38 AC5 mutant wrongly deletes the no-PR-at-all stand-in (AC2 negative broken)" "has 'deleted remote branch r8/nopr \(merged\)' && ! remote_exists r8/nopr \"$R8\""
+  ok "PI-38 AC5 mutant still leaves main alone (protected() is a separate, still-intact guard)" "! has 'remote branch main' && remote_exists main \"$R8\""
+else
+  mut_refused pi38 "removing the PR-state match makes every non-active, non-protected remote branch read as merged"
+fi
+
+# --- PI-48 AC3: the anchor-loss class, executed against every self-mutating block in this file -----
+# Not a table read off the code: each row below builds a real copy of the captured source with ONE loss
+# applied, runs the site's own mut_site() against it, and asserts what the gate says — and, where the
+# point is that the old evidence was satisfiable by a broken mutation, what the ungated sed would have
+# produced instead. The class is every way a text address stops meaning the span its block assumes, for
+# an address made of ONE anchor, which is what all four sites here use:
+#   anchor-removed         the anchor is gone — the substitution matches nothing
+#   anchor-annotated       a comment appended to its line — /^…$/ stops matching, /…/ still does
+#   anchor-doubled         its line occurs twice — the ungated sed patches BOTH, not the one block meant
+#   anchor-doubled-inline  the anchor occurs twice on ONE line — the ungated sed patches only the first
+#                          (substring anchors only: a whole-line anchor cannot occur twice on one line)
+#   marker-in-source       the replacement is already in the source — "the marker landed" proves nothing
+# The two remaining rows of PI-45's class, closing anchor removed and closing anchor doubled, need a
+# RANGE address; no block in this file has one (mut_decl declares a single anchor per site, and the
+# census below shows no other block builds a copy at all). They are executed against these same shared
+# functions in bin/doctor.test.sh, whose sites do use ranges.
+GM="$S/gate-matrix"; mkdir -p "$GM"
+damage(){ # damage <site> <case> <outfile> — the captured source with one anchor loss applied
+  local mode anchor repl decl lit
+  decl=$(mut_decl "$1"); IFS=$'\t' read -r mode anchor repl <<<"$decl"
+  lit=$(sed_lit "$anchor")
+  { case "$2" in                                   # each case prints the damaged source on stdout; the
+    anchor-removed)   if [[ "$mode" == line ]]; then sed "/^$lit\$/d" "$SCRIPT_SRC"
+                      else sed "s/$lit//" "$SCRIPT_SRC"; fi;;
+    anchor-annotated) awk -v pat="$anchor" 'BEGIN{d=0} {if(!d && index($0,pat)){print $0 "  # touched"; d=1} else print}' "$SCRIPT_SRC";;
+    anchor-doubled)   awk -v pat="$anchor" 'BEGIN{d=0} {if(!d && index($0,pat)){print; print; d=1} else print}' "$SCRIPT_SRC";;
+    anchor-doubled-inline) awk -v pat="$anchor" 'BEGIN{d=0} {if(!d && index($0,pat)){print $0 "  # " pat; d=1} else print}' "$SCRIPT_SRC";;
+    marker-in-source) cat "$SCRIPT_SRC"; printf '# %s\n' "$repl";;   # MUTANT-WRITER: a damaged SOURCE for
+    *) return 2;;                                                    # the matrix, never a mutant to run
+  esac; } > "$3"                                   # one redirection for all of them, on this line alone
+}
+raw_sed(){ # raw_sed <site> <src> <out> — the same substitution WITHOUT the gate: what each block did
+  # before PI-48, kept here so every row can show the damage the gate now refuses to pass on
+  local mode anchor repl decl lhs
+  decl=$(mut_decl "$1"); IFS=$'\t' read -r mode anchor repl <<<"$decl"
+  if [[ "$mode" == line ]]; then lhs="^$(sed_lit "$anchor")\$"; else lhs="$(sed_lit "$anchor")"; fi
+  sed "s/$lhs/$(sed_rhs "$repl")/" "$2" > "$3"   # MUTANT-WRITER: deliberate, ungated, for the rows below
+}
+for site in $MUT_DECLARED; do
+  IFS=$'\t' read -r smode sanchor srepl <<<"$(mut_decl "$site")"
+
+  damage "$site" anchor-removed "$GM/$site.removed.sh"
+  ok "AC3 [$site/anchor-removed]: the gate refuses and says which anchor and how many times" \
+    '! mut_site "$site" "$GM/$site.removed.sh" "$GM/$site.removed.mut.sh" && grep -q "^anchor found 0 times, not 1" <<<"$MUT_WHY"'
+  ok "AC3 [$site/anchor-removed]: no patched copy is even written, so there is nothing a downstream assertion could run" \
+    '[[ ! -e "$GM/$site.removed.mut.sh" ]]'
+  raw_sed "$site" "$GM/$site.removed.sh" "$GM/$site.removed.raw.sh"
+  ok "AC3 [$site/anchor-removed]: ungated, the substitution silently matches nothing — the copy is the source, and every assertion after it would have run against an unmutated script" \
+    'cmp -s "$GM/$site.removed.sh" "$GM/$site.removed.raw.sh" && ! grep -qF -- "$srepl" "$GM/$site.removed.raw.sh"'
+
+  damage "$site" anchor-doubled "$GM/$site.doubled.sh"
+  ok "AC3 [$site/anchor-doubled]: the gate refuses — the anchor is there twice and a plain s/// would patch only one of them" \
+    '! mut_site "$site" "$GM/$site.doubled.sh" "$GM/$site.doubled.mut.sh" && grep -q "^anchor found 2 times, not 1" <<<"$MUT_WHY"'
+  raw_sed "$site" "$GM/$site.doubled.sh" "$GM/$site.doubled.raw.sh"
+  ok "AC3 [$site/anchor-doubled]: ungated, the marker IS in the copy and it differs from the source — the old evidence says 'applied' while the substitution in fact landed twice, over a span the block never meant" \
+    'grep -qF -- "$srepl" "$GM/$site.doubled.raw.sh" && ! cmp -s "$GM/$site.doubled.sh" "$GM/$site.doubled.raw.sh" && [[ "$(grep -cF -- "$srepl" "$GM/$site.doubled.raw.sh")" -eq 2 ]]'
+
+  if [[ "$smode" != line ]]; then
+    damage "$site" anchor-doubled-inline "$GM/$site.inline.sh"
+    ok "AC3 [$site/anchor-doubled-inline]: the gate refuses — the anchor now occurs twice on one line" \
+      '! mut_site "$site" "$GM/$site.inline.sh" "$GM/$site.inline.mut.sh" && grep -q "^anchor found 2 times, not 1" <<<"$MUT_WHY"'
+    raw_sed "$site" "$GM/$site.inline.sh" "$GM/$site.inline.raw.sh"
+    ok "AC3 [$site/anchor-doubled-inline]: ungated, s/// without /g patches the FIRST occurrence only — marker present, copy differs, and an untouched occurrence of the anchor is still there" \
+      'grep -qF -- "$srepl" "$GM/$site.inline.raw.sh" && ! cmp -s "$GM/$site.inline.sh" "$GM/$site.inline.raw.sh" && grep -qF -- "$sanchor" "$GM/$site.inline.raw.sh"'
+  fi
+
+  damage "$site" marker-in-source "$GM/$site.marker.sh"
+  ok "AC3 [$site/marker-in-source]: the gate refuses before patching — a marker the source already carried could not prove the mutation landed" \
+    '! mut_site "$site" "$GM/$site.marker.sh" "$GM/$site.marker.mut.sh" && grep -q "already in the source" <<<"$MUT_WHY"'
+
+  damage "$site" anchor-annotated "$GM/$site.annotated.sh"
+  if [[ "$smode" == line ]]; then
+    ok "AC3 [$site/anchor-annotated]: whole-line anchor, so a comment appended to its line is a loss — /^…\$/ no longer matches and the gate refuses" \
+      '! mut_site "$site" "$GM/$site.annotated.sh" "$GM/$site.annotated.mut.sh" && grep -q "^anchor found 0 times, not 1" <<<"$MUT_WHY"'
+  else
+    ok "AC3 [$site/anchor-annotated]: substring anchor, so a comment appended to its line is NOT a loss — /…/ still matches it, the gate follows sed rather than second-guessing it, and the mutation still lands where the block meant" \
+      'mut_site "$site" "$GM/$site.annotated.sh" "$GM/$site.annotated.mut.sh" && grep -qF -- "$srepl" "$GM/$site.annotated.mut.sh"'
+  fi
+
+  ok "AC3 [$site]: when the gate refuses, the check that fails names self-mutation and this site — never the downstream assertion the block would have made" \
+    'mut_site "$site" "$GM/$site.removed.sh" "$GM/$site.removed.mut.sh"; grep -q "^self-mutation refused at site $site " <<<"$(mut_refused_name "$site" "whatever this block proves")"'
+  ok "AC3 [$site]: and a copy the gate refused is not executed even if a block forgets to check — run_mutant reads the gate's ledger, not the block's discipline" \
+    'RM_OUT=$(run_mutant "$GM/$site.removed.mut.sh" "$S" 2>/dev/null); [[ $? -eq 99 && -z "$RM_OUT" ]]'
+done
+# The matrix's own fixtures are copies of the captured source too — damaged sources, ungated raw copies,
+# the copies the gate accepted — and they are scaffolding, not blocks of this file. They go before the
+# census below reads the world, so what it finds there is the four real blocks and nothing else.
+rm -rf "$GM"; mkdir -p "$GM"
+
+# --- PI-48 AC4: how many blocks in this file build a patched copy, and how many of them are gated ---
+# The two sides come from sources that cannot agree by construction: one is the FILESYSTEM (every file
+# that is a copy of cleanup-merged.sh, found by content — at least half of the captured source's lines —
+# whatever it is named and wherever it sits), the other is the gate's own RUNTIME LEDGER (the copies it
+# approved, written as it approved them). A count and a check derived from the same grep over this file
+# could never disagree; these two disagree the moment any block builds a copy without the gate, and the
+# sibling row below proves it by building exactly one such copy on purpose.
+mutant_files(){ # mutant_files <dir>... — every regular file under <dir> whose content is a copy of the
+  # captured source. The only filter is a size floor: a file sharing half the source's LINES cannot be
+  # smaller than a quarter of its bytes, so nothing a copy could be is excluded by it.
+  local d f n total min
+  total=$(grep -c '' "$SCRIPT_SRC"); min=$(( $(wc -c < "$SCRIPT_SRC") / 4 ))
+  for d in "$@"; do
+    [[ -d "$d" ]] || continue
+    while IFS= read -r f; do
+      [[ "$f" == "$SCRIPT_SRC" ]] && continue   # the pristine capture is not a patched copy
+      n=$(LC_ALL=C comm -12 <(LC_ALL=C sort "$SCRIPT_SRC") <(LC_ALL=C sort "$f" 2>/dev/null) 2>/dev/null | grep -c '')
+      (( n * 2 >= total )) && printf '%s\n' "$f"
+    done < <(find "$d" -type f -size +"${min}"c 2>/dev/null)
+  done
+}
+ungated_copies(){ # every copy on disk the gate's ledger does not list
+  local f
+  while IFS= read -r f; do grep -qxF -- "$f" "$MUT_LEDGER" || printf '%s\n' "$f"; done < <(mutant_files "$S" "$SCRATCH_WT")
+}
+FOUND=$(mutant_files "$S" "$SCRATCH_WT" | grep -c '')
+GATED_ON_DISK=$(while IFS= read -r f; do [[ -e "$f" ]] && printf '%s\n' "$f"; done < "$MUT_LEDGER" | sort -u | grep -c '')
+UNGATED=$(ungated_copies)
+ok "AC4: every patched copy of cleanup-merged.sh this run left on disk was approved by the shared gate, and every approved copy still on disk was found by the scan — $FOUND found by content, $GATED_ON_DISK approved and still there, 0 ungated${UNGATED:+ (ungated: $(tr '\n' ' ' <<<"$UNGATED"))}" \
+  '[[ -z "$UNGATED" ]] && [[ "$FOUND" -eq "$GATED_ON_DISK" ]] && [[ "$FOUND" -ge 4 ]]'
+mkdir -p "$GM/ungated"; sed 's/^exit 0$/exit 0  # PI-48 ungated probe/' "$SCRIPT_SRC" > "$GM/ungated/probe.sh"   # MUTANT-WRITER: deliberate, the sibling below
+PROBE=$(ungated_copies)
+ok "AC4 sibling: with one patched copy built deliberately WITHOUT the gate, the same census names it — the row above is not vacuously empty" \
+  '[[ "$(grep -c "" <<<"$PROBE")" -eq 1 ]] && grep -q "ungated/probe.sh$" <<<"$PROBE"'
+rm -rf "$GM/ungated"
+# The census above reads the world at the end of the run, so a copy built and deleted inside the run is
+# invisible to it. This second, static side closes that: a block that builds a copy straight from the
+# live script, whatever it then does with it, is a line of THIS file that redirects $SCRIPT/$SCRIPT_SRC
+# into a path — the idiom all four blocks used before PI-48. mut_site's own writer reads its <src>
+# argument and so is not one; the two deliberate exceptions carry the marker comment and are excluded by
+# name. Cooperative, like every text guard: it stops the next block written in the old idiom, not someone
+# adding the marker to evade it.
+raw_writers(){ grep -nE '"\$SCRIPT(_SRC)?"[[:space:]]*>+[[:space:]]*"?\$|(cp|cat)[[:space:]]+"\$SCRIPT(_SRC)?"' "$1" | grep -v 'MUTANT''-WRITER'; }
+RAW=$(raw_writers "$SELF" | grep -c '')
+ok "AC4 static side: no block in this file builds a patched copy straight from the live script outside mut_site — $RAW raw writers found, 0 expected" \
+  '[[ "$RAW" -eq 0 ]]'
+cp "$SELF" "$GM/selfprobe.sh"
+printf '%s\n' 'sed "s/x/y/" "$SCRIPT" > "$S/mutantX.sh"' >> "$GM/selfprobe.sh"   # MUTANT-WRITER: the sibling's own input
+ok "AC4 static side sibling: the same search over a copy of this file with one raw writer appended finds exactly that line — the search really reads the file" \
+  '[[ "$(raw_writers "$GM/selfprobe.sh" | grep -c "")" -eq 1 ]]'
+# Third side, the declaration list against what actually ran: a site declared in mut_decl but never
+# exercised (a block deleted, an `if` that stopped being reached) is not caught by either side above,
+# because both only ever see the copies that WERE built.
+RAN=$(sort -u "$MUT_RAN" | grep -c '')
+DECLARED=$(printf '%s\n' $MUT_DECLARED | grep -c '')
+ok "AC4 third side: every self-mutating block declared in this file really ran against the captured source — $DECLARED declared, $RAN executed" \
+  '[[ "$RAN" -eq "$DECLARED" ]]'
 
 exit $fail
