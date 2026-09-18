@@ -78,14 +78,6 @@ def _classify_base(base, env):
     if ls.returncode == 2: return "deleted", None
     stderr = ls.stderr.strip()
     return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")
-def _classify_base(base, env):
-    # ('ok'|'deleted'|'unreachable', detail) — from ls-remote's exit code alone, never from text.
-    ls = subprocess.run(["git", "ls-remote", "--exit-code", "origin", f"refs/heads/{base}"],
-                         capture_output=True, text=True, env=env)
-    if ls.returncode == 0: return "ok", None
-    if ls.returncode == 2: return "deleted", None
-    stderr = ls.stderr.strip()
-    return "unreachable", (stderr.splitlines()[-1] if stderr else "no network")
 
 common_dir = sh("git rev-parse --git-common-dir")
 has_origin = sh("git remote get-url origin") != ""
