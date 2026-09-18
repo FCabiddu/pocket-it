@@ -203,3 +203,4 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
 - 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
 - 2026-09-15 PI-37 mergiato su main (#74) — un task la cui PR e' stata mergiata non resta piu' in stato diverso da Done
+- 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
