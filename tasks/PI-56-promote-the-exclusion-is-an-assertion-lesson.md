@@ -1,6 +1,6 @@
 # PI-56 — Promote the "an exclusion is an assertion" lesson into §7 and delete its line
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -35,3 +35,10 @@ None — text only. Integration/E2E: not needed.
 - Suggested wording, already free of any project name — improve it if §7's voice differs, but do not weaken it: «Un elenco o una classificazione consegnati come prova di completezza portano, per ogni riga, il comando che l'ha prodotta o l'ha esclusa: un'esclusione è un'affermazione, e una riga esclusa a ragionamento si conta come non guardata. Una motivazione al posto di una misura è un difetto anche quando la conclusione è giusta.»
 - `shared/implementing-common.md` is also edited by PI-16 (§6, in review on PR #93). Start from a base that has it, or expect to resolve the same file twice.
 - pocket-it is public: the rule is stated as a mechanism, with no consumer-project names, paths or anecdotes — the two occurrences that produced it stay out of the text.
+
+## Closed by the retrospective of 2026-09-18, not by a developer round
+The whole content of this task was a promotion — a rule written at a declared `WHERE` and the lesson line deleted in the same commit — which is the retrospective's own job and is text only. Opening a task for it inserted a queue where the promotion rule says there is none. Executed instead in `retro(signals-2026-09-18c)`:
+
+- AC1/AC3 — the rule is in `shared/implementing-common.md` **§7** (the lesson's declared `WHERE`), as one paragraph, not beside an existing bullet. §9's *"a claim a command could settle is run before it is written down"* was checked for overlap and left alone: it binds the **execution** of a row, this binds the **accounting** of the total, and they are one concept in two halves only if the rows are named — which is the increment below.
+- The increment, from a second occurrence on a different kind of artefact: **a census that states a total accounts for every unit of that total; "everything else is X, Y or Z" is not a bucket.** Measured — an enumeration declaring 78 classified lines closed with a four-way catch-all and left 6 of them in no bucket, one being the most load-bearing site in the census. The conclusion was true and independently re-derived by the reviewer, so the defect was the shape of the evidence, not the answer.
+- AC2 — the line was deleted, not marked `confirmed`. AC4 — `grep -c '^- 20'` 12 → 10 (this promotion and one other in the same PR); the 300-byte `awk` prints nothing. AC5 — `doctor.sh` and the full test command green.
