@@ -1539,14 +1539,23 @@ open(outpath, "w").write(out)
 EXTEOF
   }
   mirror_run(){ # mirror_run <doctor.sh-path> — recurse the whole suite with bin/doctor.sh replaced
-    # by <doctor.sh-path>. Every other file the recursed run's own path resolution needs is a
-    # symlink to the real, current one (never copied, never edited): only bin/doctor.sh differs,
-    # and only inside this throwaway mirror directory, removed before this function returns.
+    # by <doctor.sh-path>. Every OTHER entry of the checkout — every top-level file and directory,
+    # and every other file under bin/ — is a symlink to the real, current one (never copied, never
+    # edited), so a relative read anywhere in the recursed run (../tasks/…, .claude/hooks/…,
+    # .claude/skills/…) resolves exactly as it would outside this mirror: only bin/doctor.sh
+    # differs, and only inside this throwaway directory, removed before this function returns.
+    # .git is left out on purpose: nothing in the recursed run treats the mirror itself as a repo,
+    # and a worktree's .git is a text file naming a relative gitdir path that is easiest to just
+    # not carry here.
     local mut="$1" m f b
     m=$(mktemp -d "$S/mirror.XXXXXX")
-    mkdir -p "$m/bin" "$m/.claude"
-    ln -s "$REPO_ROOT/.claude/hooks" "$m/.claude/hooks"
-    ln -s "$REPO_ROOT/.claude/skills" "$m/.claude/skills"
+    mkdir -p "$m/bin"
+    for f in "$REPO_ROOT"/* "$REPO_ROOT"/.[!.]*; do
+      [[ -e "$f" ]] || continue
+      b="$(basename "$f")"
+      [[ "$b" == "bin" || "$b" == ".git" ]] && continue
+      ln -s "$f" "$m/$b"
+    done
     for f in "$REPO_ROOT"/bin/*; do
       b="$(basename "$f")"
       [[ "$b" == "doctor.sh" ]] && continue
