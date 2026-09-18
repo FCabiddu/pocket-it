@@ -40,10 +40,23 @@ MONTH=$(date -u +%Y-%m)
 # after it, with nothing wrong in the code under test. The two helpers below close the whole class rather
 # than the assertion that happened to catch it: `dated` accepts either date this run can legitimately have
 # written, and `undate` normalises a leading date to $TODAY on BOTH sides of a multiset comparison.
-# (`MONTH` above carries the same hazard at a UTC month boundary; it is not closed here — see the report.)
 dated(){ local a="$1"; shift; local r="$*"
          [[ "$a" == "- $TODAY${r:+ $r}" ]] || [[ "$a" == "- $(date +%Y-%m-%d)${r:+ $r}" ]]; }
 undate(){ sed -E "s/^- $(date +%Y-%m-%d)( |\$)/- $TODAY\1/"; }
+# `MONTH` carries the identical hazard at a UTC month boundary — the fragment directory is named for the
+# month at the moment of the write, so a run that starts at 23:59 UTC on the last day of a month and
+# writes at 00:01 the next day compares one month against the other. `monthed` closes it the same way
+# `dated` does, by re-reading the clock at assertion time and accepting either month this run can
+# legitimately have written: <string> must be <literal prefix> + docs/handoff/{AAAA-MM}/ + <suffix glob>.
+# Prefix and month are matched literally; only the suffix is a pattern.
+monthed(){ local s="$1" pre="$2" suf="${3-}" m
+  for m in "$MONTH" "$(date -u +%Y-%m)"; do
+    [[ "$s" == "$pre""docs/handoff/$m/"$suf ]] && return 0
+  done
+  return 1
+}
+# MONTHS_RE — the same two months as an alternation, for the filters that must drop fragment paths
+MONTHS_RE(){ printf 'docs/handoff/(%s|%s)/' "$MONTH" "$(date -u +%Y-%m)"; }
 
 TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/handoff-tests.XXXXXX")
 TMPROOT=$(cd "$TMPROOT" && pwd -P)   # resolve any symlink (e.g. macOS /tmp) so it matches git's resolved toplevel
@@ -103,7 +116,7 @@ ok "$((CAP - 1)) facts means $((CAP - 1)) fragments — one file per invocation,
 outcap=$(cd "$S" && bash "$SCRIPT" fact "fact number $CAP" 2>&1 1>/dev/null); rccap=$?
 ok "AC1 — fact reaching the cap lands with exit 0" '[[ "$rccap" -eq 0 ]]'
 ok "AC1 — stderr warns the cap is reached and names the fragment it wrote" \
-   "[[ \"\$outcap\" == \"handoff: facts $CAP/$CAP — cap reached, next fact will be refused — \$S/docs/handoff/$MONTH/\"*.md ]]"
+   "monthed \"\$outcap\" \"handoff: facts $CAP/$CAP — cap reached, next fact will be refused — \$S/\" '*.md'"
 ok "AC1 — the fact reaching the cap is actually visible" 'grep -qF "fact number '"$CAP"'" <<<"$(cfacts "$S")"'
 ok "$CAP visible facts after that add" "[[ \"\$(count)\" -eq $CAP ]]"
 
@@ -200,18 +213,18 @@ ok "PI-39 AC3 — no doubled-date log line in this repo's frozen memory or in an
 # =================================================================================================
 S9=$(mkrepo)
 outlog9=$(cd "$S9" && bash "$SCRIPT" log "an event")
-ok "PI-9 AC1 — log names the fragment it created, under docs/handoff/$MONTH/" \
-   '[[ "$outlog9" == "handoff: logged — $S9/docs/handoff/$MONTH/"*.md ]]'
+ok "PI-9 AC1 — log names the fragment it created, under docs/handoff/{AAAA-MM}/" \
+   'monthed "$outlog9" "handoff: logged — $S9/" "*.md"'
 ok "PI-9 AC1 — sibling: that path exists and holds the event" \
    'p="${outlog9##*— }"; [[ -f "$p" ]] && grep -qF "an event" "$p"'
 outfact9=$(cd "$S9" && bash "$SCRIPT" fact "a fact")
-ok "PI-9 AC2 — fact names the fragment it created" '[[ "$outfact9" == "handoff: fact added — $S9/docs/handoff/$MONTH/"*.md ]]'
+ok "PI-9 AC2 — fact names the fragment it created" 'monthed "$outfact9" "handoff: fact added — $S9/" "*.md"'
 outdup9=$(cd "$S9" && bash "$SCRIPT" fact "a fact")
 ok "PI-9 AC2 — a duplicate fact still names where the memory lives" '[[ "$outdup9" == *"$S9/docs/handoff"* ]]'
 ok "PI-9 AC2 — a duplicate fact creates no second file" '[[ "$(nfrags "$S9")" -eq 2 ]]'
 outret9=$(cd "$S9" && bash "$SCRIPT" retract "a fact")
 ok "PI-9 — retract names the fragment it created and the hash it wrote" \
-   '[[ "$outret9" == "handoff: retracted $(hash12 "a fact") — $S9/docs/handoff/$MONTH/"*.md ]]'
+   'monthed "$outret9" "handoff: retracted $(hash12 "a fact") — $S9/" "*.md"'
 rcredir9=$(cd "$S9" && bash "$SCRIPT" log "redirected event" >/dev/null 2>&1; echo $?)
 ok "PI-9 AC3 — exit code unchanged when the output is redirected" '[[ "$rcredir9" -eq 0 ]]'
 ok "PI-9 AC3 — and the event was still written" 'grep -qF "redirected event" <<<"$(clog "$S9")"'
@@ -308,9 +321,9 @@ after31=$(statesnap "$S31")
 ok "PI-16 AC4 — after the retract the fact is gone from the view" '! grep -qF "fatto condiviso" <<<"$(cfacts "$S31")"'
 ok "PI-16 AC4 — the other fact is untouched" 'grep -qxF -- "- fatto che resta" <<<"$(cfacts "$S31")"'
 ok "PI-16 AC4 — both source files are byte-identical and unmodified (hash and mtime before == after)" \
-   '[[ "$(printf "%s\n" "$before31" | grep -v "docs/handoff/'"$MONTH"'/")" == "$(printf "%s\n" "$after31" | grep -v "docs/handoff/'"$MONTH"'/")" ]]'
+   '[[ "$(printf "%s\n" "$before31" | grep -vE "$(MONTHS_RE)")" == "$(printf "%s\n" "$after31" | grep -vE "$(MONTHS_RE)")" ]]'
 ok "PI-16 AC4 — the retract added exactly one new file, and it holds only the hash" \
-   '[[ "$(nfrags "$S31")" -eq 2 ]] && [[ "$new31" == "$S31/docs/handoff/$MONTH/"* ]] && grep -qxF -- "- ~ $(hash12 "fatto condiviso")" "$new31"'
+   '[[ "$(nfrags "$S31")" -eq 2 ]] && monthed "$new31" "$S31/" "*" && grep -qxF -- "- ~ $(hash12 "fatto condiviso")" "$new31"'
 ok "PI-16 AC4 — the retract fragment never carries the fact's text" \
    '! grep -qF "fatto condiviso" "$new31"'
 
@@ -461,7 +474,7 @@ ok "PI-16 AC6 — the two frozen files were not touched by those writes" \
 # =================================================================================================
 D35="$TMPROOT/notarepo"; mkdir -p "$D35"
 out35=$(cd "$D35" && bash "$SCRIPT" where 2>&1); rc35=$?
-ok "PI-16 AC7 — where outside a git repo prints docs/handoff/{AAAA-MM}/" '[[ "$out35" == "docs/handoff/$MONTH/" ]]'
+ok "PI-16 AC7 — where outside a git repo prints docs/handoff/{AAAA-MM}/" 'monthed "$out35" "" ""'
 ok "PI-16 AC7 — where outside a git repo exits 0" '[[ "$rc35" -eq 0 ]]'
 ok "PI-16 AC7 — and the directory is still empty" '[[ -z "$(find "$D35" -mindepth 1)" ]]'
 OLD35="$TMPROOT/old-handoff.sh"
@@ -485,7 +498,7 @@ for variant in bare withold; do
   (cd "$S36" && git add -A >/dev/null 2>&1 && git commit -q -m init --allow-empty) >/dev/null 2>&1
   before36=$(cd "$S36" && git status --porcelain)
   out36=$(cd "$S36" && bash "$SCRIPT" where 2>&1); rc36=$?
-  ok "PI-16 AC7 [$variant] — same output in a repo root, exit 0" '[[ "$out36" == "docs/handoff/$MONTH/" ]] && [[ "$rc36" -eq 0 ]]'
+  ok "PI-16 AC7 [$variant] — same output in a repo root, exit 0" 'monthed "$out36" "" "" && [[ "$rc36" -eq 0 ]]'
   ok "PI-16 AC7 [$variant] — git status --porcelain identical before and after" \
      '[[ "$before36" == "$(cd "$S36" && git status --porcelain)" ]]'
   ok "PI-16 AC7 [$variant] — where created no directory" '[[ ! -d "$S36/docs/handoff" ]]'
@@ -505,8 +518,8 @@ S37=$(mkrepo)
 (cd "$S37" && git checkout -q -b 'Feature/ÀÉ_Strano..cose' 2>/dev/null || git checkout -q -b 'Feature/Strano_cose')
 outw37=$(cd "$S37" && bash "$SCRIPT" log "riga da un ramo dal nome ostile" 2>&1)
 p37="${outw37##*— }"
-ok "PI-16 — a hostile branch name still writes inside docs/handoff/$MONTH/" \
-   '[[ "$p37" == "$S37/docs/handoff/$MONTH/"* ]] && [[ -f "$p37" ]]'
+ok "PI-16 — a hostile branch name still writes inside docs/handoff/{AAAA-MM}/" \
+   'monthed "$p37" "$S37/" "*" && [[ -f "$p37" ]]'
 ok "PI-16 — the file name is stamp + sanitised slug + 4 random [a-z0-9], nothing else" \
    '[[ "$(basename "$p37")" =~ ^[0-9]{8}T[0-9]{6}Z-[a-z0-9-]+-[a-z0-9]{4}\.md$ ]]'
 ok "PI-16 — nothing was created outside docs/handoff" \
@@ -1155,16 +1168,30 @@ ok "AC8 coexistence — §6 keeps the base's forward pointer to the task that ma
    'grep -qF "tasks/PI-52" <<<"$sec6"'
 ok "AC8 coexistence — §6 keeps this task's mechanic: one new file per write, under docs/handoff/" \
    'grep -qF "**Every write creates one new file**" <<<"$sec6" && grep -qF "docs/handoff/" <<<"$sec6"'
-ok "AC8 coexistence — §6 says what the mechanic does and does not settle, in the same section" \
-   'grep -qiE "made with the tool. now creates a new file|merge as a union" <<<"$sec6"'
+# The two halves of the mechanic's own scope, one assertion each, anchored on the single sentence that
+# states each — never on an alternation. The first version of this check was `grep -qiE "made with the
+# tool. now creates a new file|merge as a union"`, and it measured neither half: its first alternative
+# matched 0 lines of the real file (the text is `a write **made with the tool** now creates a new file`
+# and `.` matches one character, not two asterisks), while `merge as a union` occurs once in EACH of the
+# two paragraphs, so either one alone satisfied it. Measured on the real file: deleting the only
+# sentence that says what the mechanic does NOT settle left all 8 coexistence assertions green. A
+# sentence that can be deleted with the suite green is unguarded, whatever the assertion is named.
+ok "AC8 coexistence — §6 says what the mechanic DOES settle: a tool write creates a new file, so parallel branches merge as a union" \
+   'grep -qF "made with the tool** now creates a new file" <<<"$sec6" && grep -qF "so parallel branches merge as a union" <<<"$sec6"'
+ok "AC8 coexistence — §6 says what the mechanic does NOT settle: by hand, the memory is corrupted exactly as before" \
+   'grep -qF "They remove nothing of the other half" <<<"$sec6" && grep -qF "corrupt the memory exactly as before" <<<"$sec6"'
 ok "AC8 coexistence — sibling: the §6 extraction really returned the section, so the checks are not vacuous" \
    '[[ "$(grep -c . <<<"$sec6")" -ge 8 ]] && grep -qF "## 6. Branch, commit, PR" <<<"$sec6"'
 row=$(grep -F "| Learning loop |" "$REPO/CLAUDE.md")
 ok "AC8 coexistence — the learning-loop row keeps the base's lesson promotion and this task's facts source" \
    '[[ -n "$row" ]] && grep -qF "docs/handoff/" <<<"$row" && grep -qiE "promot" <<<"$row" && ! grep -qF "SESSION_HANDOFF" <<<"$row"'
 front=$(sed -n '1,12p' "$REPO/.claude/agents/retro.md")
-ok "AC8 coexistence — retro.md's front matter keeps the base's method lessons and names no frozen file" \
-   'grep -qiE "method lessons|lesson" <<<"$front" && ! grep -qF "SESSION_HANDOFF" <<<"$front"'
+# Same repair as the pair above, applied to this one before it could become the next false-coverage row:
+# it read `grep -qiE "method lessons|lesson"`, and the second alternative subsumes the first, so the
+# alternation could only ever be satisfied by the weaker of the two. The base's side is named literally —
+# the method lessons AND their automatic promotion — and this branch's side stays the frozen-file absence.
+ok "AC8 coexistence — retro.md's front matter keeps the base's method lessons and their promotion, and names no frozen file" \
+   'grep -qF "method lessons" <<<"$front" && grep -qiE "promot" <<<"$front" && ! grep -qF "SESSION_HANDOFF" <<<"$front"'
 
 [[ "$fail" -eq 0 ]] && echo "handoff.test.sh: all ok" || echo "handoff.test.sh: FAILURES"
 exit "$fail"
