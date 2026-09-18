@@ -1,6 +1,6 @@
 # PI-63 — Le fixture di auto-mutazione non devono scrivere sul sorgente in uso
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,7 +13,7 @@
 **Files**: `bin/doctor.test.sh` (le fixture di auto-mutazione, `SCRIPT`/`restore_doctor`/`DOCTOR_BACKUP` intorno alle righe 1487–1547)
 **TAD**: none — segui le convenzioni già presenti negli altri `bin/*.test.sh`
 **Contract**: none
-**Branch**:
+**Branch**: task/PI-63-a-test-never-mutates-the-checked-out-source
 **PR**:
 
 ## Goal
