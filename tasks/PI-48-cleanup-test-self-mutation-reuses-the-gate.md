@@ -1,6 +1,6 @@
 # PI-48 — The two self-mutating blocks in cleanup-merged.test.sh must use the shared gate
 
-**Status**: In Review
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
