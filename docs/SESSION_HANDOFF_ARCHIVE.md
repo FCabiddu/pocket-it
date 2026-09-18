@@ -198,3 +198,5 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 PI-15 mergiato su main (#71) — i lettori passano al composer di handoff.sh; PI-16 e PI-17 si sbloccano
 - 2026-09-15 PI-38 PR #76 needs work — AC1 unmet: remote branch deferred one run — cause: first-round
 - 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
+- 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
+- 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'

@@ -68,8 +68,11 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - bin/doctor.test.sh's mutant_whole post-flight (PI-45) proves a mutant is still a whole script via compile(), so a mutation that removes a function the script still calls passes it — the NameError surfaces only at run time. Measured by the PI-45 delta review 2026-09-17: real but non-blocking, none of the six live mutation sites is exposed to it. If a seventh site mutates by deleting a definition rather than editing a body, this gate will not see it.
 - lsof lists itself and inherits the caller's working directory: any liveness probe that reads process cwds must record and exclude its own prober pid, or a check run from inside the directory it guards always sees a phantom process there
 - a worktree being registered is not an agent running: liveness is a live process whose working directory is inside the checkout; registered-but-idle worktrees are reported, never waited for
+- qualsiasi consumatore della memoria ancorato a un nome di file (guardia, corpus di test, conteggio) smette di vedere le scritture quando il target cambia, e resta verde: terza istanza trovata in PI-16 (install-drift.sh, la sua fixture AC6, retro-due.test.sh:594 — quest'ultima misurata: 'parked' 0 volte nel grep, 1 volta via handoff.sh recent --all). Leggere sempre attraverso il compositore.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-18 PI-16 PR #93 needs work — un terzo lettore ancorato al file congelato — cause: first-round
+- 2026-09-18 PI-47 PR #94 approved — merge: orchestrator — cause: example-not-class
 - 2026-09-18 PI-47 PR #94 needs work — report and PR body claim PI-52 merged, it is Todo — cause: other: a task id cited in shared/implementing-common.md as an existing mechanism was read as merged and asserted as fact
 - 2026-09-17 retro-mark 2026-09-17 signals-2026-09-17b
 - 2026-09-17 PI-51 round 3 — F6 the duplicated lesson line deleted (the rule at implementing-common.md §9 is the promotion), F7 the Effort lines put in the prescribed shape, F8 this section put in command form; no code, test or skill touched
@@ -108,5 +111,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-15 PI-37 mergiato su main (#74) — un task la cui PR e' stata mergiata non resta piu' in stato diverso da Done
 - 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
 - 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
-- 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
-- 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
