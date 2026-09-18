@@ -66,8 +66,29 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - cleanup-merged.sh reap_remote_branches: the skip lines for an active branch (:272), a protected branch (:273) and a branch with no matching merged PR (:278) are bare continues — they leave the remote ref on origin without announcing or counting it, and that is deliberate: a remote ref that was never a deletion candidate is candidate selection, not a keep decision (the same reading AC3 rests on for "already gone is not kept"), and announcing each would print a line per branch on origin. The keep()/kept-count invariant covers local branches and worktrees only, never refs on origin. Measured in the PI-44 delta review with a gh stub over a real bare origin (protected + no-PR remote branches left on origin, summary "0 kept"), 2026-09-17. Do not re-file this as a defect: the PI-44 report classifies these three under "already routes through keep()", which is false — the behaviour is right, that sentence is not.
 - bin/verify.test.sh selects producers by NAME (CMD_[A-Z0-9]+=, cross-checked against a python CMD_(\w+)= ground truth) but both selectors share the VALUE pattern ("[^"]*"|\$\(): a single-quoted producer such as CMD_SQ='go test ./...' is invisible to BOTH at once, so the cross-check sees no disagreement and the producer is dropped from the sandbox and from every assertion in silence. Measured 2026-09-17 on PI-46's landed code: bash 10, python 10, suite ALL PASS 145. The class is 'a producer the selector drops in silence'; its name-charset dimension is closed, its value-quoting dimension is open (PI-49).
 - bin/doctor.test.sh's mutant_whole post-flight (PI-45) proves a mutant is still a whole script via compile(), so a mutation that removes a function the script still calls passes it — the NameError surfaces only at run time. Measured by the PI-45 delta review 2026-09-17: real but non-blocking, none of the six live mutation sites is exposed to it. If a seventh site mutates by deleting a definition rather than editing a body, this gate will not see it.
+- lsof lists itself and inherits the caller's working directory: any liveness probe that reads process cwds must record and exclude its own prober pid, or a check run from inside the directory it guards always sees a phantom process there
+- a worktree being registered is not an agent running: liveness is a live process whose working directory is inside the checkout; registered-but-idle worktrees are reported, never waited for
+- qualsiasi consumatore della memoria ancorato a un nome di file (guardia, corpus di test, conteggio) smette di vedere le scritture quando il target cambia, e resta verde: terza istanza trovata in PI-16 (install-drift.sh, la sua fixture AC6, retro-due.test.sh:594 — quest'ultima misurata: 'parked' 0 volte nel grep, 1 volta via handoff.sh recent --all). Leggere sempre attraverso il compositore.
+- verify.sh base_blockers: in the bare "<pm> <token>" form (no run) the token is a script OR the manager's own verb, and the manager decides from the package.json of the tree it runs in, by a per-manager, per-version precedence rule the script does not encode (npm runs its own version verb but runs test/start/stop/restart bare). PI-47: it clears only when the branch tree and the base tree AGREE on whether that script is declared - that holds whatever the precedence rule is; a disagreement in either direction is a blocker (PI-41 one-sidedness), and $pmsub is consulted only in the "neither declares" cell, so shrinking the list cannot re-open the hole. Measured before the fix (bash probe on the extracted helpers): npm pack/publish/version/update all cleared against a base with no scripts, npm run pack refused.
+- shared/implementing-common.md:111 names tasks/PI-52 as an existing mechanism ('moves this from discipline to a refusal in handoff.sh itself'), read at present tense; PI-52 is Status: Todo with no branch or PR (checked 2026-09-18). A task cited in that file as a future task, not a shipped one, is easy to misread as already merged — check tasks/{ID}'s own Status before citing it as settled.
 
 ## Log (più recente in alto, ultime 40 righe)
+- 2026-09-18 retro-mark 2026-09-18 signals-2026-09-18
+- 2026-09-18 PI-47 mergiato su main (#94) — verify.sh: la forma bare <pm> <token> viene liberata solo quando branch e base concordano sulla dichiarazione dello script
+- 2026-09-18 PI-47 review round 1 fix pushed — corrected a false PI-52-merged claim in report and PR body, kept both Effort numbers, fixed a mutation comment — PR #94
+- 2026-09-18 PI-47 PR #94 draft — verify.sh bare pm form: clear only when branch and base agree on the script — 10 assertions, merged with origin/main round 2
+- 2026-09-18 PI-16 PR #93 needs work — un terzo lettore ancorato al file congelato — cause: first-round
+- 2026-09-18 PI-47 PR #94 approved — merge: orchestrator — cause: example-not-class
+- 2026-09-18 PI-47 PR #94 needs work — report and PR body claim PI-52 merged, it is Todo — cause: other: a task id cited in shared/implementing-common.md as an existing mechanism was read as merged and asserted as fact
+- 2026-09-17 retro-mark 2026-09-17 signals-2026-09-17b
+- 2026-09-17 PI-51 round 3 — F6 the duplicated lesson line deleted (the rule at implementing-common.md §9 is the promotion), F7 the Effort lines put in the prescribed shape, F8 this section put in command form; no code, test or skill touched
+- 2026-09-17 PI-51 round 2b — PR body rewritten to the head; the rule for it is in implementing-common.md §9, Resume report format
+- 2026-09-17 PI-51 round 2 pushed on #96 — F1 verdict refused for the whole uncompared class (verify.sh reads the lockfile names from install-drift.sh), F2 liveness from live processes with --except and the reinstall moved after cleanup-merged.sh, F3 three-state worktree read, F4/AC6 NOT LOGGED on stderr — 130 + 262 assertions, full suite 1524, doctor clean
+- 2026-09-17 PI-51 PR #96 approved (delta 3) — merge: orchestrator — F6/F7/F8 closed and each re-measured on 26ca327 vs main cce0c43: lessons.md out of the diff (13 = 13), no tilde and no unmeasured minute in the report, the 5 handoff commands replayed verbatim in a throwaway repo (3 logs + 2 facts, exit 0); verify.sh GREEN, 130 + 262 assertions, doctor 0/0
+- 2026-09-17 PI-51 PR #96 needs work (delta 2) — lessons.md keeps a copy of the rule its own commit wrote — cause: other: the fix round added a shared-file line that file's rules forbid
+- 2026-09-17 PI-51 PR #96 needs-work (delta 2) — corpo della PR fermo al giro 1 e ora falso; cause: other: il giro 2 ha aggiornato report e commento di review ma non il corpo
+- 2026-09-17 PI-51 PR #96 needs work — verify: GREEN on a tree it never compared — cause: first-round
+- 2026-09-17 QF-1 PR #92 approved — cause read off every log line, real-corpus check 56/56 and 60/60 with zero new fires — merge: orchestrator
 - 2026-09-17 PI-45 PR #85 approved (delta 1) — dual-grep proposal beaten by anchor-count/mode-matched gate, mutant_whole limitation noted non-blocking, AC4 self-check proven non-decorative — merge: orchestrator
 - 2026-09-17 PI-46 PR #88 approved (delta 1) — sandbox anchored to a floor list, producer selector cross-checked from two independent sources — merge: orchestrator
 - 2026-09-17 retro-mark 2026-09-17 signals-2026-09-17
@@ -92,19 +113,3 @@ Memoria della pipeline, scritta dagli agenti. Lo stato del lavoro non sta qui (s
 - 2026-09-16 PI-42 PR #82 draft — doctor derives TAD subsection checks from citations — 15 tests
 - 2026-09-16 PI-38 PR #76 merged — cleanup-merged.sh reaps the remote branch left behind by gh pr merge --delete-branch
 - 2026-09-15 PI-38 PR #76 review fix pushed — F1 active-list read after loop, F2 comment scoped — 170 tests
-- 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
-- 2026-09-15 PI-37 mergiato su main (#74) — un task la cui PR e' stata mergiata non resta piu' in stato diverso da Done
-- 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
-- 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
-- 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
-- 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
-- 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
-- 2026-09-15 PI-38 PR #76 needs work — AC1 unmet: remote branch deferred one run — cause: first-round
-- 2026-09-15 PI-15 mergiato su main (#71) — i lettori passano al composer di handoff.sh; PI-16 e PI-17 si sbloccano
-- 2026-09-15 PI-15 PR #71 approved (delta round 2) — AC1 grep verified 0/exit1, two-directional probe by reviewer, status.test.sh 16/16, verify GREEN — merge: orchestrator
-- 2026-09-15 PI-37 PR #74 needs work — verify.sh RED on retro-due R4F1, pre-existing on main — cause: base-moved
-- 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
-- 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
-- 2026-09-15 PI-15 PR #71 round 2 fix pushed — AC1 grep false-green in bin/status.test.sh (needed same variable indirection as retro-due.test.sh), fixed and re-verified 0 matches, still needs-work label off for reviewer to re-check
-- 2026-09-15 PI-15 PR #71 needs work — AC1 dichiara zero occorrenze del grep ma non e' vero; causa di primo giro: bin/status.test.sh vuole la stessa indirezione per variabile gia' applicata a retro-due.test.sh. Secondo giro lanciato
-- 2026-09-15 PI-15 PR #71 needs work — AC1 grep not actually empty, status.test.sh matches

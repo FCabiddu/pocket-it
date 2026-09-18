@@ -188,3 +188,19 @@ Righe di log spostate qui da SESSION_HANDOFF.md quando superano le ultime 40. Ne
 - 2026-09-15 PI-36 PR draft — force-push guard boundary-safe fix — 39 test lines added
 - 2026-09-15 PI-15 PR draft — readers switch to handoff.sh composer — 7 new tests
 - 2026-09-15 retro-mark 2026-09-15 effort-agent-id
+- 2026-09-15 PI-15 PR #71 needs work — AC1 grep not actually empty, status.test.sh matches
+- 2026-09-15 PI-15 PR #71 needs work — AC1 dichiara zero occorrenze del grep ma non e' vero; causa di primo giro: bin/status.test.sh vuole la stessa indirezione per variabile gia' applicata a retro-due.test.sh. Secondo giro lanciato
+- 2026-09-15 PI-15 PR #71 round 2 fix pushed — AC1 grep false-green in bin/status.test.sh (needed same variable indirection as retro-due.test.sh), fixed and re-verified 0 matches, still needs-work label off for reviewer to re-check
+- 2026-09-15 PI-36 PR #70 approved — merge: orchestrator
+- 2026-09-15 PI-36 mergiato su main (#70) — la guardia non blocca piu' un force-push su un branch di task seguito da un comando che nomina main; il classificatore a segmenti decide da solo. Attivo subito in ogni sessione: ~/.claude/agents e' un symlink a ~/Desktop/agents
+- 2026-09-15 PI-37 PR #74 needs work — verify.sh RED on retro-due R4F1, pre-existing on main — cause: base-moved
+- 2026-09-15 PI-15 PR #71 approved (delta round 2) — AC1 grep verified 0/exit1, two-directional probe by reviewer, status.test.sh 16/16, verify GREEN — merge: orchestrator
+- 2026-09-15 PI-15 mergiato su main (#71) — i lettori passano al composer di handoff.sh; PI-16 e PI-17 si sbloccano
+- 2026-09-15 PI-38 PR #76 needs work — AC1 unmet: remote branch deferred one run — cause: first-round
+- 2026-09-15 PI-39 PR draft — normalizza data doppia in handoff log — 6 test
+- 2026-09-15 PI-39 PR #77 approved — merge: orchestrator
+- 2026-09-15 PI-39 mergiato su main (#77) — handoff.sh log normalizza un prefisso di data ridondante e le due righe sporche sono corrette; R4F1 di retro-due.test.sh torna verde su main, quindi il rosso ereditato che aveva bocciato PI-37 non c'e' piu'
+- 2026-09-15 retro-mark 2026-09-15 signals-2026-09-15
+- 2026-09-15 PI-37 PR #74 approved — merge: orchestrator
+- 2026-09-15 PI-37 mergiato su main (#74) — un task la cui PR e' stata mergiata non resta piu' in stato diverso da Done
+- 2026-09-15 PI-38 PR #76 draft — cleanup-merged.sh now reaps merged-PR remote branches gh leaves alive, 23 new tests (169 total in cleanup-merged.test.sh)
