@@ -1,6 +1,6 @@
 # PI-48 — The two self-mutating blocks in cleanup-merged.test.sh must use the shared gate
 
-**Status**: Todo
+**Status**: In Review
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -10,10 +10,10 @@
 **Risk**: low
 **Depends on**: PI-45
 **Wave**: 1
-**Files**: bin/cleanup-merged.test.sh
+**Files**: bin/cleanup-merged.test.sh, bin/self-mutation-gate.sh (new), bin/doctor.test.sh, tasks/PI-48-cleanup-test-self-mutation-reuses-the-gate.md
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
+**Branch**: task/pi-48-cleanup-test-reuses-gate
 **PR**:
 
 ## Goal
@@ -57,3 +57,13 @@ nobody has yet established that this file has only two.
 
 Blocked on PI-45 (PR #85) landing, because AC2 requires reusing the gate that PR builds. Do not start before
 it merges, and do not anticipate its shape: read what actually landed.
+
+**Measured at implementation time (the title's "two" is wrong):** the file has **four** self-mutating
+blocks, not two — `grep -n 'sed .*"\$SCRIPT"' bin/cleanup-merged.test.sh` at lines 371, 607, 630 and 640 on
+the pre-change file. AC4 was the criterion that asked; this is its answer. The title is left as it was filed
+so the id and the filing are not rewritten after the fact.
+
+**`**Files**` above was re-derived from the branch, not from this note:**
+`git diff --name-only $(git merge-base origin/main HEAD) HEAD` on `task/pi-48-cleanup-test-reuses-gate`.
+`docs/reports/**` and `docs/handoff/**` are on the branch too and are deliberately not listed: PI-65 AC4
+excludes those two prefixes by name, while the task file itself is not on that exclusion list, so it is.
