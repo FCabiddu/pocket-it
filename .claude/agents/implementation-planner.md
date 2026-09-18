@@ -89,6 +89,8 @@ One file per task with **exactly** this header (fields are `**Key**: value`, one
 - [ ] AC2 — Given …, when …, then …
 {each criterion is diff-checkable and becomes one test; number them so the PR can map tests to criteria}
 
+**A criterion names its target by content, never by a line number or by a total that another open task can move.** `line 31 is deleted`, `the file holds 12 entries (13 before)`, `:111 is reworded` all decide the task's pass/fail from a coordinate that belongs to the file, not to the work: one unrelated edit landing first turns a correct implementation red or a wrong one green, and the developer has no way to see it happened. Quote the line's distinguishing text instead, and state totals as a delta the change itself owns (`one line shorter than the head this branch started from, nothing else changed in the file`). A line number stays useful in **Notes** as a starting point — "`path/file.sh:149` declares it" — because nothing is decided there.
+
 ## Non-goals
 {what this task deliberately does not do — the sibling task that does it, or "out of scope for the story"}
 
