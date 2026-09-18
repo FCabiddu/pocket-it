@@ -517,7 +517,11 @@ kill_in_base "PI-41 AC5 SIGHUP during the base re-check" HUP 129
 # certified as the base's. The guard is now a single choke point (base_blockers) every re-run goes through,
 # and the case list below is REGENERATED from verify.sh's own producer block at run time instead of being a
 # list of examples: a command producer added later is covered by these assertions without editing this file.
-eval "$(awk '/^# --- base-runnability helpers/,/^# --- end base-runnability helpers/' "$SCRIPT")"
+# PI-47 keeps the extracted text in a variable as well as eval'ing it: the mutations below re-eval a
+# DOCTORED copy of this very block in a subshell, so what they mutate is the production text, not a
+# paraphrase of it kept here.
+HELPERS=$(awk '/^# --- base-runnability helpers/,/^# --- end base-runnability helpers/' "$SCRIPT")
+eval "$HELPERS"
 BASE=main   # base_blockers names the base in its reasons; what is asserted is only whether a reason came back
 SBX="$S/blockers"
 mkdir -p "$SBX/empty" "$SBX/full/node_modules/.bin" "$SBX/full/bin" "$SBX/full/tests" "$SBX/full/src" \
@@ -642,6 +646,149 @@ for sub in $PMSUB_FLOOR; do
   done
 done
 ok "PI-46 AC2 — every package-manager subcommand on the floor is excluded, whatever manager it follows" "[ $R46 -eq 0 ]"
+
+# ============ PI-47 — the bare `<pm> <token>` form must not clear a token that is also a script ==============
+# Measured by the PI-46 review against a tree declaring no scripts: `npm pack`, `npm publish`, `npm version`
+# and `npm update` were all CLEARED by base_blockers (so the base re-run counted as a comparable check, and a
+# red the branch owns could be reported as exit 3, "inherited"), while `npm run pack` was correctly refused.
+# Those four words are ordinary package-script names. The rule now, stated as the class and not as four words:
+#
+#   the token is a script or the manager's own verb; the MANAGER decides which, from the package.json of the
+#   tree it runs in. So the branch run and the base re-run are the same check exactly when the two trees AGREE
+#   on whether that script is declared — that holds whatever precedence rule the manager applies, which is why
+#   no per-manager knowledge and no word list is needed for it. They disagree => unestablished => blocker
+#   (PI-41's one-sidedness: a wrong exit 3 is a wrong green, an extra blocker is one branch-attributed red).
+#   $pmsub is consulted only for the "neither tree declares it" cell, to tell the manager's verb (runnable on
+#   both sides) from a word that is nothing anywhere.
+#
+# The table below is walked in full. Rows: every word on PMSUB_FLOOR (this suite's own floor list, F1 — never
+# the live PMSUB, which a shrink would empty) x every manager, plus a control word that is on no list.
+#   branch declares / base declares -> cleared        (same resolution on both sides)
+#   branch declares / base does not -> BLOCKER        (the measured defect; AC1)
+#   base declares  / branch does not -> BLOCKER       (the same disagreement, mirrored)
+#   neither declares, word on the list -> cleared     (the manager's own verb; AC2, unchanged)
+#   neither declares, word on no list -> BLOCKER      ("no script to re-run", unchanged)
+BARE="$S/bare"; mkdir -p "$BARE/bin" "$BARE/base" "$BARE/branch" "$BARE/nomanifest"
+for b in npm pnpm yarn bun; do printf '#!/usr/bin/env bash\nexit 0\n' > "$BARE/bin/$b"; chmod +x "$BARE/bin/$b"; done
+bare_decl(){ if [ -n "${2:-}" ]; then printf '{"scripts":{"%s":"x"}}\n' "$2" > "$BARE/$1/package.json"
+             else printf '{"scripts":{}}\n' > "$BARE/$1/package.json"; fi; }
+# bare_probe <pm> <token> <branch declares: y|n> <base declares: y|n> — prints the blocker, nothing if cleared
+bare_probe(){ local bs="" ss=""
+  [ "$3" = y ] && bs="$2"; [ "$4" = y ] && ss="$2"
+  bare_decl branch "$bs"; bare_decl base "$ss"
+  (cd "$BARE/base" && PATH="$BARE/bin:$PATH" WT_REAL="$BARE/branch" base_blockers "$1 $2" package.json); }
+NOTSUB=zzscriptonly   # a control word that is on no subcommand list, so "blocker" is never the trivial answer
+R47=0; BAREREDS=""
+for w in $PMSUB_FLOOR $NOTSUB; do
+  for pm in npm pnpm yarn bun; do
+    got=$(bare_probe "$pm" "$w" y y); [ -z "$got" ] || { R47=1; BAREREDS="$BAREREDS
+      both trees declare \"$w\": $pm $w => $got, want cleared"; }
+    got=$(bare_probe "$pm" "$w" y n); [ -n "$got" ] || { R47=1; BAREREDS="$BAREREDS
+      branch declares \"$w\", base does not: $pm $w => cleared, want a blocker"; }
+    got=$(bare_probe "$pm" "$w" n y); [ -n "$got" ] || { R47=1; BAREREDS="$BAREREDS
+      base declares \"$w\", branch does not: $pm $w => cleared, want a blocker"; }
+    got=$(bare_probe "$pm" "$w" n n)
+    case "$w" in
+      "$NOTSUB") [ -n "$got" ] || { R47=1; BAREREDS="$BAREREDS
+      neither tree declares \"$w\" and it is no subcommand: $pm $w => cleared, want a blocker"; };;
+      *)         [ -z "$got" ] || { R47=1; BAREREDS="$BAREREDS
+      neither tree declares \"$w\": $pm $w => $got, want cleared (unchanged: a manager verb)"; };;
+    esac
+  done
+done
+[ -n "$BAREREDS" ] && printf '%s\n' "$BAREREDS"
+ok "PI-47 AC1/AC2/AC3 — the bare form's whole 2x2 table holds for every floor subcommand x every manager, and for a word on no list" "[ $R47 -eq 0 ]"
+# AC4 — the four MEASURED words, named one by one and in the exact shape they were measured in, so the report
+# of PI-46 is closed by name and not only by the class above. The membership check first: if any of the four
+# ever dropped out of PMSUB_FLOOR, the class loop would stop covering it and this would say so rather than
+# quietly testing three words.
+R47=0
+for w in pack publish version update; do
+  case "$PMSUB_FLOOR" in *" $w "*) ;; *) R47=1; echo "      \"$w\", one of the four measured cases, is no longer on PMSUB_FLOOR, so the class loop above no longer covers it";; esac
+  got=$(bare_probe npm "$w" y n)
+  [ -n "$got" ] || { R47=1; echo "      MEASURED CASE STILL OPEN: \"npm $w\" (branch declares the script, base does not) => cleared, want a blocker"; }
+done
+ok "PI-47 AC4 — the four measured bare-form cases (npm pack / publish / version / update) are each refused by name" "[ $R47 -eq 0 ]"
+# AC4 mutation — the assertion above must be able to go red. Re-eval a copy of the production helpers with the
+# PI-47 region cut out (awk, on the region's own marker lines) in a SUBSHELL, and require the four to come back
+# CLEARED there. The cut removes the whole `pm)` body, so it clears every bare token that reaches it, not only
+# these four (a control word on no list would be cleared here too, which PI-46's own code would have refused) —
+# it is broader than PI-46's measured behaviour, not a reproduction of it; that reproduction is external
+# mutation #2, below, run against origin/main's own unmodified verify.sh. This cut only has to make the
+# assertion above go red, which it does.
+MUT_NOFIX=$(printf '%s\n' "$HELPERS" | awk '/PI-47 bare-form region begins/{skip=1} !skip; /PI-47 bare-form region ends/{skip=0}')
+R47=1; [ "$(printf '%s\n' "$MUT_NOFIX" | wc -l)" -lt "$(printf '%s\n' "$HELPERS" | wc -l)" ] && R47=0
+ok "PI-47 AC4 mutation — the region markers really cut something out of the production helpers" "[ $R47 -eq 0 ]"
+R47=0
+for w in pack publish version update; do
+  got=$( eval "$MUT_NOFIX"; bare_probe npm "$w" y n )
+  [ -z "$got" ] || { R47=1; echo "      with the PI-47 region cut out, \"npm $w\" still answered: $got"; }
+done
+ok "PI-47 AC4 mutation — with the fix cut away the four measured cases are cleared again (the assertion above is load-bearing)" "[ $R47 -eq 0 ]"
+# AC1's second sentence — "the check must not depend on which words are on the list today". Emptied $pmsub,
+# same subshell technique: the disagreement cell must still block (it never reaches the list), while the
+# "neither declares" cell must flip to a blocker (it does), which is what proves the emptying took effect.
+MUT_NOLIST=$(printf '%s\n' "$HELPERS" | sed 's/^  local pmsub=" .*" *$/  local pmsub=" "/')
+R47=1; [ "$MUT_NOLIST" != "$HELPERS" ] && R47=0
+ok "PI-47 AC1 — the pmsub mutation really changed the production helpers' text" "[ $R47 -eq 0 ]"
+R47=0
+for w in $PMSUB_FLOOR; do
+  got=$( eval "$MUT_NOLIST"; bare_probe npm "$w" y n )
+  [ -n "$got" ] || { R47=1; echo "      with pmsub emptied, the disagreement cell for \"$w\" was cleared — the refusal still depends on the list"; }
+  got=$( eval "$MUT_NOLIST"; bare_probe npm "$w" n n )
+  [ -n "$got" ] || { R47=1; echo "      with pmsub emptied, \"npm $w\" was still cleared with neither tree declaring it — the emptying did not take effect"; }
+done
+ok "PI-47 AC1 — with pmsub emptied the disagreement is still refused (the refusal does not depend on which words are on the list)" "[ $R47 -eq 0 ]"
+# AC3, the forced case, stated where it is decided rather than only in the report: the branch declares the
+# script, the base does not, and the token is also a manager verb. npm would run its own verb on both sides
+# (a clearance would be right); pnpm, yarn and bun may run the branch's script and the base's verb (a
+# clearance would be a wrong exit 3). Same token, same two trees, two defensible readings, no evidence left
+# to separate them — so the choice is forced, and it goes to the blocker.
+R47=0
+for pm in npm pnpm yarn bun; do
+  got=$(bare_probe "$pm" version y n)
+  [ -n "$got" ] || { R47=1; echo "      forced case unresolved for $pm: a declared \"version\" script on the branch, none on the base, was cleared"; }
+done
+ok "PI-47 AC3 — where the token cannot settle it, the bare form takes the blocker (a branch-declared \"version\" script, absent on the base)" "[ $R47 -eq 0 ]"
+# The branch tree's answer has three values, not two, and only the third is a blocker on its own. "That tree
+# declares no such script" is evidence (a tree with no package.json at all says exactly that: no manifest, no
+# script, so nothing could have shadowed a verb there); "I was never told where that tree is" is not.
+R47=0
+got=$(bare_decl base ""; cd "$BARE/base" && PATH="$BARE/bin:$PATH" WT_REAL="$BARE/nomanifest" base_blockers "npm install" package.json)
+[ -z "$got" ] || { R47=1; echo "      a branch tree without a package.json should read as 'declares nothing', got: $got"; }
+got=$(bare_decl base ""; cd "$BARE/base" && PATH="$BARE/bin:$PATH" WT_REAL="" base_blockers "npm install" package.json)
+[ -n "$got" ] || { R47=1; echo "      with no branch tree named at all, \"npm install\" was cleared — an unknown must never clear"; }
+got=$(bare_decl base ""; cd "$BARE/base" && PATH="$BARE/bin:$PATH" WT_REAL="$BARE/there-is-no-such-tree" base_blockers "npm install" package.json)
+[ -n "$got" ] || { R47=1; echo "      with a branch tree that is not there, \"npm install\" was cleared — an unknown must never clear"; }
+ok "PI-47 AC2/AC3 — an unreadable branch tree blocks, a branch tree that simply declares nothing does not" "[ $R47 -eq 0 ]"
+# The `run` / `run-script` forms are not touched by any of this: they name a script unambiguously and their
+# answer is the base's declaration alone, whatever the branch declares.
+R47=0
+for pm in npm pnpm yarn bun; do
+  for form in run run-script; do
+    for w in lint pack; do
+      got=$(bare_decl branch ""; bare_decl base "$w"; cd "$BARE/base" && PATH="$BARE/bin:$PATH" WT_REAL="$BARE/branch" base_blockers "$pm $form $w" package.json)
+      [ -z "$got" ] || { R47=1; echo "      $pm $form $w, declared on the base => $got, want cleared"; }
+      got=$(bare_decl branch "$w"; bare_decl base ""; cd "$BARE/base" && PATH="$BARE/bin:$PATH" WT_REAL="$BARE/branch" base_blockers "$pm $form $w" package.json)
+      [ -n "$got" ] || { R47=1; echo "      $pm $form $w, NOT declared on the base => cleared, want a blocker"; }
+    done
+  done
+done
+ok "PI-47 — the run and run-script forms still answer from the base's declaration alone, for every manager" "[ $R47 -eq 0 ]"
+# PI-47 x PI-46 AC1 — the two derivations must still agree. scripts_named (above) decides which scripts the
+# sandboxes must DECLARE for a producer's command to run; base_blockers now decides, for the same token in the
+# same shape, whether the base has to declare it before its red can be attributed. If those two ever diverge,
+# a producer's command would be declared in a sandbox base_blockers refuses, or the reverse, and the producer
+# assertions below would be testing a tree that does not match the rule. Checked over the union of both
+# vocabularies: every floor subcommand, plus every script name PI-46's derivation actually extracted.
+R47=0
+for w in $PMSUB_FLOOR $(printf '%s\n' "$SCRIPTNAMES" | awk 'NF' | sort -u) "$NOTSUB"; do
+  named=$(scripts_named "npm $w" | tr '\n' ' ')
+  got=$(bare_probe npm "$w" n n)
+  if [ -n "$named" ] && [ -z "$got" ]; then R47=1; echo "      scripts_named calls \"$w\" a script, but base_blockers clears \"npm $w\" with neither tree declaring it"; fi
+  if [ -z "$named" ] && [ -n "$got" ]; then R47=1; echo "      scripts_named calls \"$w\" no script, but base_blockers refuses \"npm $w\" with neither tree declaring it: $got"; fi
+done
+ok "PI-47 x PI-46 AC1 — scripts_named and base_blockers agree, token by token, on what counts as a package script" "[ $R47 -eq 0 ]"
 NPROD=0; NLIT=0; NONLIT=0; NONEEDS=""; NOTREFUSED=""; NOTREFUSED2=""; NOTCLEARED=""
 while IFS= read -r pline; do
   [ -n "$pline" ] || continue

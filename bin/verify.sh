@@ -183,6 +183,14 @@ has(){ python3 -c 'import json,sys
 try: s = json.load(open("package.json")).get("scripts", {})
 except Exception: sys.exit(1)
 sys.exit(0 if sys.argv[1] in s else 1)' "$1" 2>/dev/null; }
+# has_at <dir> <script> — `has`, asked of a tree other than the current one; used only to ask the BRANCH
+# worktree what it declares (PI-47). Three answers, not two: 0 declared there, 1 not declared there,
+# 2 the question could not be put at all (no directory named, or it is not there to look in). 1 and 2 are
+# kept apart on purpose — "that tree declares no such script" is evidence, "I never saw that tree" is not,
+# and base_blockers' one-sidedness turns only the second into a blocker. A tree with no package.json at all
+# answers 1, the same reading `has` gives the base: no manifest, so no script, so nothing could have
+# shadowed a subcommand there.
+has_at(){ local d="${1:-}"; [[ -n "$d" && -d "$d" ]] || return 2; ( cd "$d" || exit 2; has "$2" ); }
 # shlex <command> — the command's words, one per line, with the runner's own quoting rules (the selectors are
 # single-quoted paths that may contain spaces or parentheses). Never eval'd: the string is parsed, not run.
 shlex(){ python3 - "$1" <<'PY' 2>/dev/null
@@ -208,11 +216,14 @@ PY
 # of these three.
 # Four rules, in order of cost: (1) the marker file that made this script choose the command must exist here;
 # (2) every package script the command names must be declared here — a package manager exits 1 for a missing
-# script, indistinguishable from a real failure; (3) the runner must resolve here — an absent module or
+# script, indistinguishable from a real failure; and in the bare `<pm> <token>` form, where the same word can
+# be a script or the manager's own subcommand, the two trees must AGREE on whether that script is declared,
+# or which of the two ran cannot be the same on both sides (PI-47 — the detail is at the rule itself);
+# (3) the runner must resolve here — an absent module or
 # binary exits 1 too, not only 127; (4) every path the command names that exists on the branch must exist
 # here — a selector pointing at a file the base does not have tests nothing that belongs to the base.
 base_blockers(){
-  local cmd="$1" needs="${2:-}" toks tok n seg=1 pend=""
+  local cmd="$1" needs="${2:-}" toks tok n seg=1 pend="" branch_decl=2 base_decl=1
   local pmsub=" install ci add remove rm uninstall link unlink exec dlx why audit publish pack init create update outdated list ls info view config cache dedupe prune store rebuild version "
   for n in $needs; do
     [[ -e "$n" ]] || { printf '%s' "origin/$BASE has no $n, so this is not the same check there"; return 0; }
@@ -240,9 +251,42 @@ base_blockers(){
       pm)
         case "$tok" in -*) continue;; run|run-script) pend=pmrun; continue;; esac
         pend=""
-        case "$pmsub" in *" $tok "*) continue;; esac
-        has "$tok" || { printf '%s' "origin/$BASE has no \"$tok\" script to re-run"; return 0; }
-        continue;;
+        # PI-47 bare-form region begins
+        # The bare `<pm> <token>` form, the one with no `run` in it. The token has two possible meanings and
+        # its spelling carries neither: a subcommand of the manager, or a package script — pnpm, yarn and bun
+        # all accept `<pm> <script>`, npm accepts it for its own shortcuts, and `pack`, `publish`, `version`,
+        # `update` are as ordinary as script names get. Which meaning wins is decided by the MANAGER, from the
+        # package.json of the tree it is run in, by a precedence rule that differs per manager and per version.
+        # This script does not know that rule and must not acquire it: encoding it is a word list again, and a
+        # word list is what cannot tell the two apart (that is the whole of PI-47).
+        # What can be established here without knowing any precedence rule: if the branch tree and this tree
+        # AGREE on whether that script is declared, then the manager — whichever rule it applies — makes the
+        # same choice on both sides, and the base re-run is the same check. If they DISAGREE, whether it is
+        # still the same check depends on exactly the rule we do not know, and rule (2)'s one-sidedness settles
+        # it: an unestablished "the base is red too" is the wrong green this guard exists to prevent, while an
+        # extra blocker costs one branch-attributed red. So a disagreement — in either direction — is a blocker.
+        # $pmsub is consulted only AFTER that, for the case where the two trees agree that no such script
+        # exists anywhere: there the token can only have been the manager's own verb, and whether the list
+        # holds it decides between "the base runs the same verb" and "neither side had anything to run".
+        # Removing a word from that list therefore cannot re-open this hole.
+        has_at "${WT_REAL:-}" "$tok"; branch_decl=$?    # 0 declared on the branch, 1 not, 2 unknowable
+        if [[ $branch_decl -eq 2 ]]; then
+          printf '%s' "\"$tok\" here is either a package script or the manager's own subcommand, and the branch tree could not be read to tell which, so a failure of it here proves nothing"; return 0
+        fi
+        if has "$tok"; then base_decl=0; else base_decl=1; fi
+        if [[ $branch_decl -ne $base_decl ]]; then
+          if [[ $branch_decl -eq 0 ]]; then
+            printf '%s' "the branch declares a script named \"$tok\" and origin/$BASE does not, so the bare form may not mean the same thing on the two sides"
+          else
+            printf '%s' "origin/$BASE declares a script named \"$tok\" and the branch does not, so the bare form may not mean the same thing on the two sides"
+          fi
+          return 0
+        fi
+        if [[ $base_decl -eq 0 ]]; then continue; fi     # both trees declare it: same resolution either way
+        case "$pmsub" in *" $tok "*) continue;; esac     # neither does: it can only be the manager's own verb
+        printf '%s' "origin/$BASE has no \"$tok\" script to re-run"; return 0
+        # PI-47 bare-form region ends
+        ;;
       pmrun)
         case "$tok" in -*) continue;; esac
         pend=""

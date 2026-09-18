@@ -1,6 +1,6 @@
 # PI-47 — The bare `<pm> <script>` form must not clear a script that shares a subcommand's name
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
@@ -13,8 +13,8 @@
 **Files**: bin/verify.sh, bin/verify.test.sh
 **TAD**: none — follow existing conventions
 **Contract**: none
-**Branch**:
-**PR**:
+**Branch**: task/pi-47-bare-form-clears-scripts
+**PR**: https://github.com/FCabiddu/pocket-it/pull/94
 
 ## Goal
 `base_blockers` in `bin/verify.sh` keeps a list of package-manager subcommands (`pmsub`) so that a command
@@ -32,22 +32,22 @@ A wrong green is the failure mode that costs; a wrong red only costs a re-run.
 Pre-existing behaviour from PI-41, surfaced by PI-46's review, not introduced by it.
 
 ## Acceptance criteria
-- [ ] AC1 — Given a command in the bare `<pm> <script>` form whose token is also a package-manager
+- [x] AC1 — Given a command in the bare `<pm> <script>` form whose token is also a package-manager
       subcommand, and a base tree that does not declare that script, when `base_blockers` runs, then it
       returns a blocker. The check must not depend on which words are on the list today.
-- [ ] AC2 — Given a command in the bare form whose token is unambiguously a manager subcommand in a tree
+- [x] AC2 — Given a command in the bare form whose token is unambiguously a manager subcommand in a tree
       that declares no such script (`npm install`, `npm ci`), when `base_blockers` runs, then the behaviour
       is unchanged from today. State in the report how the two cases in AC1 and AC2 are told apart, and what
       evidence the distinction rests on — a token's spelling alone cannot carry it.
-- [ ] AC3 — Given the ambiguity cannot be resolved from the token, when the script must choose, then it
+- [x] AC3 — Given the ambiguity cannot be resolved from the token, when the script must choose, then it
       chooses the blocker: an unproven "the base is red too" is the failure this task exists to remove, and
       an extra blocker costs only a branch-attributed red. Show the case where the choice is forced and name
       which way it goes.
-- [ ] AC4 — Given `bin/verify.test.sh`, when it runs, then the four measured cases (`pack`, `publish`,
+- [x] AC4 — Given `bin/verify.test.sh`, when it runs, then the four measured cases (`pack`, `publish`,
       `version`, `update` in the bare form, against a tree declaring no scripts) are asserted by name, and
       the assertion is derived from the class rather than from those four words. Prove the assertion can
       fail: mutate the fix away and show the named reds.
-- [ ] AC5 — Given the full `bin/verify.test.sh` suite, when it runs, then it is green and the `ok` count is
+- [x] AC5 — Given the full `bin/verify.test.sh` suite, when it runs, then it is green and the `ok` count is
       not lower than before this change.
 
 ## Tests expected
