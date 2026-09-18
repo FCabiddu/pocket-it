@@ -1,6 +1,6 @@
 # PI-16 — Le scritture diventano frammenti immutabili; congelamento del vecchio file; `retract`
 
-**Status**: Needs Work
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
