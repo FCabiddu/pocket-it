@@ -59,3 +59,17 @@ can answer.
 
 Related to PI-65 (nothing relates open branches to the board): same family — work in progress that leaves
 no trace anything can read. Do not merge the two; this one is about a single script's contract.
+
+## Occorrenze misurate
+
+Due volte nella stessa sessione, 2026-09-18, lo stop hook ha chiesto di lanciare un retro mentre
+un retro era vivo e non aveva ancora pushato nulla:
+
+1. retro lanciato da 28 s — nessuna PR, nessun branch `retro/`, hook bloccante.
+2. retro lanciato da 15 s — stesso quadro, entrambi i repo puliti e allineati ai remoti, zero PR
+   aperte, e l'unico segnale non lavorato era proprio quello che il retro vivo aveva in scope.
+
+In entrambi i casi la sola difesa è stata il giudizio dell'orchestratore, che ha guardato gli
+agenti vivi prima di obbedire. La guardia della PR `retro/` aperta (citata da `/quickfix`) non può
+aiutare: fra il lancio e il primo push un retro non esiste su GitHub. Il costo di sbagliare è due
+retro che scrivono regole negli stessi file letti all'avvio, da due rami diversi.
