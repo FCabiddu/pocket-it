@@ -1,6 +1,6 @@
 # PI-16 — Le scritture diventano frammenti immutabili; congelamento del vecchio file; `retract`
 
-**Status**: Todo
+**Status**: Done
 **Label**: DevOps
 **Epic**: handoff
 **Story**: handoff
@@ -13,8 +13,8 @@
 **Files**: bin/handoff.sh, bin/handoff.test.sh, .claude/agents/shared/implementing-common.md:104,118, .claude/agents/developer.md:112, .claude/agents/retro.md:3,34,48,58, .claude/skills/quickfix/SKILL.md:79, .claude/skills/run-wave/SKILL.md:48, CLAUDE.md:78,79,160,161,164, README.md:46,74
 **TAD**: tech-analysis/HANDOFF_MEMORY_TECH_ANALYSIS.md (§2.4 ADR-3, ADR-4, ADR-5, §4.2, §4.3, §4.4, §5.2, §6, §9.2, §11.2, §12 PI-16, §13 R-01, R-02, R-03, R-07)
 **Contract**: none
-**Branch**: 
-**PR**: 
+**Branch**: task/pi-16-writes-immutable-fragments
+**PR**: https://github.com/FCabiddu/pocket-it/pull/93
 
 ## Goal
 Da questo task `log`, `fact` e `retract` smettono di scrivere `docs/SESSION_HANDOFF.md` e `docs/SESSION_HANDOFF_ARCHIVE.md` e creano invece un frammento immutabile sotto `docs/handoff/{AAAA-MM}/{AAAAMMGGTHHMMSSZ}-{slug}-{rand4}.md` (§4.1, §4.2 e ADR-5 del TAD), con creazione esclusiva (`set -o noclobber`) così un file non viene mai scritto due volte. Il vecchio file si **congela**: da qui in poi nessuno scrive più sopra, resta sola sorgente letta dal compositore per sempre (ADR-3). `retract` è un comando nuovo: crea un frammento `## Ritirati` con l'hash del testo del fatto da nascondere, senza toccare alcun file esistente (ADR-4). Il comando `where` stampa la cartella relativa in cui scriverebbe, non richiede un repo, non scrive niente, ed è il segnale verificabile che questo task è installato (§5.2, §9.2 «Regola ponte»). È il task a rischio alto della sequenza: è la modifica che ogni agente di ogni progetto userà alla prossima scrittura di memoria, e contiene la prova di non-contesa a quattro rami.

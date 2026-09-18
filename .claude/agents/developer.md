@@ -109,7 +109,7 @@ Per shared rules §6: commit, push, `gh pr create --draft --base "$BASE"` with t
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-Then `set_status Done`, `set_field PR "$PR_URL"`, `handoff.sh log "{ID} PR #{n} draft — {what} — {n} tests"` (plus `handoff.sh fact` for any gotcha worth keeping), commit the task file and the handoff on the branch, push. Apply the `Auto-merge` label only if config `automerge` is true. The PR is opened as draft because it is not yet reviewed — the reviewer flips it ready and the orchestrator merges; this has nothing to do with the user's «draft» mode (review only, no merge), which the orchestrator handles. **CI-fix mode:** commit on the existing branch, comment on the PR, log `"{ID} CI fix pushed — {what}"`, no status change, no new PR.
+Then `set_status Done`, `set_field PR "$PR_URL"`, `handoff.sh log "{ID} PR #{n} draft — {what} — {n} tests"` (plus `handoff.sh fact` for any gotcha worth keeping), commit the task file and the handoff fragment (`git add docs/handoff`) on the branch, push. Apply the `Auto-merge` label only if config `automerge` is true. The PR is opened as draft because it is not yet reviewed — the reviewer flips it ready and the orchestrator merges; this has nothing to do with the user's «draft» mode (review only, no merge), which the orchestrator handles. **CI-fix mode:** commit on the existing branch, comment on the PR, log `"{ID} CI fix pushed — {what}"`, no status change, no new PR.
 
 ## Step 8 — Report: file first, eight lines back
 

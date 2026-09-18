@@ -20,7 +20,8 @@
 # line, so one named inside an approval signals on the same terms as one named in a rework (present, not
 # first-round). Its three blocks below take their case lists from declarations, never from examples: the
 # taxonomy from reviewer.md's own prose and its two log templates (compared with each other for drift),
-# the outcome words from this project's real log + archive at run time. The needs-work anchor stays
+# the outcome words from this project's real memory at run time, read through the composer (never by
+# naming a file: since PI-16 writes land in new fragments and a file-anchored harvest freezes silently). The needs-work anchor stays
 # exactly as it was and now governs only the round count and the signal's provenance label, so the
 # R3F2/F2 negatives assert the signal TYPE rather than the absence of a line.
 set -uo pipefail
@@ -586,16 +587,48 @@ ok "QF1/AC5 — reviewer.md says the approval's cause field is absent when there
    'grep -q "absent entirely when it did not" ../.claude/agents/reviewer.md'
 
 # --- QF1 (AC2/AC6): outcome-independence over the class of outcome words this project really writes,
-# harvested from its own log + archive at run time rather than from the four example lines the task
-# quotes — a new outcome word is covered the day it is first written. Three corpora over the same
-# harvested forms: with a real cause every line must signal, with cause: first-round none may, with no
-# cause field at all none may. The last two are what make the first mean anything: a corpus that
-# signalled whatever it said would come out green on the first assertion alone.
-FORMS=$(grep -hoE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [^ ]+ PR #[0-9]+ [^—]*' ../docs/SESSION_HANDOFF.md ../docs/SESSION_HANDOFF_ARCHIVE.md 2>/dev/null \
-        | sed -E 's/^- [0-9-]+ [^ ]+ PR #[0-9]+ //; s/[[:space:]]+$//' | grep -v '^$' | sort -u)
+# harvested from its own memory at run time rather than from the four example lines the task quotes —
+# a new outcome word is covered the day it is first written. Three corpora over the same harvested
+# forms: with a real cause every line must signal, with cause: first-round none may, with no cause
+# field at all none may. The last two are what make the first mean anything: a corpus that signalled
+# whatever it said would come out green on the first assertion alone.
+#
+# The harvest reads the memory through the COMPOSER (`handoff.sh recent --all`), never by naming the
+# files it happens to live in today. Since PI-16 a write creates a new immutable fragment under
+# docs/handoff/ and docs/SESSION_HANDOFF.md and its archive are frozen sources no write reopens, so
+# grepping that pair harvests every generation of the memory EXCEPT the one new writes land in: the
+# corpus would freeze at the forms present the day the write target moved, and the non-vacuity sibling
+# below — green off frozen history for ever — could never notice. Measured on this branch before the
+# fix: a real `handoff.sh log "… parked …"` was found 0 times by the frozen pair and 1 time through the
+# composer. Same class as install-drift.sh's count_logged, and the fallback is the same: the frozen
+# pair is read directly only when the composer cannot answer (a sibling handoff.sh older than PI-14).
+HS="$PWD/handoff.sh"
+REPO_ROOT=$(cd .. && pwd -P)
+harvest_forms(){ # harvest_forms <repo root> — the distinct outcome words that root's memory holds
+  local root="$1"
+  { (cd "$root" && bash "$HS" recent --all 2>/dev/null) \
+      || cat "$root/docs/SESSION_HANDOFF.md" "$root/docs/SESSION_HANDOFF_ARCHIVE.md" 2>/dev/null; } \
+    | grep -oE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [^ ]+ PR #[0-9]+ [^—]*' \
+    | sed -E 's/^- [0-9-]+ [^ ]+ PR #[0-9]+ //; s/[[:space:]]+$//' | grep -v '^$' | sort -u
+}
+FORMS=$(harvest_forms "$REPO_ROOT")
 form_count=$(printf '%s\n' "$FORMS" | grep -c . || true)
-ok "QF1 setup — this project's own log/archive yields several distinct outcome words (not vacuous)" \
+ok "QF1 setup — this project's own memory yields several distinct outcome words (not vacuous)" \
    '[[ "$form_count" -ge 5 ]]'
+
+# The guard the freeze slipped past: the harvest must read the memory where writes really land. A brand
+# new outcome word, written into a fresh repo by the real handoff.sh of this checkout, has to come back
+# out of the very same harvest — so the day the write target moves again, this goes red instead of the
+# corpus silently freezing. Anchoring the harvest on any particular file name fails it: a repo whose
+# only memory is a fragment has no docs/SESSION_HANDOFF.md at all.
+Shv=$(mkrepo)
+(cd "$Shv" && bash "$HS" log "PI-999 PR #999 parked — a brand new outcome word" >/dev/null 2>&1)
+forms_hv=$(harvest_forms "$Shv")
+ok "QF1 setup — the harvest reads the memory where writes land: a word written by the real handoff.sh is harvested" \
+   'grep -qxF "parked" <<<"$forms_hv"'
+ok "QF1 setup — sibling: that write really happened (the repo gained exactly one fragment)" \
+   '[[ "$(find "$Shv/docs/handoff" -type f -name "*.md" 2>/dev/null | grep -c .)" -eq 1 ]]'
+rm -rf "$Shv"
 
 corpus(){ # corpus cause|first-round|none — one line per harvested outcome form, with a distinct task id
           # and a distinct cause on each, so neither (b) nor (c) can add a signal of its own to the count

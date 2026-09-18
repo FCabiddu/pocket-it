@@ -167,13 +167,24 @@ def read_log_fallback(root):
     return oldest_first_archive + list(reversed(newest_first))
 
 
+# How a handoff.sh DECLARES the PI-14 read-only composer. Two forms, because the declaration moved: up
+# to PI-15 it was the bash case pattern `facts|show|recent|grep)`; PI-16 made every subcommand an entry
+# of the SPEC dict (`"recent": (...)`) and deleted the bash dispatch, so matching only the old form made
+# this script silently fall back to the frozen files — which after PI-16 no writer touches, i.e. every
+# signal written since would be invisible and the retro would never come due. Detection stays a property
+# of the installed script, never a pocket-it version number, because an install can be any age.
+COMPOSER_RES = (
+    re.compile(r'facts\|show\|recent\|grep'),              # ≤ PI-15: the bash case pattern
+    re.compile(r'^\s*["\']recent["\']\s*:', re.M),          # ≥ PI-16: the SPEC entry, at the start of a line
+)
+
+
 def has_composer(handoff):
-    """bin/handoff.sh grows the recent/grep read-only composer at PI-14 — detect it by its own
-    case-statement grammar rather than assuming a fixed pocket-it version is installed everywhere."""
+    """True when the installed bin/handoff.sh declares the read-only composer (`recent --all`)."""
     if not os.path.isfile(handoff):
         return False
     src = open(handoff, errors="ignore").read()
-    return re.search(r'facts\|show\|recent\|grep', src) is not None
+    return any(r.search(src) for r in COMPOSER_RES)
 
 
 def read_log_composer(handoff):

@@ -43,7 +43,7 @@ Rounded boxes are agents, cylinders are files on disk, parallelograms are script
 
 Every entry point is a plain command, so pocket-it works on its own or under any orchestrator you put in front of it: `status.sh` tells an orchestrator where the project is, `next-wave.sh` what can be launched, and the three main-session skills (`/intake`, `/quickfix`, `/run-wave`) are the only places that talk to the user. One thing always stays with the human: reviewing the board before wave 1. Approved PRs are merged by the orchestrator by default (`automerge: true`); say `draft` in the request, or set `automerge: false`, and it reviews but leaves the merge to you. The epic→main PR of a deployed project is a deploy: opened and merged only when you ask.
 
-No agent asks questions at runtime. `/intake` asks you once; everything else reads `.pocket-it.json` and `BRIEF.md` and writes its assumptions down. Scripts, not agents, decide what is ready to launch and whether a PR is mechanically green. Memory across sessions lives on disk: the board and git for state, `docs/SESSION_HANDOFF.md` (written by agents through `handoff.sh`) for facts and events — never `--resume`.
+No agent asks questions at runtime. `/intake` asks you once; everything else reads `.pocket-it.json` and `BRIEF.md` and writes its assumptions down. Scripts, not agents, decide what is ready to launch and whether a PR is mechanically green. Memory across sessions lives on disk: the board and git for state, `docs/handoff/` (written by agents through `handoff.sh`, one immutable file per write, composed back into one view on read) for facts and events — never `--resume`.
 
 ## Skills
 
@@ -71,7 +71,7 @@ bash ~/.claude/agents/pocket-it/bin/doctor.sh          # pre-flight: config, boa
 bash ~/.claude/agents/pocket-it/bin/next-wave.sh       # what can be launched right now, as JSON lines
 bash ~/.claude/agents/pocket-it/bin/verify.sh 42       # lint + type-check + affected tests on PR #42, in a throwaway worktree
 bash ~/.claude/agents/pocket-it/bin/status.sh          # project state from disk, ~25 lines (what an orchestrator reads first)
-bash ~/.claude/agents/pocket-it/bin/handoff.sh log "…"   # append to docs/SESSION_HANDOFF.md (agents do this; `fact "…"` for gotchas)
+bash ~/.claude/agents/pocket-it/bin/handoff.sh log "…"   # one new file under docs/handoff/ (agents do this; `fact "…"` for gotchas, `retract "…"` to prune, `where` to see the folder)
 bash ~/.claude/agents/pocket-it/bin/tasks-index.sh     # regenerate tasks/INDEX.md
 bash ~/.claude/agents/pocket-it/bin/cleanup-merged.sh [--dry-run] [--all]   # remove worktrees + local branches of merged PRs (run-wave/quickfix do it after each merge)
 python3 ~/.claude/agents/pocket-it/bin/usage-report.py --days 7   # where the tokens went this week
