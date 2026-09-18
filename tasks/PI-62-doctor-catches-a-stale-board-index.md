@@ -1,6 +1,6 @@
 # PI-62 — doctor fails when tasks/INDEX.md no longer matches the task files
 
-**Status**: Done
+**Status**: In Progress
 **Label**: DevOps
 **Epic**: quickfix
 **Story**: quickfix
