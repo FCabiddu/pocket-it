@@ -1605,27 +1605,48 @@ RCASES
   # --- AC4: SIGINT sent mid-recursion (after the mutated copy exists, while the nested suite is
   # running against it) must leave the real, checked-out bin/doctor.sh exactly as it was — no trap
   # is needed for that anymore, because nothing between here and the nested run ever opens $SCRIPT
-  # for writing. Proved by actually interrupting a live case, not by reading the code above.
+  # for writing. Proved by actually interrupting a live case, not by reading the code above: `cmd &`
+  # from this non-interactive shell starts with SIGINT pre-ignored for the job, so a plain
+  # `kill -INT "$SIGINT_PID"` is a no-op and the nested run would simply finish on its own — which
+  # ALSO leaves the checkout clean (AC1 already proves that), so a completion marker is required to
+  # tell "interrupted" apart from "finished before anyone signalled it"; without it this case would be
+  # green whether or not the signal ever landed, exactly the defect class PI-63 exists to remove.
+  # `set -m` gives the backgrounded job its own process group even inside a script, so the signal can
+  # target the whole group (`kill -INT -"$SIGINT_PID"`), the same way a terminal's Ctrl-C would.
   BEFORE_SIGINT="$(git -C "$REPO_ROOT" status --porcelain -- bin/doctor.sh 2>/dev/null)"
-  ( external_mutation "has_section_literal" "$S/ac4.mut.sh" && mirror_run "$S/ac4.mut.sh" >/dev/null 2>&1 ) &
+  set -m
+  ( external_mutation "has_section_literal" "$S/ac4.mut.sh" && mirror_run "$S/ac4.mut.sh" >/dev/null 2>&1 && : > "$S/ac4.completed" ) &
   SIGINT_PID=$!
+  set +m
   sleep 1
-  kill -INT "$SIGINT_PID" 2>/dev/null
-  pkill -INT -P "$SIGINT_PID" 2>/dev/null
+  kill -INT -"$SIGINT_PID" 2>/dev/null   # the whole job's process group, as a Ctrl-C would
   wait "$SIGINT_PID" 2>/dev/null
-  sleep 0.2
-  pkill -KILL -P "$SIGINT_PID" 2>/dev/null
   AFTER_SIGINT="$(git -C "$REPO_ROOT" status --porcelain -- bin/doctor.sh 2>/dev/null)"
-  ok "AC4: SIGINT mid-recursion (sent 1s in, to the case's subshell and its direct child) leaves the real bin/doctor.sh exactly as before — git status empty on both sides of the interruption" \
-    '[[ -z "$BEFORE_SIGINT" && "$AFTER_SIGINT" == "$BEFORE_SIGINT" ]]'
-  rm -f "$S/ac4.mut.sh"
+  ok "AC4: SIGINT mid-recursion really landed (the case never completed) AND left the real bin/doctor.sh exactly as before" \
+    '[[ -z "$BEFORE_SIGINT" && "$AFTER_SIGINT" == "$BEFORE_SIGINT" && ! -e "$S/ac4.completed" ]]'
+  rm -f "$S/ac4.mut.sh" "$S/ac4.completed"
+
+  # --- AC4 control: the SAME case, left to run to completion (no signal) — proves the marker above
+  # is not vacuously absent. If it never appeared here either, the assertion above would be green
+  # for the wrong reason again, just one layer deeper.
+  external_mutation "has_section_literal" "$S/ac4.mut2.sh"
+  ( mirror_run "$S/ac4.mut2.sh" >/dev/null 2>&1 && : > "$S/ac4.completed2" )
+  ok "AC4 control: the same case, left uninterrupted, DOES write the completion marker — the marker is not vacuously absent" \
+    '[[ -e "$S/ac4.completed2" ]]'
+  rm -f "$S/ac4.mut2.sh" "$S/ac4.completed2"
 fi
 
-# PI-63 (AC1): the background reader above never saw bin/doctor.sh differ from HEAD's content at
-# any sampled instant of this run — the whole point of this task, checked once at the very end so a
-# hit recorded at any point during the run (including the recursion block above) is caught here.
+# PI-63 (AC1): the background reader above never saw bin/doctor.sh change at any sampled instant of
+# this run — the whole point of this task, checked once at the very end so a hit recorded at any
+# point during the run (including the recursion block above) is caught here. This proves invariance
+# across the run, not HEAD-identity at the moment the suite started: $SCRIPT_SRC is a copy taken from
+# the working tree at the top of this file (before this check, bin/doctor.sh could in principle
+# already differ from git HEAD, e.g. an uncommitted edit sitting in the checkout) — that is what the
+# task's Goal actually asks for (nothing writes to the checked-out file, ever, not by how it started).
+# Asserting literal HEAD-identity instead would need `git show HEAD:bin/doctor.sh`, which cannot run
+# inside a mirror_run child: the mirror carries no .git on purpose (see mirror_run's own comment).
 kill "$SCRIPT_WATCH_PID" 2>/dev/null; wait "$SCRIPT_WATCH_PID" 2>/dev/null
-ok "AC1: bin/doctor.sh on disk never differed from HEAD's own content at any instant of this run (continuous background sampling, byte-for-byte against the copy captured at start)" \
+ok "AC1: bin/doctor.sh on disk never changed during this run (continuous background sampling, byte-for-byte against the copy captured at start of run)" \
   '[[ ! -e "$SCRIPT_WATCH_HIT" ]] && cmp -s "$SCRIPT" "$SCRIPT_SRC"'
 
 exit $fail
