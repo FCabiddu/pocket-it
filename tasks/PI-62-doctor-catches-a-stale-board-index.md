@@ -14,7 +14,7 @@
 **TAD**: none — follow the conventions already in `bin/doctor.sh`
 **Contract**: none
 **Branch**: task/PI-62-doctor-catches-a-stale-board-index
-**PR**:
+**PR**: https://github.com/FCabiddu/pocket-it/pull/107
 
 ## Goal
 `tasks/INDEX.md` is generated from the task files by `bin/tasks-index.sh`, and every lane is supposed to
