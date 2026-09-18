@@ -29,6 +29,20 @@ cp "$SCRIPT" "$SCRIPT_SRC"
 fail=0
 ok(){ if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; fail=1; fi; }
 has(){ grep -qF "$1" <<<"$OUT"; }
+# PI-63 (AC1): a background reader that never stops watching bin/doctor.sh, the checked-out file
+# ($SCRIPT — never a copy) for the entire run — proof by continuous sampling, not by reading the
+# code below and trusting that nothing in it opens $SCRIPT for writing. Every self-mutating block in
+# this file is required to work on a copy (SCRIPT_SRC above, or a throwaway file under $S); if any of
+# them, now or later, opens $SCRIPT itself, this catches the byte the moment it differs from HEAD,
+# whether or not the writer ever restores it afterwards.
+SCRIPT_WATCH_HIT="$S/.doctor.sh.watch-hit"
+( while kill -0 $$ 2>/dev/null; do
+    cmp -s "$SCRIPT" "$SCRIPT_SRC" || { echo differed > "$SCRIPT_WATCH_HIT"; break; }
+    sleep 0.02
+  done ) &
+SCRIPT_WATCH_PID=$!
+cleanup(){ kill "$SCRIPT_WATCH_PID" 2>/dev/null; wait "$SCRIPT_WATCH_PID" 2>/dev/null; rm -rf "$S"; }
+trap cleanup EXIT
 
 # --- PI-45: the gate every self-mutation in this file must pass ---------------------------------
 # Threat model. Each "mutation ...: proves the test is not vacuous" block below builds a patched copy
@@ -1468,29 +1482,36 @@ ok "gate modes: an annotated marker still matches /…/ and substr still accepts
 ok "gate modes: the same annotated line is correctly REJECTED in line mode, because /^…$/ would no longer match it — this is the difference a plain grep -F gate would have missed" \
   '! src_anchors "$G/modes.sh" line 1 "# MARK BEGIN"'
 
-# --- PI-45 regression: the suite survives bin/doctor.sh having been modified from OUTSIDE this run,
-# before it started (AC1, AC2, AC5) — reproduces the reviewer's own non-vacuity proof that found the
-# defect: 16 FAILs on a mutated bin/doctor.sh, 9 of them artifacts (malformed-range, unrecognised-
-# qualifier, AC5) that never call _has_section at all. Each row below recurses this same file once
-# against a bin/doctor.sh carrying ONE external edit that breaks ONE self-mutation site's source
-# text while changing nothing about what doctor.sh does — so every OTHER check in the recursed run
-# is a clean control: if any of them goes red too, the isolation does not hold. The table is the
-# class of losses end to end, not the one case the first review executed: the verbatim literal of a
-# python site, and a range address's closing anchor (the runaway-to-EOF that made the suite name
-# "degrades to a warn", a check that never ran) and its doubled anchors (a whole, marker-bearing
-# copy over the wrong span, which only the anchor count can see). The swap is on the real file but
-# transient, restored between rows and via trap before this process exits either way, and never
-# committed. DOCTOR_TEST_NO_RECURSE stops each child from doing this again.
+# --- PI-45 regression, rebuilt by PI-63 on a mirror instead of the real file: the suite survives
+# bin/doctor.sh having been modified from OUTSIDE this run, before it started (AC1, AC2, AC5) —
+# reproduces the reviewer's own non-vacuity proof that found the defect: 16 FAILs on a mutated
+# bin/doctor.sh, 9 of them artifacts (malformed-range, unrecognised-qualifier, AC5) that never call
+# _has_section at all. Each row below recurses the WHOLE suite once against a bin/doctor.sh carrying
+# ONE external edit that breaks ONE self-mutation site's source text while changing nothing about
+# what doctor.sh does — so every OTHER check in the recursed run is a clean control: if any of them
+# goes red too, the isolation does not hold. The table is the class of losses end to end, not the one
+# case the first review executed: the verbatim literal of a python site, and a range address's
+# closing anchor (the runaway-to-EOF that made the suite name "degrades to a warn", a check that
+# never ran) and its doubled anchors (a whole, marker-bearing copy over the wrong span, which only
+# the anchor count can see).
+# PI-63: the mutated content the recursed run reads never touches $SCRIPT, the checked-out
+# bin/doctor.sh — not even transiently, not even restored by a trap. Each case builds the mutated
+# text into a throwaway file under $S from $SCRIPT_SRC (the same once-captured copy every other
+# self-mutating block in this file already uses), then runs the recursed suite inside a mirror
+# directory (mirror_run) that is bin/doctor.sh's throwaway copy plus a symlink to every OTHER file
+# the recursed run's own `pwd -P`/`cd ..`/`dirname "$SCRIPT"` path resolution needs (the rest of
+# bin/, .claude/hooks, .claude/skills) — so the recursed run reads real, current content for
+# everything except the one file under test. DOCTOR_TEST_NO_RECURSE stops each child from doing this
+# again.
 if [[ -z "${DOCTOR_TEST_NO_RECURSE:-}" ]]; then
-  DOCTOR_BACKUP="$S/.doctor.sh.orig"
-  cp "$SCRIPT" "$DOCTOR_BACKUP"
-  restore_doctor(){ cp "$DOCTOR_BACKUP" "$SCRIPT"; }
-  trap 'restore_doctor; cleanup' EXIT
-  external_mutation(){ # external_mutation <case> — edit $SCRIPT the way an outside hand would:
-    # behaviour-preserving, one site's anchors only, and loudly stale rather than silently wrong.
-    python3 - "$SCRIPT" "$1" <<'EXTEOF'
+  REPO_ROOT="$(cd .. && pwd -P)"
+  external_mutation(){ # external_mutation <case> <outfile> — write a MUTATED COPY of $SCRIPT_SRC's
+    # text to <outfile>, the way an outside hand would edit it: behaviour-preserving, one site's
+    # anchors only, loudly stale rather than silently wrong. $SCRIPT (the real, checked-out
+    # bin/doctor.sh) is read nowhere here and never opened for writing.
+    python3 - "$SCRIPT_SRC" "$1" "$2" <<'EXTEOF'
 import sys
-path, case = sys.argv[1], sys.argv[2]
+path, case, outpath = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(path).read()
 HAS = 'def _has_section(text, sec):\n    if "." in sec: return re.search(rf"^### {re.escape(sec)}\\b", text, re.M) is not None\n    return re.search(rf"^## {re.escape(sec)}\\.", text, re.M) is not None\n'
 OPEN = "def _classify_base(base, env):\n"
@@ -1514,18 +1535,36 @@ elif case == "classify_anchors_doubled":
     out = text[:j] + text[i:j] + text[j:]   # an identical second definition: same behaviour, both anchors now doubled
 else:
     sys.stderr.write("PI-45 recursion: unknown case %s\n" % case); sys.exit(1)
-open(path, "w").write(out)
+open(outpath, "w").write(out)
 EXTEOF
+  }
+  mirror_run(){ # mirror_run <doctor.sh-path> — recurse the whole suite with bin/doctor.sh replaced
+    # by <doctor.sh-path>. Every other file the recursed run's own path resolution needs is a
+    # symlink to the real, current one (never copied, never edited): only bin/doctor.sh differs,
+    # and only inside this throwaway mirror directory, removed before this function returns.
+    local mut="$1" m f b
+    m=$(mktemp -d "$S/mirror.XXXXXX")
+    mkdir -p "$m/bin" "$m/.claude"
+    ln -s "$REPO_ROOT/.claude/hooks" "$m/.claude/hooks"
+    ln -s "$REPO_ROOT/.claude/skills" "$m/.claude/skills"
+    for f in "$REPO_ROOT"/bin/*; do
+      b="$(basename "$f")"
+      [[ "$b" == "doctor.sh" ]] && continue
+      ln -s "$f" "$m/bin/$b"
+    done
+    cp "$mut" "$m/bin/doctor.sh"; chmod +x "$m/bin/doctor.sh"
+    ( DOCTOR_TEST_NO_RECURSE=1 bash "$m/bin/doctor.test.sh" 2>&1 )
+    rm -rf "$m"
   }
   while IFS='|' read -r rcase rexpect rwhat; do
     [[ -z "$rcase" ]] && continue
-    restore_doctor
-    if ! external_mutation "$rcase"; then
+    MUT_DOCTOR="$S/doctor.$rcase.sh"
+    if ! external_mutation "$rcase" "$MUT_DOCTOR"; then
       ok "PI-45 recursion ($rcase): bin/doctor.sh still matches this fixture's source text" 'false'
       continue
     fi
-    OUT_SELFMUT=$(DOCTOR_TEST_NO_RECURSE=1 bash "$SELF" 2>&1)
-    restore_doctor
+    OUT_SELFMUT=$(mirror_run "$MUT_DOCTOR")
+    rm -f "$MUT_DOCTOR"
     FAIL_LINES=$(grep '^FAIL' <<<"$OUT_SELFMUT")
     ok "AC2 ($rcase — $rwhat): the harness reports its own named, isolated self-mutation error" \
       'grep -qF "$rexpect" <<<"$FAIL_LINES"'
@@ -1544,7 +1583,40 @@ has_section_literal|FAIL  mutation sanity (_has_section accept-anything/reject-e
 classify_close_anchor|FAIL  mutation (round-2 text-based classify): cannot self-mutate: |site 4's range CLOSING anchor edited, the runaway-to-EOF the review caught
 classify_anchors_doubled|FAIL  mutation (round-2 text-based classify): cannot self-mutate: |site 4's range anchors doubled by an identical second definition
 RCASES
-  trap cleanup EXIT
+
+  # --- AC2, the other direction: the SAME recursion machinery, unmutated — proves the loop above
+  # is not vacuously red regardless of what bin/doctor.sh contains. A pristine copy of $SCRIPT_SRC
+  # recursed through mirror_run must report none of the three "cannot self-mutate" FAILs above.
+  cp "$SCRIPT_SRC" "$S/doctor.pristine.sh"
+  OUT_PRISTINE=$(mirror_run "$S/doctor.pristine.sh")
+  rm -f "$S/doctor.pristine.sh"
+  ok "AC2 control (both directions): recursing on an UNMUTATED copy of bin/doctor.sh reports none of the three self-mutation FAILs — the loop above is not vacuously red" \
+    '! grep -q "^FAIL.*cannot self-mutate:" <<<"$OUT_PRISTINE"'
+
+  # --- AC4: SIGINT sent mid-recursion (after the mutated copy exists, while the nested suite is
+  # running against it) must leave the real, checked-out bin/doctor.sh exactly as it was — no trap
+  # is needed for that anymore, because nothing between here and the nested run ever opens $SCRIPT
+  # for writing. Proved by actually interrupting a live case, not by reading the code above.
+  BEFORE_SIGINT="$(git -C "$REPO_ROOT" status --porcelain -- bin/doctor.sh 2>/dev/null)"
+  ( external_mutation "has_section_literal" "$S/ac4.mut.sh" && mirror_run "$S/ac4.mut.sh" >/dev/null 2>&1 ) &
+  SIGINT_PID=$!
+  sleep 1
+  kill -INT "$SIGINT_PID" 2>/dev/null
+  pkill -INT -P "$SIGINT_PID" 2>/dev/null
+  wait "$SIGINT_PID" 2>/dev/null
+  sleep 0.2
+  pkill -KILL -P "$SIGINT_PID" 2>/dev/null
+  AFTER_SIGINT="$(git -C "$REPO_ROOT" status --porcelain -- bin/doctor.sh 2>/dev/null)"
+  ok "AC4: SIGINT mid-recursion (sent 1s in, to the case's subshell and its direct child) leaves the real bin/doctor.sh exactly as before — git status empty on both sides of the interruption" \
+    '[[ -z "$BEFORE_SIGINT" && "$AFTER_SIGINT" == "$BEFORE_SIGINT" ]]'
+  rm -f "$S/ac4.mut.sh"
 fi
+
+# PI-63 (AC1): the background reader above never saw bin/doctor.sh differ from HEAD's content at
+# any sampled instant of this run — the whole point of this task, checked once at the very end so a
+# hit recorded at any point during the run (including the recursion block above) is caught here.
+kill "$SCRIPT_WATCH_PID" 2>/dev/null; wait "$SCRIPT_WATCH_PID" 2>/dev/null
+ok "AC1: bin/doctor.sh on disk never differed from HEAD's own content at any instant of this run (continuous background sampling, byte-for-byte against the copy captured at start)" \
+  '[[ ! -e "$SCRIPT_WATCH_HIT" ]] && cmp -s "$SCRIPT" "$SCRIPT_SRC"'
 
 exit $fail
