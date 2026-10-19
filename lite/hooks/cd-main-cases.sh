@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Test cases for cd-principale.sh: `bash lite/hooks/cd-principale-cases.sh [cd-principale.sh]`. Exits with 1 if a case fails.
+# Test cases for cd-main.sh: `bash lite/hooks/cd-main-cases.sh [cd-main.sh]`. Exits with 1 if a case fails.
 # The cwd of the cases is a fake repo R; the worktrees live in R/.claude/worktrees/.
-H=${1:-$(dirname "$0")/cd-principale.sh}
+H=${1:-$(dirname "$0")/cd-main.sh}
 R=/repo W=/repo/.claude/worktrees/fix/foo
 fail=0
 t() {

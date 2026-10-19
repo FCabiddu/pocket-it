@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 # Merges an approved PR and cleans everything up, in the right order:
 #   -. stops if the branch carries a task ID (T10, E2E-3, R19) and the PR body does not name it;
-#   -. stops if the PR brings a wave (onda/*) to main without the «security» = success status
-#      on the head commit (sicurezza-ok.sh, after the security agent's SICUREZZA OK);
+#   -. stops if the PR brings a wave (wave/*) to main without the «security» = success status
+#      on the head commit (security-ok.sh, after the security agent's SECURITY OK);
 #   -. stops if the PR adds or changes files in tasks/<slug>/ and the plan tasks/<slug>/INDEX.md
-#      is missing or has no rows that pulisci-onda.sh can read (piano.sh);
+#      is missing or has no rows that clean-wave.sh can read (plan.sh);
 #   0. runs the project's scripts/pre-merge.sh on the PR merged with the base, with
 #      PRE_MERGE_BASE=<base>, and stops if it is red, if the PR conflicts or if the
 #      script is missing (template: lite/templates/pre-merge.sh);
 #   1. removes the worktrees of the branch and rev-<PR> (stops if the worktree has uncommitted changes),
 #      after stopping the processes still running inside (stop-worktree-procs.sh);
-#   2. merge and deletion of the remote branch: squash, but a true merge if the base is onda/*
+#   2. merge and deletion of the remote branch: squash, but a true merge if the base is wave/*
 #      (a squash would flatten the merge of main done in the branch, and the wave would
 #      conflict with main);
 #   3. checks that the remote branch is gone;
 #   4. deletes the local branch;
 #   5. fetch, local main up to date (--ff-only), worktree prune.
-#   Commands towards GitHub (gh, git fetch/push/ls-remote) are retried if the network drops (rete.sh).
+#   Commands towards GitHub (gh, git fetch/push/ls-remote) are retried if the network drops (network.sh).
 #   merge-pr.sh <PR>     (from inside the repo)
 set -euo pipefail
 
 bin=$(cd "$(dirname "$0")" && pwd)   # before the cd into the repo: $0 may be relative
-. "$bin/piano.sh"
-. "$bin/rete.sh"
+. "$bin/plan.sh"
+. "$bin/network.sh"
 
 die() { echo "merge-pr: $1" >&2; exit "${2:-1}"; }
 
@@ -46,10 +46,10 @@ if [ -n "$task" ]; then
 fi
 
 # A wave reaches main only with the security agent's sign-off on the commit being merged
-# («security» status set by sicurezza-ok.sh): a commit added after the sign-off requires a new check.
-if [ "$base" = main ] && [ "${branch#onda/}" != "$branch" ]; then
+# («security» status set by security-ok.sh): a commit added after the sign-off requires a new check.
+if [ "$base" = main ] && [ "${branch#wave/}" != "$branch" ]; then
   sec=$(rete gh api "repos/{owner}/{repo}/commits/$head/statuses" -q '[.[] | select(.context == "security")][0].state // ""')
-  [ "$sec" = success ] || die "wave $branch has no sign-off from the security agent on commit ${head:0:8}: run security (Wave job), then sicurezza-ok.sh $pr"
+  [ "$sec" = success ] || die "wave $branch has no sign-off from the security agent on commit ${head:0:8}: run security (Wave job), then security-ok.sh $pr"
 fi
 
 # Removes the directories left empty between the removed worktree and .claude/worktrees.
@@ -68,9 +68,9 @@ if git cat-file -e "$ref:scripts/pre-merge.sh" 2>/dev/null || git cat-file -e "o
   git worktree add -q --detach "$check" "$ref"
   git -C "$check" -c user.name=merge-pr -c user.email=merge-pr@localhost merge -q --no-edit "origin/$base" \
     || die "PR $pr conflicts with $base: merge $base into the branch"
-  # The task plan is checked when it comes in, not at the end of the wave in pulisci-onda.sh.
+  # The task plan is checked when it comes in, not at the end of the wave in clean-wave.sh.
   for slug in $(git -C "$check" diff --name-only --diff-filter=d "origin/$base" HEAD -- tasks/ | awk -F/ 'NF > 2 { print $2 }' | sort -u); do
-    errore=$(piano_controlla "$check" "$slug")
+    errore=$(plan_check "$check" "$slug")
     [ -z "$errore" ] || die "PR $pr: $errore. The task-writer fixes it on the branch, then rerun"
   done
   # A PR that changes the dependencies is not checked with the node_modules of the main
@@ -90,7 +90,7 @@ if git cat-file -e "$ref:scripts/pre-merge.sh" 2>/dev/null || git cat-file -e "o
   trap - EXIT
 else
   git update-ref -d "$ref"
-  die "the project has no scripts/pre-merge.sh: no merge without checks. The architect creates it from $bin/../templates/pre-merge.sh (progetto-pronto.sh says what is missing)"
+  die "the project has no scripts/pre-merge.sh: no merge without checks. The architect creates it from $bin/../templates/pre-merge.sh (project-ready.sh says what is missing)"
 fi
 
 # 1. Worktrees: those on the PR branch, plus rev-<PR>.
@@ -108,7 +108,7 @@ while IFS= read -r p; do
 done <<< "$paths"
 
 # 2. Merge.
-case "$base" in onda/*) how=--merge ;; *) how=--squash ;; esac
+case "$base" in wave/*) how=--merge ;; *) how=--squash ;; esac
 # If the network drops after the merge, the retry says «already merged»: the state decides.
 rete gh pr merge "$pr" "$how" --delete-branch >/dev/null || true
 merged=$(rete gh pr view "$pr" --json state -q .state)

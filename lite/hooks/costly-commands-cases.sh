@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Test cases of comandi-costosi.sh: `bash lite/hooks/comandi-costosi-cases.sh`. Exits with 1 if a case fails.
-H=$(dirname "$0")/comandi-costosi.sh
+# Test cases of costly-commands.sh: `bash lite/hooks/costly-commands-cases.sh`. Exits with 1 if a case fails.
+H=$(dirname "$0")/costly-commands.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 tmp=$(cd "$tmp" && pwd -P)
 R=$tmp/repo; git init -q "$R"; mkdir -p "$R/.claude/worktrees/task" "$R/src"
-printf 'File delle direttive tecniche: `docs/direttive.md`\nComandi solo con ok: netlify deploy , supabase db push,node scripts/genera-.*\\.mjs\n' > "$R/CLAUDE.md"
-S=$tmp/senza; git init -q "$S"; printf 'E2E: nessuno\n' > "$S/CLAUDE.md"
-N=$tmp/nessuno; git init -q "$N"; printf 'Comandi solo con ok: nessuno\n' > "$N/CLAUDE.md"
+printf 'Technical directives file: `docs/direttive.md`\nCommands only with approval: netlify deploy , supabase db push,node scripts/genera-.*\\.mjs\n' > "$R/CLAUDE.md"
+S=$tmp/senza; git init -q "$S"; printf 'E2E: none\n' > "$S/CLAUDE.md"
+N=$tmp/nessuno; git init -q "$N"; printf 'Commands only with approval: none\n' > "$N/CLAUDE.md"
 mkdir -p "$tmp/fuori"
 fail=0
 t() {
@@ -30,7 +30,7 @@ t BLOCK developer "$tmp"                      "(cd repo/src && npm run build && 
 t ok    developer "$tmp/fuori"                'netlify deploy'
 t ok    developer "$S"                        'netlify deploy'
 t ok    developer "$N"                        'netlify deploy'
-t ok    developer "$N"                        'echo nessuno'
+t ok    developer "$N"                        'echo none'
 t ok    developer "$R"                        ''
 printf '{rotto' | bash "$H" >/dev/null 2>&1; rc=$?
 if [ $rc -eq 0 ]; then echo "PASS  broken JSON → exit 0"; else echo "FAIL  broken JSON → exit $rc"; fail=1; fi

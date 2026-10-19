@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash): the project's «only with ok» commands are not run by an agent.
-# The project's CLAUDE.md lists them on one line: `Comandi solo con ok: <regex>, <regex>, ...`
+# The project's CLAUDE.md lists them on one line: `Commands only with approval: <regex>, <regex>, ...`
 # (Python regexes, comma-separated, hence with no commas inside; `nessuno` = no command).
 # - Only for subagents (agent_type present): the main session passes, it is the one asking the user for the ok.
 # - CLAUDE.md is looked up in the repo of the command's cwd and of the `cd <dir>` the command contains
@@ -38,11 +38,11 @@ for dir in dirs:
         continue
     lista = None
     for riga in open(claude, encoding="utf-8", errors="replace"):
-        m = re.match(r"^Comandi solo con ok:\s*(.*?)\s*$", riga)
+        m = re.match(r"^Commands only with approval:\s*(.*?)\s*$", riga)
         if m:
             lista = m.group(1)
             break
-    if lista is None or lista.lower() in ("", "nessuno", "-"):
+    if lista is None or lista.lower() in ("", "none", "-"):
         continue
     for rx in (x.strip() for x in lista.split(",")):
         if not rx:
@@ -55,5 +55,5 @@ for dir in dirs:
             continue
 ' 2>/dev/null)
 [ -z "$out" ] && exit 0
-echo "comandi-costosi: «${out}» is a command that needs the user's ok (line «Comandi solo con ok» in the project's CLAUDE.md): stop and ask for it in the report, do not run it" >&2
+echo "costly-commands: «${out}» is a command that needs the user's ok (line «Commands only with approval» in the project's CLAUDE.md): stop and ask for it in the report, do not run it" >&2
 exit 2

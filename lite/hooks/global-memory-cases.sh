@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Test cases for memoria-globale.sh: `bash lite/hooks/memoria-globale-cases.sh`. Exits with 1 if a case fails.
-H=$(dirname "$0")/memoria-globale.sh
+# Test cases for global-memory.sh: `bash lite/hooks/global-memory-cases.sh`. Exits with 1 if a case fails.
+H=$(dirname "$0")/global-memory.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 tmp=$(cd "$tmp" && pwd -P)
-export MEMORIA_HOME=$tmp/home MEMORIA_CLAUDE_DIR=$tmp/home/.claude MEMORIA_PROGETTI_DIR=$tmp/home/Desktop
+export MEMORY_HOME=$tmp/home MEMORY_CLAUDE_DIR=$tmp/home/.claude MEMORY_PROGETTI_DIR=$tmp/home/Desktop
 enc() { printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g'; }
-G=$MEMORIA_CLAUDE_DIR/projects/$(enc "$MEMORIA_HOME")/memory
-mkdir -p "$G" "$MEMORIA_PROGETTI_DIR/app-demo" "$MEMORIA_PROGETTI_DIR/agents/pocket-it" "$MEMORIA_PROGETTI_DIR/varie/foto"
-git init -q "$MEMORIA_PROGETTI_DIR/app-demo"
-mkdir -p "$MEMORIA_CLAUDE_DIR/projects/$(enc "$MEMORIA_PROGETTI_DIR/agents/pocket-it")/memory"
-P=$MEMORIA_CLAUDE_DIR/projects/$(enc "$MEMORIA_PROGETTI_DIR/app-demo")/memory
+G=$MEMORY_CLAUDE_DIR/projects/$(enc "$MEMORY_HOME")/memory
+mkdir -p "$G" "$MEMORY_PROGETTI_DIR/app-demo" "$MEMORY_PROGETTI_DIR/agents/pocket-it" "$MEMORY_PROGETTI_DIR/varie/foto"
+git init -q "$MEMORY_PROGETTI_DIR/app-demo"
+mkdir -p "$MEMORY_CLAUDE_DIR/projects/$(enc "$MEMORY_PROGETTI_DIR/agents/pocket-it")/memory"
+P=$MEMORY_CLAUDE_DIR/projects/$(enc "$MEMORY_PROGETTI_DIR/app-demo")/memory
 fail=0
 t() {
   local exp=$1 tool=$2 path=$3 text=$4 rc got

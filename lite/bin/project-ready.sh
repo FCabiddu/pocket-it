@@ -2,44 +2,44 @@
 # Checks that the project has what the lite flow expects (the «contract»,
 # lite/templates/README.md). The main session runs it once, at the start of a
 # project (its first feature with the flow); if it is red, the architect creates the missing pieces from the templates.
-#   progetto-pronto.sh            (from inside the repo)
-#   progetto-pronto.sh --prova    also runs scripts/pre-merge.sh on the checkout
+#   project-ready.sh            (from inside the repo)
+#   project-ready.sh --dry-run    also runs scripts/pre-merge.sh on the checkout
 # Prints one line for every piece that is missing or wrong; exits with 1 if there is at least one.
 set -euo pipefail
-cd "$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "progetto-pronto: not inside a git repo" >&2; exit 2; }
+cd "$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "project-ready: not inside a git repo" >&2; exit 2; }
 tpl="$(cd "$(dirname "$0")/../templates" && pwd)"
-prova=0; [ "${1:-}" = --prova ] && prova=1
+prova=0; [ "${1:-}" = --dry-run ] && prova=1
 bad=()
 
 # 1. Directives: CLAUDE.md names the directives file, and the file exists.
 if [ ! -f CLAUDE.md ]; then
-  bad+=("CLAUDE.md is missing, with the line «File delle direttive tecniche: \`<path>\`»")
+  bad+=("CLAUDE.md is missing, with the line «Technical directives file: \`<path>\`»")
 else
-  dir=$(grep -oE '[Dd]irettive[^`]*`[^`]+`' CLAUDE.md | head -n 1 | sed -E 's/.*`([^`]+)`/\1/' || true)
-  if [ -z "$dir" ]; then bad+=("CLAUDE.md does not name the directives file (line «File delle direttive tecniche: \`<path>\`»)")
+  dir=$(grep -oE '[Dd]irectives[^`]*`[^`]+`' CLAUDE.md | head -n 1 | sed -E 's/.*`([^`]+)`/\1/' || true)
+  if [ -z "$dir" ]; then bad+=("CLAUDE.md does not name the directives file (line «Technical directives file: \`<path>\`»)")
   elif [ ! -f "$dir" ]; then bad+=("CLAUDE.md names $dir, which does not exist")
-  elif ! grep -qE '^#+ *Sicurezza' "$dir"; then bad+=("$dir has no «Sicurezza» section (architect.md; principles in lite/docs/sicurezza.md)")
+  elif ! grep -qE '^#+ *Security' "$dir"; then bad+=("$dir has no «Security» section (architect.md; principles in lite/docs/security.md)")
   fi
 fi
 
-# 1b. E2E: CLAUDE.md says when the E2E run (al rilascio, a fine onda, nessuno).
-if [ -f CLAUDE.md ] && ! grep -qE '^E2E: (al rilascio|a fine onda|nessuno)$' CLAUDE.md; then
-  bad+=("CLAUDE.md has no «E2E: al rilascio», «E2E: a fine onda» or «E2E: nessuno» line (it says when the E2E run)")
+# 1b. E2E: CLAUDE.md says when the E2E run (at release, end of wave, none).
+if [ -f CLAUDE.md ] && ! grep -qE '^E2E: (at release|end of wave|none)$' CLAUDE.md; then
+  bad+=("CLAUDE.md has no «E2E: at release», «E2E: end of wave» or «E2E: none» line (it says when the E2E run)")
 fi
 
 # 1c. Deploy: CLAUDE.md says whether a merge to main triggers a deploy (build, credits), before the first merge.
-if [ -f CLAUDE.md ] && ! grep -qE '^Deploy da main: (sì|no)' CLAUDE.md; then
-  bad+=("CLAUDE.md has no «Deploy da main: sì» or «Deploy da main: no» line (it says whether a merge to main publishes and costs)")
+if [ -f CLAUDE.md ] && ! grep -qE '^Deploy from main: (yes|no)' CLAUDE.md; then
+  bad+=("CLAUDE.md has no «Deploy from main: yes» or «Deploy from main: no» line (it says whether a merge to main publishes and costs)")
 fi
 
-# 1c2. Comandi solo con ok: CLAUDE.md lists the commands an agent does not run on its own (hooks/comandi-costosi.sh), or «nessuno».
-if [ -f CLAUDE.md ] && ! grep -qE '^Comandi solo con ok: .+' CLAUDE.md; then
-  bad+=("CLAUDE.md has no «Comandi solo con ok: <regex>, <regex>, ...» line (or «Comandi solo con ok: nessuno»): the commands an agent does not run without the user's ok, lite/templates/README.md")
+# 1c2. Commands only with approval: CLAUDE.md lists the commands an agent does not run on its own (hooks/costly-commands.sh), or «nessuno».
+if [ -f CLAUDE.md ] && ! grep -qE '^Commands only with approval: .+' CLAUDE.md; then
+  bad+=("CLAUDE.md has no «Commands only with approval: <regex>, <regex>, ...» line (or «Commands only with approval: nessuno»): the commands an agent does not run without the user's ok, lite/templates/README.md")
 fi
 
 # 1d. Security: the project has had the first audit by the security agent (Audit job).
-if ! ls docs/sicurezza/audit-*.md >/dev/null 2>&1; then
-  bad+=("docs/sicurezza/audit-<date>.md is missing: the first security audit is done by the security agent (Audit job)")
+if ! ls docs/security/audit-*.md >/dev/null 2>&1; then
+  bad+=("docs/security/audit-<date>.md is missing: the first security audit is done by the security agent (Audit job)")
 fi
 
 # 1e. Sandbox: .claude/settings.json confines the agents' Bash commands in the Claude Code sandbox
@@ -82,25 +82,25 @@ elif [ "$prova" = 1 ]; then
   if ! PRE_MERGE_BASE=main bash scripts/pre-merge.sh >/dev/null 2>&1; then bad+=("scripts/pre-merge.sh is red on the current checkout"); fi
 fi
 
-# 3. E2E: unless «E2E: nessuno» in CLAUDE.md (project with no interface to test from the outside).
-if [ -f CLAUDE.md ] && grep -qE '^E2E: nessuno' CLAUDE.md; then
+# 3. E2E: unless «E2E: none» in CLAUDE.md (project with no interface to test from the outside).
+if [ -f CLAUDE.md ] && grep -qE '^E2E: none' CLAUDE.md; then
   :
 else
   if [ ! -f scripts/e2e.sh ]; then
-    bad+=("scripts/e2e.sh is missing (template: $tpl/e2e.sh; a project without E2E writes «E2E: nessuno» in CLAUDE.md)")
-  elif ! grep -q 'e2e-slots' scripts/e2e.sh || ! grep -q 'e2e-giri' scripts/e2e.sh; then
-    bad+=("scripts/e2e.sh has no local queue (e2e-slots) or run log (e2e-giri) from the template $tpl/e2e.sh")
+    bad+=("scripts/e2e.sh is missing (template: $tpl/e2e.sh; a project without E2E writes «E2E: none» in CLAUDE.md)")
+  elif ! grep -q 'e2e-slots' scripts/e2e.sh || ! grep -q 'e2e-runs' scripts/e2e.sh; then
+    bad+=("scripts/e2e.sh has no local queue (e2e-slots) or run log (e2e-runs) from the template $tpl/e2e.sh")
   fi
-  if [ ! -f scripts/e2e-scelta.sh ]; then
-    bad+=("scripts/e2e-scelta.sh is missing (template: $tpl/e2e-scelta.sh and $tpl/spec-per-cartella.txt)")
-  elif ! bash scripts/e2e-scelta.sh --verifica >/dev/null 2>&1; then
-    bad+=("scripts/e2e-scelta.sh --verifica is red: the spec map has wrong lines")
+  if [ ! -f scripts/e2e-select.sh ]; then
+    bad+=("scripts/e2e-select.sh is missing (template: $tpl/e2e-select.sh and $tpl/spec-per-folder.txt)")
+  elif ! bash scripts/e2e-select.sh --check >/dev/null 2>&1; then
+    bad+=("scripts/e2e-select.sh --check is red: the spec map has wrong lines")
   fi
 fi
 
 if [ ${#bad[@]} -eq 0 ]; then
-  echo "progetto-pronto: ok"
+  echo "project-ready: ok"
   exit 0
 fi
-printf 'progetto-pronto: %s\n' "${bad[@]}"
+printf 'project-ready: %s\n' "${bad[@]}"
 exit 1

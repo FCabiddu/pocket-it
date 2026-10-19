@@ -101,5 +101,5 @@ for seg in segs:
         d = target
 ')
 [ -n "$msg" ] || exit 0
-echo "cd-principale: $msg" >&2
+echo "cd-main: $msg" >&2
 exit 2

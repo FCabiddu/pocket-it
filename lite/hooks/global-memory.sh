@@ -6,20 +6,20 @@
 # - Every other write there, and every Bash command that touches it, asks the user for confirmation: a project
 #   memory that does not name the project can be recognised only by reading it.
 # Projects: the git repos under ~/Desktop and the directories that have a memory in ~/.claude/projects/.
-# For the tests: MEMORIA_HOME, MEMORIA_CLAUDE_DIR, MEMORIA_PROGETTI_DIR.
+# For the tests: MEMORY_HOME, MEMORY_CLAUDE_DIR, MEMORY_PROGETTI_DIR.
 input=$(cat)
 out=$(printf '%s' "$input" | python3 -c '
 import json, os, re, subprocess, sys
-home = os.environ.get("MEMORIA_HOME") or os.path.expanduser("~")
-claude = os.environ.get("MEMORIA_CLAUDE_DIR") or os.path.join(home, ".claude")
-desk = os.environ.get("MEMORIA_PROGETTI_DIR") or os.path.join(home, "Desktop")
+home = os.environ.get("MEMORY_HOME") or os.path.expanduser("~")
+claude = os.environ.get("MEMORY_CLAUDE_DIR") or os.path.join(home, ".claude")
+desk = os.environ.get("MEMORY_PROGETTI_DIR") or os.path.join(home, "Desktop")
 enc = lambda p: re.sub(r"[^A-Za-z0-9]", "-", p)
 mem = os.path.join(os.path.realpath(claude), "projects", enc(home), "memory") + "/"
 d = json.load(sys.stdin)
 ti = d.get("tool_input", {})
 def chiedi(perche):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
-        "permissionDecisionReason": "memoria-globale: " + perche}}))
+        "permissionDecisionReason": "global-memory: " + perche}}))
     sys.exit(0)
 if d.get("tool_name") == "Bash":
     cmd = ti.get("command") or ""
@@ -58,5 +58,5 @@ chiedi("write into the global memory: is it a preference valid for every project
 ' 2>/dev/null)
 [ -z "$out" ] && exit 0
 case $out in '{'*) printf '%s\n' "$out"; exit 0;; esac
-echo "memoria-globale: $out" >&2
+echo "global-memory: $out" >&2
 exit 2

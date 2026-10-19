@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash): blocks pushes to main/master, plain force pushes, and a «git checkout/restore» of a
-# file with uncommitted changes (it would wipe them: use scripts/mutazione.sh fine, or commit first).
+# file with uncommitted changes (it would wipe them: commit first).
 # Override for a deliberate push to main: prefix the command with ALLOW_MAIN_PUSH=1.
 input=$(cat)
 cmd=$(printf '%s' "$input" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tool_input",{}).get("command",""))' 2>/dev/null)
 cwd=$(printf '%s' "$input" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("cwd",""))' 2>/dev/null)
 agent=$(printf '%s' "$input" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("agent_type") or "")' 2>/dev/null)
 # Agents: no prettier --write by hand. Formatting is done by the pre-commit hook (lint-staged) on the files of the
-# commit only; by hand an agent reformatted files outside its task (10/10, 13/10, 15/10: see
-# docs/recap/2026-10-15-errori.md). Quoted text and heredoc bodies are not commands.
+# commit only; by hand an agent reformatted files outside its task. Quoted text and heredoc bodies are not commands.
 if [ -n "$agent" ]; then
   fmt=$(printf '%s' "$cmd" | python3 -c '
 import os, re, shlex, sys
@@ -130,23 +129,23 @@ for seg in segments(strip_heredocs(src)):
             for a in args:
                 # variable, substitution or glob: the text does not say which files it touches, the whole repo counts
                 if re.search(r"[$`*?\[]", a):
-                    print("dinamico\t" + where + "\t" + a)
+                    print("dynamic\t" + where + "\t" + a)
             for a in paths:
-                print("tocca\t" + where + "\t" + a)
+                print("touches\t" + where + "\t" + a)
             break
 ')
 [ -n "$pushes" ] || exit 0
 block() { echo "guard: $1" >&2; exit 2; }
 while IFS=$'\t' read -r kind dir seg; do
-  if [ "$kind" = dinamico ]; then
+  if [ "$kind" = dynamic ]; then
     if [ -n "$(git -C "${dir:-.}" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-      block "the argument $seg does not say which files it touches and the repo has uncommitted changes that checkout/restore can wipe: for a mutation use scripts/mutazione.sh fine <file>, otherwise commit first"
+      block "the argument $seg does not say which files it touches and the repo has uncommitted changes that checkout/restore can wipe: commit first"
     fi
     continue
   fi
-  if [ "$kind" = tocca ]; then
+  if [ "$kind" = touches ]; then
     if [ -n "$(git -C "${dir:-.}" status --porcelain -- "$seg" 2>/dev/null)" ]; then
-      block "$seg has uncommitted changes and checkout/restore wipes them: for a mutation use scripts/mutazione.sh fine $seg, otherwise commit first"
+      block "$seg has uncommitted changes and checkout/restore wipes them: commit first"
     fi
     continue
   fi

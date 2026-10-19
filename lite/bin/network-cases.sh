@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Test cases of rete.sh: `bash lite/bin/rete-cases.sh`. Exits with 1 if a case fails.
-. "$(cd "$(dirname "$0")" && pwd)/rete.sh"
-export RETE_ATTESE="0 0 0"
+# Test cases of network.sh: `bash lite/bin/network-cases.sh`. Exits with 1 if a case fails.
+. "$(cd "$(dirname "$0")" && pwd)/network.sh"
+export NET_WAITS="0 0 0"
 tmp=$(mktemp -d); fail=0
 c() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 (expected $2, got $3)"; fail=1; fi; }
 # finto <errors before succeeding> <message>: counts the runs in $tmp/n, prints «ok» when it succeeds.
@@ -18,6 +18,6 @@ c "network always down: gives up"       "/4/4"   "$(prova 9 'Could not resolve h
 c "non-network error: no retry"         "/4/1"   "$(prova 9 'GraphQL: Could not resolve to a PullRequest')"
 c "rejected merge: no retry"            "/4/1"   "$(prova 9 'Pull request is not mergeable')"
 c "error shown to the caller"           "Pull request is not mergeable" "$(rm -f "$tmp/n"; rete finto 9 'Pull request is not mergeable' 2>&1 >/dev/null)"
-c "set -e: the retry does not exit early" "ok"     "$(rm -f "$tmp/n"; bash -c 'set -euo pipefail; . "$1"; RETE_ATTESE=0; f() { [ -e "$2/x" ] || { touch "$2/x"; echo "Could not resolve host" >&2; return 1; }; echo ok; }; rete f _ "$2"' _ "$(dirname "$0")/rete.sh" "$tmp")"
+c "set -e: the retry does not exit early" "ok"     "$(rm -f "$tmp/n"; bash -c 'set -euo pipefail; . "$1"; NET_WAITS=0; f() { [ -e "$2/x" ] || { touch "$2/x"; echo "Could not resolve host" >&2; return 1; }; echo ok; }; rete f _ "$2"' _ "$(dirname "$0")/network.sh" "$tmp")"
 rm -rf "$tmp"
 exit $fail

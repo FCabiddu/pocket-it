@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Test cases for progetto-pronto.sh (sandbox check, 1e): `bash lite/bin/progetto-pronto-cases.sh`.
+# Test cases for project-ready.sh (sandbox check, 1e): `bash lite/bin/project-ready-cases.sh`.
 # Exits with 1 if a case fails.
 bin=$(cd "$(dirname "$0")" && pwd)
 tmp=$(cd "$(mktemp -d)" && pwd -P); fail=0
 c() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 (expected $2, got $3)"; fail=1; fi; }
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 
-# Project with everything else in place (E2E: nessuno, so e2e.sh and e2e-scelta.sh are not needed).
-r="$tmp/repo"; g init -q "$r"; mkdir -p "$r/docs/sicurezza" "$r/scripts" "$r/.claude"
-printf 'File delle direttive tecniche: `docs/direttive.md`\nE2E: nessuno\nDeploy da main: no\nComandi solo con ok: nessuno\n' > "$r/CLAUDE.md"
-printf '# Direttive\n## Sicurezza\n' > "$r/docs/direttive.md"
-echo audit > "$r/docs/sicurezza/audit-2026-01-01.md"
+# Project with everything else in place (E2E: none, so e2e.sh and e2e-select.sh are not needed).
+r="$tmp/repo"; g init -q "$r"; mkdir -p "$r/docs/security" "$r/scripts" "$r/.claude"
+printf 'Technical directives file: `docs/direttive.md`\nE2E: none\nDeploy from main: no\nCommands only with approval: nessuno\n' > "$r/CLAUDE.md"
+printf '# Direttive\n## Security\n' > "$r/docs/direttive.md"
+echo audit > "$r/docs/security/audit-2026-01-01.md"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$r/scripts/pre-merge.sh"
-pp() { (cd "$r" && bash "$bin/progetto-pronto.sh" 2>&1); }
+pp() { (cd "$r" && bash "$bin/project-ready.sh" 2>&1); }
 # sb <python that modifies s> : starts from the template and changes it.
 sb() { python3 -I - "$bin/../templates/settings.json" "$r/.claude/settings.json" "$1" <<'PY'
 import json, sys
@@ -25,7 +25,7 @@ c "without settings.json: red"            1 "$rc"
 c "without settings.json: names the template"  si "$(grep -q '.claude/settings.json with the sandbox is missing (template: .*templates/settings.json)' <<< "$out" && echo si || echo no)"
 sb ""; out=$(pp); rc=$?
 c "template copied: green"                0 "$rc"
-c "template copied: one ok line"          "progetto-pronto: ok" "$out"
+c "template copied: one ok line"          "project-ready: ok" "$out"
 sb 's["sandbox"]["enabled"] = False'; out=$(pp); rc=$?
 c "enabled false: red"                    1 "$rc"
 c "enabled false: says what is missing"   si "$(grep -q 'sandbox.enabled: true' <<< "$out" && echo si || echo no)"

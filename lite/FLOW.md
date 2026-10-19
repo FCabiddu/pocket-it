@@ -4,7 +4,7 @@ The flow described by `CLAUDE.md` (rules v7), the agents in `.claude/agents/`, t
 
 ## 1 · The big picture
 
-Once, at the start of a project, `progetto-pronto.sh` checks that the project has the scripts the flow uses (`templates/README.md`); whatever is missing, the architect creates from the templates. A feature goes through these steps; small work (a bug, a change) is done by the main session alone, on a branch, with a PR and a merge.
+Once, at the start of a project, `project-ready.sh` checks that the project has the scripts the flow uses (`templates/README.md`); whatever is missing, the architect creates from the templates. A feature goes through these steps; small work (a bug, a change) is done by the main session alone, on a branch, with a PR and a merge.
 
 ```mermaid
 flowchart LR
@@ -21,7 +21,7 @@ The tasks of a wave run in parallel, each with its own developer.
 
 ```mermaid
 flowchart TD
-    B["branch onda/slug-N<br/>from main"] --> D["developer<br/>code + fast tests"]
+    B["branch wave/slug-N<br/>from main"] --> D["developer<br/>code + fast tests"]
     D --> R{"reviewer<br/>reads the code"}
     R -- "changes" --> D
     R -- "ok" --> P["merge into the wave branch<br/>(tsc, lint, unit run automatically)"]
@@ -36,14 +36,14 @@ flowchart TD
     T["tester<br/>writes and runs the E2E"] --> V{"green?"}
     S["security<br/>looks for holes in the wave's diff"] --> SO{"ok?"}
     SO -- "holes" --> D
-    SO -- "SICUREZZA OK<br/>sicurezza-ok.sh" --> M
+    SO -- "SECURITY OK<br/>security-ok.sh" --> M
     V -- "yes" --> M["the wave goes to main<br/>(merge-pr.sh requires the security sign-off)"]
     V -- "wrong test" --> T
     V -- "app bugs" --> D["developer fixes<br/>every finding of the round<br/>reviewer checks"]
-    D -- "one RIGIRA (rerun):<br/>rerun the reds" --> T
+    D -- "one RERUN (rerun):<br/>rerun the reds" --> T
     D -. "still red after 2 rounds" .-> U["ask the user"]
 ```
 
 ## End of a wave
 
-With the wave on `main`: `errori.sh` and the agents' reports; every friction is one line in `docs/recap/attriti.md` (the third time it is damage), every damage a recap discussed with the user; then `pulisci-onda.sh` removes the wave's tasks from `main`, and the next wave starts.
+With the wave on `main`: `errors.sh` and the agents' reports; every friction is one line in `docs/recap/friction.md` (the third time it is damage), every damage a recap discussed with the user; then `clean-wave.sh` removes the wave's tasks from `main`, and the next wave starts.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Template of the lite flow (lite/templates/pre-merge.sh): the architect copies it to
-# scripts/pre-merge.sh and adapts only the «DA ADATTARE» block.
+# scripts/pre-merge.sh and adapts only the «TO ADAPT» block.
 #
 # `merge-pr.sh` runs it on the PR's code merged with the base (main or the wave branch),
 # with PRE_MERGE_BASE=<base>: an exit other than 0 stops the merge. These are the fast checks
@@ -23,7 +23,7 @@ check() {
   echo "pre-merge: $name green"
 }
 
-# --- DA ADATTARE: the project's fast checks, from the quickest on ------------------------
+# --- TO ADAPT: the project's fast checks, from the quickest on ------------------------
 # Examples for a Node project; for other stacks: `cargo check`, `ruff check .`, `pytest -m "not e2e"`, …
 check typecheck npx tsc --noEmit -p .
 check lint      npx eslint . --quiet

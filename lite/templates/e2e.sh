@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Template of the lite flow (lite/templates/e2e.sh): the architect copies it to scripts/e2e.sh
-# and adapts only the «DA ADATTARE» block. Usage: `bash scripts/e2e.sh <spec...> [runner options]`.
+# and adapts only the «TO ADAPT» block. Usage: `bash scripts/e2e.sh <spec...> [runner options]`.
 #
 # What it guarantees, the same in every project:
 #  - one E2E run at a time on the machine for every slot (port), shared by all the
@@ -10,18 +10,18 @@
 #  - if scripts/e2e-build.sh exists, it runs it after taking the slot (project build);
 #  - the runner receives the slot's PORT and BASE_URL;
 #  - every run leaves a line (time, exit, summary, arguments) in
-#    <git-common-dir>/e2e-giri/<branch>.log, outside git and shared by the worktrees: the tester's
+#    <git-common-dir>/e2e-runs/<branch>.log, outside git and shared by the worktrees: the tester's
 #    PR reports every run and the reviewer compares it with this file.
 set -euo pipefail
 
-# «E2E:» line of CLAUDE.md: with «E2E: al rilascio» the E2E run only in the round before the release.
-# E2E_FORZA=1 only for a run the user asks for.
-if grep -qE '^E2E: al rilascio' "$(git rev-parse --show-toplevel)/CLAUDE.md" 2>/dev/null && [ "${E2E_FORZA:-}" != 1 ]; then
-  echo "e2e: CLAUDE.md says «E2E: al rilascio», the E2E run only in the round before the release (E2E_FORZA=1)" >&2
+# «E2E:» line of CLAUDE.md: with «E2E: at release» the E2E run only in the round before the release.
+# E2E_FORCE=1 only for a run the user asks for.
+if grep -qE '^E2E: at release' "$(git rev-parse --show-toplevel)/CLAUDE.md" 2>/dev/null && [ "${E2E_FORCE:-}" != 1 ]; then
+  echo "e2e: CLAUDE.md says «E2E: at release», the E2E run only in the round before the release (E2E_FORCE=1)" >&2
   exit 1
 fi
 
-# --- DA ADATTARE ------------------------------------------------------------------------
+# --- TO ADAPT ------------------------------------------------------------------------
 PORTS=(3101)      # one slot per port; more ports only if two runs together do not disturb each other (shared DB: one)
 WAIT_MAX=3600     # maximum seconds in the queue
 run_e2e() {       # the project's runner; receives the script's arguments
@@ -90,7 +90,7 @@ if [ -f scripts/e2e-build.sh ]; then bash scripts/e2e-build.sh >&2; fi
 
 name=$(git rev-parse --abbrev-ref HEAD)
 [ "$name" = HEAD ] && name=$(basename "$(git rev-parse --show-toplevel)")
-log="$common/e2e-giri/${name//\//_}.log"
+log="$common/e2e-runs/${name//\//_}.log"
 mkdir -p "$(dirname "$log")"
 out=$(mktemp)
 set +e
