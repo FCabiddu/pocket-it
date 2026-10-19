@@ -32,7 +32,7 @@ repo=$(dirname "$common")
 root="$repo/.claude/worktrees"
 cd "$repo"
 
-read -r state branch base head < <(rete gh pr view "$pr" --json state,headRefName,baseRefName,headRefOid -q '.state + " " + .headRefName + " " + .baseRefName + " " + .headRefOid')
+read -r state branch base head < <(retry gh pr view "$pr" --json state,headRefName,baseRefName,headRefOid -q '.state + " " + .headRefName + " " + .baseRefName + " " + .headRefOid')
 [ "$state" = "OPEN" ] || die "PR $pr is $state, not OPEN"
 
 # The body belongs to the right PR: if the branch carries a task ID (feat/<x>-T10-…,
@@ -40,7 +40,7 @@ read -r state branch base head < <(rete gh pr view "$pr" --json state,headRefNam
 # task makes the reviewer decide on the wrong results.
 task=$(sed -nE 's#^.*[/-](E2E-[0-9]+|[TR][0-9]+[a-z]?)(-.*)?$#\1#p' <<< "$branch")
 if [ -n "$task" ]; then
-  body=$(rete gh pr view "$pr" --json body -q .body)
+  body=$(retry gh pr view "$pr" --json body -q .body)
   grep -qwF -- "$task" <<< "$body" \
     || die "the body of PR $pr does not name task $task of branch $branch: is it the body of another PR? Fix it (gh pr edit $pr --body-file …) and rerun"
 fi
@@ -48,7 +48,7 @@ fi
 # A wave reaches main only with the security agent's sign-off on the commit being merged
 # («security» status set by security-ok.sh): a commit added after the sign-off requires a new check.
 if [ "$base" = main ] && [ "${branch#wave/}" != "$branch" ]; then
-  sec=$(rete gh api "repos/{owner}/{repo}/commits/$head/statuses" -q '[.[] | select(.context == "security")][0].state // ""')
+  sec=$(retry gh api "repos/{owner}/{repo}/commits/$head/statuses" -q '[.[] | select(.context == "security")][0].state // ""')
   [ "$sec" = success ] || die "wave $branch has no sign-off from the security agent on commit ${head:0:8}: run security (Wave job), then security-ok.sh $pr"
 fi
 
@@ -61,7 +61,7 @@ ref="refs/merge-pr/$pr"
 check="$root/pre-merge-$pr"
 remove_check() { if [ -e "$check" ]; then git worktree remove --force "$check"; prune_parents "$check"; fi; }
 cleanup_check() { remove_check; git update-ref -d "$ref" 2>/dev/null || true; }
-rete git fetch -q origin "$base" "+refs/pull/$pr/head:$ref"
+retry git fetch -q origin "$base" "+refs/pull/$pr/head:$ref"
 if git cat-file -e "$ref:scripts/pre-merge.sh" 2>/dev/null || git cat-file -e "origin/$base:scripts/pre-merge.sh" 2>/dev/null; then
   trap 'rc=$?; cleanup_check; exit $rc' EXIT
   remove_check
@@ -70,8 +70,8 @@ if git cat-file -e "$ref:scripts/pre-merge.sh" 2>/dev/null || git cat-file -e "o
     || die "PR $pr conflicts with $base: merge $base into the branch"
   # The task plan is checked when it comes in, not at the end of the wave in clean-wave.sh.
   for slug in $(git -C "$check" diff --name-only --diff-filter=d "origin/$base" HEAD -- tasks/ | awk -F/ 'NF > 2 { print $2 }' | sort -u); do
-    errore=$(plan_check "$check" "$slug")
-    [ -z "$errore" ] || die "PR $pr: $errore. The task-writer fixes it on the branch, then rerun"
+    error=$(plan_check "$check" "$slug")
+    [ -z "$error" ] || die "PR $pr: $error. The task-writer fixes it on the branch, then rerun"
   done
   # A PR that changes the dependencies is not checked with the node_modules of the main
   # checkout (they are the base's): npm ci installs the PR's.
@@ -110,27 +110,27 @@ done <<< "$paths"
 # 2. Merge.
 case "$base" in wave/*) how=--merge ;; *) how=--squash ;; esac
 # If the network drops after the merge, the retry says «already merged»: the state decides.
-rete gh pr merge "$pr" "$how" --delete-branch >/dev/null || true
-merged=$(rete gh pr view "$pr" --json state -q .state)
+retry gh pr merge "$pr" "$how" --delete-branch >/dev/null || true
+merged=$(retry gh pr view "$pr" --json state -q .state)
 [ "$merged" = "MERGED" ] || die "PR $pr does not show as merged"
 if [ "$how" = --merge ]; then
-  rete git fetch -q origin "$base"
+  retry git fetch -q origin "$base"
   git merge-base --is-ancestor "$head" "origin/$base" || die "true merge expected: $head is not an ancestor of origin/$base"
 fi
 
 # 3. Remote branch.
-remoto=$(rete git ls-remote --heads origin "$branch")
-if [ -n "$remoto" ]; then
-  rete git push -q origin --delete "$branch"
+remote=$(retry git ls-remote --heads origin "$branch")
+if [ -n "$remote" ]; then
+  retry git push -q origin --delete "$branch"
 fi
-remoto=$(rete git ls-remote --heads origin "$branch")
-[ -z "$remoto" ] || die "remote branch $branch is still there"
+remote=$(retry git ls-remote --heads origin "$branch")
+[ -z "$remote" ] || die "remote branch $branch is still there"
 
 # 4. Local branch.
 if git show-ref -q --verify "refs/heads/$branch"; then git branch -q -D "$branch"; fi
 
 # 5. Local base up to date.
-rete git fetch -q --prune origin
+retry git fetch -q --prune origin
 if [ "$(git branch --show-current)" = "$base" ]; then git merge -q --ff-only "origin/$base"; fi
 git worktree prune
 

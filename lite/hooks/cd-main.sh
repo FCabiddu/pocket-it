@@ -39,8 +39,8 @@ for t in toks:
     else:
         cur.append(t)
 segs.append(cur)
-MUTA = {"merge", "checkout", "switch", "reset", "commit", "pull", "rebase", "cherry-pick", "stash", "restore", "revert", "am"}
-def principale(path):
+MUTATING = {"merge", "checkout", "switch", "reset", "commit", "pull", "rebase", "cherry-pick", "stash", "restore", "revert", "am"}
+def is_main_checkout(path):
     # main checkout: the first .git going up is a directory (in a worktree it is a file)
     p = path
     while True:
@@ -79,7 +79,7 @@ for seg in segs:
                 i += 2
             else:
                 i += 1
-        if i < len(seg) and seg[i] in MUTA and principale(gd):
+        if i < len(seg) and seg[i] in MUTATING and is_main_checkout(gd):
             print("git " + seg[i] + " in the main checkout (" + gd + "): an agent works only in its own worktree; check that the cd succeeded and use && between cd and git")
             sys.exit(0)
         continue

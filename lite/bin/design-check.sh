@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the technical design of a feature and the tasks that cite it. The architect runs it when checking the tasks.
 #   design-check.sh <feature folder> <task.md>...
-#   design-check.sh docs/features/mondo-unico-xoria tasks/mondo-unico-xoria/c4-0*.md
+#   design-check.sh docs/features/one-world-xoria tasks/one-world-xoria/c4-0*.md
 # Reports: design files (index and technical-design/, archive excluded) over 150 lines; citations
 # `technical-design/<file>.md` § «title» to a file or a heading (# line) that does not exist, or to the archive;
 # tasks without the «To read» section or with an empty one. Exits with 1 if it finds anything.

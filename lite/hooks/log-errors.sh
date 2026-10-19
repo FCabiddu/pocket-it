@@ -9,10 +9,10 @@ input=$(cat)
 dir="${ERRORS_DIR:-$HOME/.claude/logs/errors}"; mkdir -p "$dir"   # ERRORS_DIR only for the tests
 # Cleanup: the daily logs and the markers of the failed commands are thrown away after 7 days.
 # Once a day, not at every event.
-oggi="$dir/.cleaned-$(date +%F)"
-if [ ! -e "$oggi" ]; then
+today="$dir/.cleaned-$(date +%F)"
+if [ ! -e "$today" ]; then
   rm -f "$dir"/.cleaned-* 2>/dev/null
-  : > "$oggi"
+  : > "$today"
   find "$dir" -maxdepth 1 -name '*.jsonl' -mtime +7 -delete 2>/dev/null
   find "$dir/.seen" -type f -mtime +7 -delete 2>/dev/null
 fi
@@ -39,11 +39,11 @@ if ev == "PostToolUseFailure":
 elif ev == "PermissionDenied":
     base.update(tool=d.get("tool_name"), input=cut(json.dumps(d.get("tool_input", {}))))
     # The reason for the denial: the field name is not documented, so everything not already above is saved.
-    noti = {"session_id", "transcript_path", "cwd", "hook_event_name", "tool_name", "tool_input",
+    known = {"session_id", "transcript_path", "cwd", "hook_event_name", "tool_name", "tool_input",
             "tool_use_id", "agent_id", "agent_type", "permission_mode"}
-    altro = {k: v for k, v in d.items() if k not in noti}
-    if altro:
-        base["other"] = cut(json.dumps(altro, ensure_ascii=False), 400)
+    other = {k: v for k, v in d.items() if k not in known}
+    if other:
+        base["other"] = cut(json.dumps(other, ensure_ascii=False), 400)
 else:
     sys.exit(0)
 with open(log, "a") as f:

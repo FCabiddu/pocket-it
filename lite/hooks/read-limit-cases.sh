@@ -3,8 +3,8 @@
 H=$(dirname "$0")/read-limit.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/src"
-seq 1 301 > "$tmp/src/lungo.ts"
-seq 1 300 > "$tmp/src/corto.ts"
+seq 1 301 > "$tmp/src/long.ts"
+seq 1 300 > "$tmp/src/short.ts"
 fail=0
 t() {
   local exp=$1 agent=$2 tool=$3 json=$4 rc got
@@ -13,20 +13,20 @@ t() {
   if [ "$got" = "$exp" ]; then r=PASS; else r=FAIL; fail=1; fi
   printf '%s  expected %-5s got %-5s  %-10s %s %s\n' "$r" "$exp" "$got" "${agent:-main}" "$tool" "$json"
 }
-t BLOCK developer Read '{"file_path":"src/lungo.ts"}'
-t BLOCK reviewer  Read "{\"file_path\":\"$tmp/src/lungo.ts\"}"
-t BLOCK developer Read '{"file_path":"src/lungo.ts","offset":1,"limit":2000}'
-t ok    developer Read '{"file_path":"src/lungo.ts","offset":100,"limit":300}'
-t ok    developer Read '{"file_path":"src/corto.ts"}'
-t ok    developer Read '{"file_path":"src/non-esiste.ts"}'
-t ok    architect Read '{"file_path":"src/lungo.ts"}'
-t ok    ""        Read '{"file_path":"src/lungo.ts"}'
-t BLOCK developer Bash '{"command":"cat src/lungo.ts"}'
-t BLOCK developer Bash "{\"command\":\"cd $tmp/src && cat lungo.ts\"}"
-t BLOCK developer Bash '{"command":"sed -n 1,400p src/lungo.ts"}'
-t ok    developer Bash '{"command":"sed -n 1,120p src/lungo.ts"}'
-t ok    developer Bash '{"command":"cat src/lungo.ts | grep 5"}'
-t ok    developer Bash '{"command":"cat src/corto.ts"}'
-t ok    developer Bash '{"command":"grep -n foo src/lungo.ts"}'
-t ok    task-writer Bash '{"command":"cat src/lungo.ts"}'
+t BLOCK developer Read '{"file_path":"src/long.ts"}'
+t BLOCK reviewer  Read "{\"file_path\":\"$tmp/src/long.ts\"}"
+t BLOCK developer Read '{"file_path":"src/long.ts","offset":1,"limit":2000}'
+t ok    developer Read '{"file_path":"src/long.ts","offset":100,"limit":300}'
+t ok    developer Read '{"file_path":"src/short.ts"}'
+t ok    developer Read '{"file_path":"src/missing.ts"}'
+t ok    architect Read '{"file_path":"src/long.ts"}'
+t ok    ""        Read '{"file_path":"src/long.ts"}'
+t BLOCK developer Bash '{"command":"cat src/long.ts"}'
+t BLOCK developer Bash "{\"command\":\"cd $tmp/src && cat long.ts\"}"
+t BLOCK developer Bash '{"command":"sed -n 1,400p src/long.ts"}'
+t ok    developer Bash '{"command":"sed -n 1,120p src/long.ts"}'
+t ok    developer Bash '{"command":"cat src/long.ts | grep 5"}'
+t ok    developer Bash '{"command":"cat src/short.ts"}'
+t ok    developer Bash '{"command":"grep -n foo src/long.ts"}'
+t ok    task-writer Bash '{"command":"cat src/long.ts"}'
 exit $fail

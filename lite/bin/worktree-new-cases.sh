@@ -11,28 +11,28 @@ g init -q --bare "$tmp/origin.git"
 g init -q "$tmp/repo"
 mkdir -p "$tmp/repo/.husky/_"
 printf '*\n' > "$tmp/repo/.husky/_/.gitignore"
-printf '#!/bin/sh\ntouch "$(git rev-parse --show-toplevel)/hook-girato"\n' > "$tmp/repo/.husky/_/pre-commit"
+printf '#!/bin/sh\ntouch "$(git rev-parse --show-toplevel)/hook-ran"\n' > "$tmp/repo/.husky/_/pre-commit"
 chmod +x "$tmp/repo/.husky/_/pre-commit"
 g -C "$tmp/repo" config core.hooksPath .husky/_
 echo x > "$tmp/repo/a"; g -C "$tmp/repo" add a; g -C "$tmp/repo" commit -q -m a
-rm -f "$tmp/repo/hook-girato"
+rm -f "$tmp/repo/hook-ran"
 g -C "$tmp/repo" remote add origin "$tmp/origin.git"; g -C "$tmp/repo" push -q origin main
 
-wt=$(cd "$tmp/repo" && bash "$bin/worktree-new.sh" prova 2>/dev/null | tail -1)
-c "worktree created"                   "$tmp/repo/.claude/worktrees/prova" "$wt"
+wt=$(cd "$tmp/repo" && bash "$bin/worktree-new.sh" sample 2>/dev/null | tail -1)
+c "worktree created"                   "$tmp/repo/.claude/worktrees/sample" "$wt"
 echo y > "$wt/b"; g -C "$wt" add b; g -C "$wt" commit -q -m b
-c "the pre-commit runs in the worktree" "yes" "$([ -e "$wt/hook-girato" ] && echo yes || echo no)"
-echo punto > "$wt/NOTE.md"
+c "the pre-commit runs in the worktree" "yes" "$([ -e "$wt/hook-ran" ] && echo yes || echo no)"
+echo progress > "$wt/NOTE.md"
 c "NOTE.md in the worktree is not untracked" "" "$(g -C "$wt" status --porcelain | grep NOTE.md || true)"
 c "NOTE.md excluded only once"         1 "$(grep -cx NOTE.md "$tmp/repo/.git/info/exclude")"
-rm -f "$wt/hook-girato"
-c "the hooks folder is not untracked" "" "$(g -C "$wt" status --porcelain | grep -v '^?? hook-girato' || true)"
-wt2=$(cd "$tmp/repo" && bash "$bin/worktree-new.sh" prova 2>/dev/null | tail -1)
+rm -f "$wt/hook-ran"
+c "the hooks folder is not untracked" "" "$(g -C "$wt" status --porcelain | grep -v '^?? hook-ran' || true)"
+wt2=$(cd "$tmp/repo" && bash "$bin/worktree-new.sh" sample 2>/dev/null | tail -1)
 c "run again: resumes the worktree"    "$wt" "$wt2"
 
 # Without core.hooksPath it creates nothing.
 g -C "$tmp/repo" config --unset core.hooksPath
-wt3=$(cd "$tmp/repo" && bash "$bin/worktree-new.sh" senza-hook 2>/dev/null | tail -1)
+wt3=$(cd "$tmp/repo" && bash "$bin/worktree-new.sh" no-hook 2>/dev/null | tail -1)
 c "without hooksPath: no .husky/_"     "no" "$([ -e "$wt3/.husky/_" ] && echo yes || echo no)"
 c "NOTE.md excluded only once even after three runs" 1 "$(grep -cx NOTE.md "$tmp/repo/.git/info/exclude")"
 

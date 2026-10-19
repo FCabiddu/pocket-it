@@ -46,57 +46,57 @@ t ok    "(cd $W && git push)"
 t ok    "git checkout main && rm -f x && git push origin task/foo"
 # heredocs and quotes are text, not commands
 t ok    "git commit -F - <<EOF
-fix: non fare mai git push origin main
+fix: never run git push origin main
 EOF"
 t ok    "git commit -F - <<'EOF'
 git push --force origin task/foo
 EOF
 git push origin task/foo"
 t BLOCK "git commit -F - <<EOF
-testo
+text
 EOF
 git push origin main"
-t ok    "gh pr create --title t --body \"riga uno
+t ok    "gh pr create --title t --body \"line one
 git push origin main
-riga tre\""
+line three\""
 t ok    "gh pr create --body \"\$(cat <<'B'
-mai git push origin main
+never git push origin main
 B
 )\""
-t ok    'git commit -m "vietato: git push -f origin main"'
+t ok    'git commit -m "forbidden: git push -f origin main"'
 t ok    "cat <<< 'git push origin main'"
 # unclosed quotes: the raw text is split, in doubt it blocks
 t BLOCK "echo \"x
 git push origin main"
 # checkout/restore of a file with uncommitted changes (it would wipe them): blocked
-mkdir -p "$R/src" && echo a > "$R/src/pulito.ts" && echo b > "$R/src/toccato.ts" && git -C "$R" add src && git -C "$R" commit -q -m files && echo mut >> "$R/src/toccato.ts"
-t BLOCK "git checkout src/toccato.ts"
-t BLOCK "git checkout -- src/toccato.ts"
-t BLOCK "git checkout HEAD -- src/toccato.ts"
-t BLOCK "git restore src/toccato.ts"
-t BLOCK "git restore --worktree --staged src/toccato.ts"
-t BLOCK "git -C $R checkout src/toccato.ts"
-t BLOCK "cd $R && git checkout src/toccato.ts; git status"
-t ok    "git checkout src/pulito.ts"
-t ok    "git checkout -- src/pulito.ts"
-t ok    "git restore --staged src/toccato.ts"
-t ok    "git checkout -b task/nuovo"
+mkdir -p "$R/src" && echo a > "$R/src/clean.ts" && echo b > "$R/src/touched.ts" && git -C "$R" add src && git -C "$R" commit -q -m files && echo mut >> "$R/src/touched.ts"
+t BLOCK "git checkout src/touched.ts"
+t BLOCK "git checkout -- src/touched.ts"
+t BLOCK "git checkout HEAD -- src/touched.ts"
+t BLOCK "git restore src/touched.ts"
+t BLOCK "git restore --worktree --staged src/touched.ts"
+t BLOCK "git -C $R checkout src/touched.ts"
+t BLOCK "cd $R && git checkout src/touched.ts; git status"
+t ok    "git checkout src/clean.ts"
+t ok    "git checkout -- src/clean.ts"
+t ok    "git restore --staged src/touched.ts"
+t ok    "git checkout -b task/new"
 t ok    "git checkout task/foo"
-t ok    "git commit -m 'mai git checkout src/toccato.ts'"
-t BLOCK 'F=src/toccato.ts; git checkout $F'
+t ok    "git commit -m 'never git checkout src/touched.ts'"
+t BLOCK 'F=src/touched.ts; git checkout $F'
 t BLOCK 'git checkout "$F"'
 t BLOCK 'git restore $F'
 t BLOCK 'git checkout -- $F'
 t BLOCK 'git checkout src/*.ts'
 t BLOCK 'git checkout -- src/*.ts'
-t BLOCK 'git checkout `echo src/toccato.ts`'
-t BLOCK 'git restore src/toccat?.ts'
-t BLOCK 'git checkout -- src/[t]occato.ts'
+t BLOCK 'git checkout `echo src/touched.ts`'
+t BLOCK 'git restore src/touche?.ts'
+t BLOCK 'git checkout -- src/[t]ouched.ts'
 t ok    'git restore --staged $F'
 t ok    "git commit -m 'git checkout \$F'"
 # clean repo: variables and globs are free
-git -C "$R" checkout -q -- src/toccato.ts
-t ok    'F=src/toccato.ts; git checkout $F'
+git -C "$R" checkout -q -- src/touched.ts
+t ok    'F=src/touched.ts; git checkout $F'
 t ok    'git checkout -- src/*.ts'
 t ok    'git restore $F'
 # 15/10: agents do not run prettier --write by hand (formatting is done by the pre-commit hook)
@@ -120,7 +120,7 @@ ta BLOCK 'pnpm format'
 ta ok    'npx prettier --check src/lib/a.ts'
 ta ok    'npx prettier -c src/lib/a.ts'
 ta ok    'npm run format:check'
-ta ok    'git commit -m "niente prettier --write a mano"'
+ta ok    'git commit -m "no prettier --write by hand"'
 ta ok    'cat > /tmp/n.md <<EOF
 npx prettier --write .
 EOF'

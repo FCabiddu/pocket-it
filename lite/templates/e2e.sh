@@ -97,7 +97,7 @@ set +e
 PORT=$port BASE_URL="http://localhost:$port" run_e2e "$@" 2>&1 | tee "$out"
 code=${PIPESTATUS[0]}
 set -e
-esito=$(summary "$out" || true)
-printf '%s\texit=%s\t%s\t%s\n' "$(date +%Y-%m-%dT%H:%M:%S)" "$code" "${esito:-no summary}" "$*" >>"$log"
+outcome=$(summary "$out" || true)
+printf '%s\texit=%s\t%s\t%s\n' "$(date +%Y-%m-%dT%H:%M:%S)" "$code" "${outcome:-no summary}" "$*" >>"$log"
 rm -f "$out"
 exit "$code"

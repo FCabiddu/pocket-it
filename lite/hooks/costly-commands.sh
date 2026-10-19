@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash): the project's «only with ok» commands are not run by an agent.
 # The project's CLAUDE.md lists them on one line: `Commands only with approval: <regex>, <regex>, ...`
-# (Python regexes, comma-separated, hence with no commas inside; `nessuno` = no command).
+# (Python regexes, comma-separated, hence with no commas inside; `none` = no command).
 # - Only for subagents (agent_type present): the main session passes, it is the one asking the user for the ok.
 # - CLAUDE.md is looked up in the repo of the command's cwd and of the `cd <dir>` the command contains
 #   (root = folder of `git rev-parse --git-common-dir`, so it works in the worktrees too).
 # - Command matching a regex: exit 2 and the message to stop and ask for it in the report.
-# - No line, `nessuno`, outside a repo, own error: passes (exit 0).
+# - No line, `none`, outside a repo, own error: passes (exit 0).
 input=$(cat)
 out=$(printf '%s' "$input" | python3 -c '
 import json, os, re, subprocess, sys
@@ -21,30 +21,30 @@ dirs = [cwd]
 for m in re.finditer(r"(?:^|[;&|(]\s*|\s)cd\s+([^\s;&|)]+)", cmd):
     p = os.path.expanduser(m.group(1).strip("\"\x27"))
     dirs.append(p if os.path.isabs(p) else os.path.join(cwd, p))
-visti = set()
-for dir in dirs:
-    if not os.path.isdir(dir):
+seen = set()
+for folder in dirs:
+    if not os.path.isdir(folder):
         continue
     try:
-        common = subprocess.run(["git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        common = subprocess.run(["git", "-C", folder, "rev-parse", "--path-format=absolute", "--git-common-dir"],
                                 capture_output=True, text=True, timeout=5).stdout.strip()
     except Exception:
         continue
-    if not common or common in visti:
+    if not common or common in seen:
         continue
-    visti.add(common)
+    seen.add(common)
     claude = os.path.join(os.path.dirname(common), "CLAUDE.md")
     if not os.path.isfile(claude):
         continue
-    lista = None
-    for riga in open(claude, encoding="utf-8", errors="replace"):
-        m = re.match(r"^Commands only with approval:\s*(.*?)\s*$", riga)
+    items = None
+    for line in open(claude, encoding="utf-8", errors="replace"):
+        m = re.match(r"^Commands only with approval:\s*(.*?)\s*$", line)
         if m:
-            lista = m.group(1)
+            items = m.group(1)
             break
-    if lista is None or lista.lower() in ("", "none", "-"):
+    if items is None or items.lower() in ("", "none", "-"):
         continue
-    for rx in (x.strip() for x in lista.split(",")):
+    for rx in (x.strip() for x in items.split(",")):
         if not rx:
             continue
         try:

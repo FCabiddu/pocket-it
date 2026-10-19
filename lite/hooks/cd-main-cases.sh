@@ -26,12 +26,12 @@ t BLOCK "" "pushd $W"
 t BLOCK "" "cd /repo/.claude/worktrees/rev-1292/e2e"
 t BLOCK "" "echo ok && cd \"$W\" && ls"
 # 02/10: the main session's cd that moved the working directory
-t BLOCK "" "cd /Users/x/progetto/.claude/worktrees/fix/e2e-dossier-chiusura-sotto-1024 && sed -n 1,5p e2e/a.ts"
+t BLOCK "" "cd /Users/x/project/.claude/worktrees/fix/e2e-dossier-closing-under-1024 && sed -n 1,5p e2e/a.ts"
 # 15/10: the worktree path in a variable of the command
 t BLOCK "" 'W=/repo/.claude/worktrees/fix/foo; cd $W && git add x'
 t BLOCK "" 'export W=/repo/.claude/worktrees/fix/foo && cd "${W}"'
 t BLOCK "" 'B=/repo/.claude/worktrees; cd $B/fix/foo'
-t BLOCK "" 'cd $NON_DEFINITA_IN_NESSUN_POSTO'
+t BLOCK "" 'cd $NOT_DEFINED_ANYWHERE'
 t ok    "" 'W=/repo/.claude/worktrees/fix/foo; git -C $W status'
 t ok    "" 'W=/repo/.claude/worktrees/fix/foo; (cd $W && ls)'
 t ok    "" 'D=/repo/docs; cd $D'
@@ -59,7 +59,7 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 P=$T/repo PW=$T/repo/.claude/worktrees/fix/foo
 mkdir -p "$P/.git" "$PW/e2e"; echo "gitdir: $P/.git/worktrees/foo" > "$PW/.git"
 # 05/10: the worktree was gone, the ; detached the merge from the failed cd
-t BLOCK tester    "cd $P/.claude/worktrees/test/giro && S=/tmp/x; git fetch -q origin && git merge -q origin/main" "$P"
+t BLOCK tester    "cd $P/.claude/worktrees/test/run && S=/tmp/x; git fetch -q origin && git merge -q origin/main" "$P"
 t BLOCK developer "git merge origin/main" "$P"
 t BLOCK developer "git checkout -b fix/x" "$P"
 t BLOCK developer "cd $PW/e2e && cd $P && git commit -m x" "$P"

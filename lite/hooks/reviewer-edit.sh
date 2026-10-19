@@ -18,10 +18,10 @@ if agent == "reviewer":
     sys.exit(0)
 if "/.claude/worktrees/" in p:
     sys.exit(0)
-dir = os.path.dirname(p)
-while dir != "/" and not os.path.isdir(dir):
-    dir = os.path.dirname(dir)
-r = subprocess.run(["git", "-C", dir, "rev-parse", "--show-toplevel"], capture_output=True)
+folder = os.path.dirname(p)
+while folder != "/" and not os.path.isdir(folder):
+    folder = os.path.dirname(folder)
+r = subprocess.run(["git", "-C", folder, "rev-parse", "--show-toplevel"], capture_output=True)
 if r.returncode == 0:
     print("a subagent writes only in its worktree .claude/worktrees/<branch>/, not in the checkout " + r.stdout.decode().strip() + " (" + p + ")")
 ' 2>/dev/null)

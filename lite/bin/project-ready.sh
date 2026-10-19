@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "project-ready: not inside a git repo" >&2; exit 2; }
 tpl="$(cd "$(dirname "$0")/../templates" && pwd)"
-prova=0; [ "${1:-}" = --dry-run ] && prova=1
+dry_run=0; [ "${1:-}" = --dry-run ] && dry_run=1
 bad=()
 
 # 1. Directives: CLAUDE.md names the directives file, and the file exists.
@@ -32,9 +32,9 @@ if [ -f CLAUDE.md ] && ! grep -qE '^Deploy from main: (yes|no)' CLAUDE.md; then
   bad+=("CLAUDE.md has no «Deploy from main: yes» or «Deploy from main: no» line (it says whether a merge to main publishes and costs)")
 fi
 
-# 1c2. Commands only with approval: CLAUDE.md lists the commands an agent does not run on its own (hooks/costly-commands.sh), or «nessuno».
+# 1c2. Commands only with approval: CLAUDE.md lists the commands an agent does not run on its own (hooks/costly-commands.sh), or «none».
 if [ -f CLAUDE.md ] && ! grep -qE '^Commands only with approval: .+' CLAUDE.md; then
-  bad+=("CLAUDE.md has no «Commands only with approval: <regex>, <regex>, ...» line (or «Commands only with approval: nessuno»): the commands an agent does not run without the user's ok, lite/templates/README.md")
+  bad+=("CLAUDE.md has no «Commands only with approval: <regex>, <regex>, ...» line (or «Commands only with approval: none»): the commands an agent does not run without the user's ok, lite/templates/README.md")
 fi
 
 # 1d. Security: the project has had the first audit by the security agent (Audit job).
@@ -54,22 +54,22 @@ try:
 except Exception as e:
     print(f"is not valid JSON ({e}): Claude Code ignores the whole file, sandbox included"); sys.exit()
 sb = s.get("sandbox") or {}; net = sb.get("network") or {}; fs = sb.get("filesystem") or {}; perm = s.get("permissions") or {}
-manca = []
-if sb.get("enabled") is not True: manca.append("sandbox.enabled: true")
-if "gh *" not in (sb.get("excludedCommands") or []): manca.append("«gh *» in sandbox.excludedCommands (gh does not get through TLS inside the sandbox)")
+missing = []
+if sb.get("enabled") is not True: missing.append("sandbox.enabled: true")
+if "gh *" not in (sb.get("excludedCommands") or []): missing.append("«gh *» in sandbox.excludedCommands (gh does not get through TLS inside the sandbox)")
 for d in ("github.com", "api.github.com"):
-    if d not in (net.get("allowedDomains") or []): manca.append(f"«{d}» in sandbox.network.allowedDomains")
-if net.get("allowLocalBinding") is not True: manca.append("sandbox.network.allowLocalBinding: true (dev server on localhost)")
-if "**/.env*" not in (fs.get("denyRead") or []): manca.append("«**/.env*» in sandbox.filesystem.denyRead")
-if "Read(**/.env*)" not in (perm.get("deny") or []): manca.append("«Read(**/.env*)» in permissions.deny (denyRead does not stop the Read tool)")
-tipi = {("sandbox", "excludedCommands"): list, ("sandbox.network", "allowedDomains"): list, ("sandbox.network", "allowMachLookup"): list,
+    if d not in (net.get("allowedDomains") or []): missing.append(f"«{d}» in sandbox.network.allowedDomains")
+if net.get("allowLocalBinding") is not True: missing.append("sandbox.network.allowLocalBinding: true (dev server on localhost)")
+if "**/.env*" not in (fs.get("denyRead") or []): missing.append("«**/.env*» in sandbox.filesystem.denyRead")
+if "Read(**/.env*)" not in (perm.get("deny") or []): missing.append("«Read(**/.env*)» in permissions.deny (denyRead does not stop the Read tool)")
+types = {("sandbox", "excludedCommands"): list, ("sandbox.network", "allowedDomains"): list, ("sandbox.network", "allowMachLookup"): list,
         ("sandbox.network", "allowUnixSockets"): list, ("sandbox.network", "allowLocalBinding"): bool, ("sandbox.filesystem", "denyRead"): list,
         ("sandbox.filesystem", "allowWrite"): list}
-for (dove, k), t in tipi.items():
-    obj = {"sandbox": sb, "sandbox.network": net, "sandbox.filesystem": fs}[dove]
+for (where, k), t in types.items():
+    obj = {"sandbox": sb, "sandbox.network": net, "sandbox.filesystem": fs}[where]
     if k in obj and not isinstance(obj[k], t):
-        manca.append(f"{dove}.{k} must be {'a list' if t is list else 'true or false'}: with the wrong type Claude Code ignores the whole file, sandbox included")
-print("; ".join(manca))
+        missing.append(f"{where}.{k} must be {'a list' if t is list else 'true or false'}: with the wrong type Claude Code ignores the whole file, sandbox included")
+print("; ".join(missing))
 PY
 )
   [ -z "$err" ] || bad+=(".claude/settings.json: $err (template: $tpl/settings.json; in the session «/sandbox» says whether it is active)")
@@ -78,7 +78,7 @@ fi
 # 2. Checks before the merge: without them, merge-pr.sh stops.
 if [ ! -f scripts/pre-merge.sh ]; then
   bad+=("scripts/pre-merge.sh is missing (template: $tpl/pre-merge.sh)")
-elif [ "$prova" = 1 ]; then
+elif [ "$dry_run" = 1 ]; then
   if ! PRE_MERGE_BASE=main bash scripts/pre-merge.sh >/dev/null 2>&1; then bad+=("scripts/pre-merge.sh is red on the current checkout"); fi
 fi
 
