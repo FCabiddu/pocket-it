@@ -1,0 +1,23 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "excludedCommands": [
+      "gh *",
+      "~/Desktop/agents/flow/bin/merge-pr.sh *",
+      "~/Desktop/agents/flow/bin/worktree-new.sh *",
+      "~/Desktop/agents/flow/bin/security-ok.sh *",
+      "~/Desktop/agents/flow/bin/clean-wave.sh *"
+    ],
+    "network": {
+      "allowedDomains": ["github.com", "api.github.com", "*.githubusercontent.com", "registry.npmjs.org"],
+      "allowLocalBinding": true,
+      "allowMachLookup": ["com.apple.sysmond"]
+    },
+    "filesystem": {
+      "denyRead": ["**/.env*", "~/.ssh", "~/.aws"]
+    }
+  },
+  "permissions": {
+    "deny": ["Read(**/.env*)"]
+  }
+}
