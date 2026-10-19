@@ -27,7 +27,7 @@ An agent system for [Claude Code](https://claude.com/claude-code) that takes a f
 ```bash
 git clone https://github.com/FCabiddu/pocket-it.git ~/Desktop/agents
 ln -s ~/Desktop/agents ~/.claude/agents     # Claude Code loads */.claude/agents/*.md from here
-cp ~/Desktop/agents/lite/CLAUDE.md ~/.claude/CLAUDE.md
+ln -sf ~/Desktop/agents/lite/CLAUDE.md ~/.claude/CLAUDE.md   # global rules, live after every merge
 ~/Desktop/agents/link-skills.sh             # rebuilds ~/.claude/skills
 ```
 
@@ -53,7 +53,7 @@ for f in lite/hooks/*-cases.sh lite/bin/*-cases.sh; do bash "$f" >/dev/null && e
 
 ## lite
 
-`lite/CLAUDE.md` holds the global rules: install them by copying the file to `~/.claude/CLAUDE.md`. The flow, in three diagrams, is in [`lite/FLOW.md`](lite/FLOW.md).
+`lite/CLAUDE.md` holds the global rules: `~/.claude/CLAUDE.md` is a symlink to it, so every merge applies from the next session. The flow, in three diagrams, is in [`lite/FLOW.md`](lite/FLOW.md).
 
 ### Who does what
 
@@ -78,8 +78,9 @@ for f in lite/hooks/*-cases.sh lite/bin/*-cases.sh; do bash "$f" >/dev/null && e
 | `merge-pr.sh <PR>` | once a PR is approved | Checks the plan `tasks/<slug>/INDEX.md` if the PR touches `tasks/` (`plan.sh`), runs the project's `scripts/pre-merge.sh` (without it, no merge), for a wave going to `main` requires the security sign-off, merges into the PR's base and removes worktree and branch |
 | `security-ok.sh <PR>` | after the security agent's `SECURITY OK` | Marks the head commit of the wave PR (status «security»); a commit added later asks for a new check |
 | `stop-worktree-procs.sh <dir>` | inside `merge-pr.sh` | Stops the processes still running in a worktree (servers, watchers) before removing it |
-| `errors.sh --wave <slug>-<n> [--rules v7]` | at the end of a wave | Shows the errors logged since the previous run and a summary of the agent launches (how many per type, durations, turns, tokens, outcomes, who is near the turn limit, who compacted, who left without finishing); with `--wave` it appends the wave's row to the project's board `docs/recap/metrics.md` (tasks, PRs, review rounds, reruns, launches, duration, tokens; `danni` and `attriti` are filled in by the reader) |
-| `clean-wave.sh <slug> <wave> <PR>` | at the end of a wave, after the error check | Removes the wave's tasks from `main` with a PR it merges by itself (on the last wave also `tasks/<slug>` and `docs/features/<slug>`); `--dry-run` is a dry run |
+| `errors.sh --wave <slug>-<n> [--rules v7]` | at the end of a wave | Shows the errors logged since the previous run and a summary of the agent launches (how many per type, durations, turns, tokens, outcomes, who is near the turn limit, who compacted, who left without finishing); with `--wave` it appends the wave's row to the project's board `docs/recap/metrics.md` (tasks, PRs, review rounds, reruns, launches, duration, tokens; `damage` and `friction` are filled in by the reader) |
+| `clean-wave.sh <slug> <wave> <PR>` | at the end of a wave, after the error check | Removes the wave's tasks from `main` with a PR it merges by itself (on the last wave also `tasks/<slug>` and `docs/features/<slug>`), and the worktrees and branches left over from the wave (`wave-worktrees.sh`); `--dry-run` shows what it would do |
+| `wave-worktrees.sh <slug> <wave\|all> [<PR>...]` | inside `clean-wave.sh` | Removes the `sec/`, `test/`, `tasks/` worktrees and branches of a finished wave and the `rev-<PR>` ones; skips a worktree with uncommitted changes |
 
 ### Project templates (`lite/templates/`)
 
@@ -102,4 +103,4 @@ Every hook has its own test file `<name>-cases.sh`, run after every change.
 
 Every agent carries only the instructions of its own job. A new rule is approved by the owner.
 
-Script names, protocol words (`APPROVED`, `CHANGES`, `SECURITY OK`, `E2E GREEN`, `RERUN`) and the project files the flow expects are in English: they are literals checked by the scripts and hooks.
+Protocol words (`APPROVED`, `CHANGES`, `SECURITY OK`, `E2E GREEN`, `RERUN`) and the project files the flow expects are literals checked by the scripts and hooks: change one, and its cases file goes red.

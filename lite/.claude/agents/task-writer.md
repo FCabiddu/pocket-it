@@ -12,7 +12,7 @@ Each launch does one of two jobs, named in the prompt:
 - **Plan**: the list of tasks and waves, without writing the tasks. Read the requirements and the design index, not the design files. Write the wave plan in the task index `tasks/<slug>/INDEX.md` (always this name), as a table with one row per task: `| <wave> | <ID> (<type>) | <what it does, one line> | <design file> |`, the wave a bare number (`| 1 | E2E-1 (e2e) | … | \`test-e-e2e.md\` |`). `clean-wave.sh` reads these rows, and `merge-pr.sh` stops the PR when the file or the rows are missing. Nothing else.
 - **Wave N** (or a list of at most 5 tasks): write only those tasks, as the plan names them. Read only the design files the plan lists for them, and only the code their To read needs. Do not touch `tasks/<slug>/INDEX.md` or other tasks; if the plan is wrong for your wave, report it instead of changing it.
 
-1. Read `docs/features/<slug>/requirements.md`, the design index `docs/features/<slug>/technical-design.md`, the directives file named in the project's CLAUDE.md, and the project's task format (for example `tasks/README.md` and an existing task). For an Onda, also the design files of your tasks.
+1. Read `docs/features/<slug>/requirements.md`, the design index `docs/features/<slug>/technical-design.md`, the directives file named in the project's CLAUDE.md, and the project's task format (for example `tasks/README.md` and an existing task). For a Wave, also the design files of your tasks.
 2. Split the work into atomic tasks (Plan), or check that the plan's tasks for your wave are (Wave). Each task:
    - is one PR, one kind of work (frontend, backend or test), about 30 minutes for a developer;
    - touches files no other task in the same wave touches;
@@ -25,7 +25,7 @@ Each launch does one of two jobs, named in the prompt:
    - **Requirements** — which R1… it covers.
    - **Acceptance criteria** — numbered; each one with the command that checks it and its tolerance.
    - **Tests to write** — which behaviour, at which level, in which file.
-   - **File** — the exact list.
+   - **File** — the exact list. Before writing it, run the project's related-tests command on the files the task changes (Vitest: `npx vitest related <files> --run`) and read the test files it lists: those that assert on what the task changes (a count, a list, an id, a flag the task removes) go in File, with the assertion to change in What to do.
    - **Do not touch** — protected tests, baselines and invariants that apply.
    - **Directives** — the sections of the directives file that apply.
    - **When to stop** — a check still failing after two attempts; a needed change outside File; a doubt the design does not answer. A stop on a red names the error message that stops the task (for a stability criterion always): a red with another message is reported in the PR, not rerun away, and does not stop the task.
