@@ -1,6 +1,6 @@
 # Security principles
 
-They hold for every project. The `architect` applies them when choosing the solution; the `security` agent uses them to look for holes. What they mean for a given project (what has value, who may do what, which limits apply, which tests guard them) lives in the «Sicurezza» section of its directives, not here.
+They hold for every project. The `architect` applies them when choosing the solution; the `security` agent uses them to look for holes. What they mean for a given project (what has value, who may do what, which limits apply, which tests guard them) lives in the «Security» section of its directives, not here.
 
 1. **The client is not trusted.** Everything that comes from the client (requests, parameters, headers, files, direct access to the database or storage) can be forged. Every decision that affects data, rights or costs is taken by the server, on server data: the client asks, it does not decide.
 2. **Every input is validated on the server**: type, format, maximum size, allowed values. Whatever is not expected is rejected: unknown fields, values outside the list, oversized requests.

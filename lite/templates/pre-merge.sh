@@ -1,30 +1,30 @@
 #!/usr/bin/env bash
-# Modello del flusso lite (lite/templates/pre-merge.sh): l'architect lo copia in
-# scripts/pre-merge.sh e adatta solo il blocco «DA ADATTARE».
+# Template of the lite flow (lite/templates/pre-merge.sh): the architect copies it to
+# scripts/pre-merge.sh and adapts only the «TO ADAPT» block.
 #
-# Lo lancia `merge-pr.sh` sul codice della PR unito alla base (main o il branch dell'onda),
-# con PRE_MERGE_BASE=<base>: un exit diverso da 0 ferma il merge. Sono i controlli veloci
-# (typecheck, lint, test unit) che il reviewer non rilancia: niente E2E, niente servizi
-# esterni, niente dati veri. Stampa solo il riassunto o gli errori: chi lo legge è un agente.
+# `merge-pr.sh` runs it on the PR's code merged with the base (main or the wave branch),
+# with PRE_MERGE_BASE=<base>: an exit other than 0 stops the merge. These are the fast checks
+# (typecheck, lint, unit tests) that the reviewer does not rerun: no E2E, no external
+# services, no real data. It prints only the summary or the errors: the reader is an agent.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
 
-# Un controllo: nome, comando. Rosso → stampa le ultime righe e ferma tutto.
+# One check: name, command. Red → prints the last lines and stops everything.
 check() {
   local name=$1; shift
   if ! "$@" >"$out" 2>&1; then
     tail -n 60 "$out"
-    echo "pre-merge: $name rosso"
+    echo "pre-merge: $name red"
     exit 1
   fi
-  echo "pre-merge: $name verde"
+  echo "pre-merge: $name green"
 }
 
-# --- DA ADATTARE: i controlli veloci del progetto, nell'ordine dal più rapido ----------
-# Esempi per un progetto Node; per altri stack: `cargo check`, `ruff check .`, `pytest -m "not e2e"`, …
+# --- TO ADAPT: the project's fast checks, from the quickest on ------------------------
+# Examples for a Node project; for other stacks: `cargo check`, `ruff check .`, `pytest -m "not e2e"`, …
 check typecheck npx tsc --noEmit -p .
 check lint      npx eslint . --quiet
 check unit      npx vitest run

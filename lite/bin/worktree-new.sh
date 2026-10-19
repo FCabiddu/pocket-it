@@ -1,47 +1,47 @@
 #!/usr/bin/env bash
-# Crea (o riprende) il worktree di un agente e ne stampa il percorso nell'ultima riga.
-#   worktree-new.sh <branch> [base]   worktree del branch in <repo>/.claude/worktrees/<branch>.
-#                                     Se il branch esiste (locale o remoto) lo riprende,
-#                                     altrimenti lo crea da origin/<base> (default main).
-#   worktree-new.sh --review <PR>     worktree del reviewer in <repo>/.claude/worktrees/rev-<PR>:
-#                                     il branch della PR con la base già mergiata dentro.
-#                                     Rilanciato, lo ricrea da capo (per riverificare dopo una correzione).
-# Si lancia da dentro il repo (checkout principale o un suo worktree).
+# Creates (or resumes) an agent's worktree and prints its path on the last line.
+#   worktree-new.sh <branch> [base]   worktree of the branch in <repo>/.claude/worktrees/<branch>.
+#                                     If the branch exists (local or remote) it resumes it,
+#                                     otherwise it creates it from origin/<base> (default main).
+#   worktree-new.sh --review <PR>     the reviewer's worktree in <repo>/.claude/worktrees/rev-<PR>:
+#                                     the PR's branch with the base already merged in.
+#                                     Run again, it recreates it from scratch (to re-check after a fix).
+# Run it from inside the repo (main checkout or one of its worktrees).
 set -euo pipefail
 
 die() { echo "worktree-new: $1" >&2; exit "${2:-1}"; }
 
-common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || die "non sei in un repo git"
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || die "you are not in a git repo"
 repo=$(dirname "$common")
 root="$repo/.claude/worktrees"
 
-# Un solo worktree alla volta: due «git worktree add» insieme si contendono .git/config.
+# One worktree at a time: two «git worktree add» together fight over .git/config.
 lock="$common/worktree-new.lock"
 got=
 for _ in $(seq 60); do if mkdir "$lock" 2>/dev/null; then got=1; break; fi; sleep 1; done
-[ -n "$got" ] || die "lock $lock occupato da più di 60s"
+[ -n "$got" ] || die "lock $lock held for more than 60s"
 trap 'rmdir "$lock" 2>/dev/null || true' EXIT
 
 grep -qxF ".claude/worktrees/" "$common/info/exclude" 2>/dev/null || echo ".claude/worktrees/" >> "$common/info/exclude"
-# NOTE.md: il punto del lavoro che developer, tester e task-writer tengono nel worktree, mai committato.
+# NOTE.md: the progress notes that developer, tester and task-writer keep in the worktree, never committed.
 grep -qxF "NOTE.md" "$common/info/exclude" 2>/dev/null || echo "NOTE.md" >> "$common/info/exclude"
 
 git -C "$repo" fetch -q --prune origin
 
 if [ "${1:-}" = "--review" ]; then
-  pr="${2:-}"; [ -n "$pr" ] || die "uso: worktree-new.sh --review <PR>"
+  pr="${2:-}"; [ -n "$pr" ] || die "usage: worktree-new.sh --review <PR>"
   info=$(cd "$repo" && gh pr view "$pr" --json headRefName,baseRefName -q '.headRefName + " " + .baseRefName' 2>/dev/null) \
-    || die "PR $pr non trovata nel repo $repo: lancia lo script da dentro il repo del progetto, per esempio (cd <Worktree> && worktree-new.sh --review $pr)" 2
+    || die "PR $pr not found in the repo $repo: run the script from inside the project's repo, for example (cd <Worktree> && worktree-new.sh --review $pr)" 2
   read -r branch base <<< "$info"
   path="$root/rev-$pr"
   if [ -e "$path" ]; then git -C "$repo" worktree remove --force "$path"; fi
   git -C "$repo" worktree add -q --detach "$path" "origin/$branch"
   if ! git -C "$path" merge -q --no-edit "origin/$base" >/dev/null 2>&1; then
     git -C "$path" merge --abort 2>/dev/null || true
-    die "la PR $pr ha conflitti con $base: va aggiornata dal developer" 3
+    die "PR $pr has conflicts with $base: the developer must update it" 3
   fi
 else
-  branch="${1:-}"; [ -n "$branch" ] || die "uso: worktree-new.sh <branch> [base]"
+  branch="${1:-}"; [ -n "$branch" ] || die "usage: worktree-new.sh <branch> [base]"
   base="${2:-main}"
   path="$root/$branch"
   if [ ! -e "$path" ]; then
@@ -55,8 +55,8 @@ else
   fi
 fi
 
-# Dipendenze e segreti del checkout principale, con percorso assoluto
-# (un branch con «/» aggiunge cartelle: un percorso relativo sbaglia livello).
+# Dependencies and secrets of the main checkout, with an absolute path
+# (a branch with «/» adds folders: a relative path lands on the wrong level).
 for f in node_modules .env.local; do
   if [ -e "$repo/$f" ] && [ ! -e "$path/$f" ]; then
     ln -s "$repo/$f" "$path/$f"
@@ -64,8 +64,8 @@ for f in node_modules .env.local; do
   fi
 done
 
-# Hook di git con percorso relativo (husky: .husky/_, cartella ignorata che esiste solo
-# nel checkout principale): senza, nel worktree il pre-commit non gira.
+# Git hooks with a relative path (husky: .husky/_, an ignored folder that exists only
+# in the main checkout): without it, the pre-commit does not run in the worktree.
 hooks=$(git -C "$repo" config --get core.hooksPath || true)
 case "$hooks" in
   ""|/*) ;;

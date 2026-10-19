@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# PreToolUse(Read|Bash): developer, reviewer e tester non leggono più di 300 righe di un file per volta.
-# Read senza limit (o con limit > 300) su un file di oltre 300 righe è negato; così `cat <file>` e
-# `sed -n 'a,bp' <file>` con più di 300 righe. Si cerca il simbolo con grep e si legge solo quella parte.
-# Gli altri agenti e la sessione principale passano.
+# PreToolUse(Read|Bash): developer, reviewer and tester read no more than 300 lines of a file at a time.
+# Read without limit (or with limit > 300) on a file of more than 300 lines is denied; so are `cat <file>` and
+# `sed -n 'a,bp' <file>` with more than 300 lines. Look the symbol up with grep and read only that part.
+# The other agents and the main session pass.
 input=$(cat)
 out=$(printf '%s' "$input" | python3 -c '
 import json, os, re, shlex, sys
@@ -22,7 +22,7 @@ def lines(p, base):
         return p, 0
 
 def deny(p, n):
-    print(p + " ha " + str(n) + " righe: cerca il simbolo con grep -n e leggi solo quella parte (Read con offset e limit <= " + str(MAX) + ")")
+    print(p + " has " + str(n) + " lines: look the symbol up with grep -n and read only that part (Read with offset and limit <= " + str(MAX) + ")")
     sys.exit(0)
 
 if d.get("tool_name") == "Read":

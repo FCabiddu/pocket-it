@@ -5,8 +5,8 @@
       "gh *",
       "~/Desktop/agents/lite/bin/merge-pr.sh *",
       "~/Desktop/agents/lite/bin/worktree-new.sh *",
-      "~/Desktop/agents/lite/bin/sicurezza-ok.sh *",
-      "~/Desktop/agents/lite/bin/pulisci-onda.sh *"
+      "~/Desktop/agents/lite/bin/security-ok.sh *",
+      "~/Desktop/agents/lite/bin/clean-wave.sh *"
     ],
     "network": {
       "allowedDomains": ["github.com", "api.github.com", "*.githubusercontent.com", "registry.npmjs.org"],
