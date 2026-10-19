@@ -31,7 +31,7 @@ Derive a **project slug** from the description:
 - Lowercase, replace spaces and special characters with hyphens, strip anything non-alphanumeric
 - Example: "A portfolio site for tattoo artist Marco" → `portfolio-tattoo-artist-marco`
 
-The output directory is `~/Desktop/clienti/{slug}/`. Create it with `mkdir -p` before writing any file.
+The output directory is `~/Desktop/sites/{slug}/`. Create it with `mkdir -p` before writing any file.
 
 ---
 
@@ -49,7 +49,7 @@ It is your permanent design compass — hold it in context through every decisio
 
 Ask the user exactly this one question using `AskUserQuestion`:
 
-> "Hai un documento o URL con info sul cliente? (es. `~/Desktop/prospect/ristorante-terramare/brief.md`, un URL del sito esistente, o lascia vuoto per saltare)"
+> "Do you have a document or URL with information about the client? (e.g. `~/Desktop/briefs/seaside-bistro/brief.md`, the URL of the existing site, or leave empty to skip)"
 
 Then act on the answer:
 
@@ -116,7 +116,7 @@ Do not write this plan to a file. Hold it in context and execute against it.
 
 ## Step 2 — Build the files
 
-Create the following file structure inside `~/Desktop/clienti/{slug}/` (slug derived in Step 0):
+Create the following file structure inside `~/Desktop/sites/{slug}/` (slug derived in Step 0):
 
 ```
 {slug}/
@@ -256,5 +256,5 @@ Tell the user:
 
 - What was built: layout archetype, colour palette, font pair
 - The 3–5 animations used, which catalogue entry each maps to, and whether it's CSS-only or uses JS
-- How to open it: `open ~/Desktop/clienti/{slug}/index.html` — zero setup
+- How to open it: `open ~/Desktop/sites/{slug}/index.html` — zero setup
 - What to add for production (real backend, CMS, domain, analytics)
