@@ -8,7 +8,7 @@ An agent system for [Claude Code](https://claude.com/claude-code) that takes a f
 
 | Folder | What |
 |---|---|
-| `lite/` | The software-delivery flow, explained below |
+| `flow/` | The software-delivery flow, explained below |
 | `mvp-builder/` | Builds static sites (no framework, no build step) with its `design-compass.md` |
 | `link-skills.sh` | Rebuilds `~/.claude/skills` from every `*/.claude/skills/*/` folder |
 
@@ -25,11 +25,11 @@ An agent system for [Claude Code](https://claude.com/claude-code) that takes a f
 ```bash
 git clone https://github.com/FCabiddu/pocket-it.git ~/Desktop/agents
 ln -s ~/Desktop/agents ~/.claude/agents     # Claude Code loads */.claude/agents/*.md from here
-ln -sf ~/Desktop/agents/lite/CLAUDE.md ~/.claude/CLAUDE.md   # global rules, live after every merge
+ln -sf ~/Desktop/agents/flow/CLAUDE.md ~/.claude/CLAUDE.md   # global rules, live after every merge
 ~/Desktop/agents/link-skills.sh             # rebuilds ~/.claude/skills
 ```
 
-Then wire the hooks in `~/.claude/settings.json`, each as `bash ~/Desktop/agents/lite/hooks/<name>.sh`:
+Then wire the hooks in `~/.claude/settings.json`, each as `bash ~/Desktop/agents/flow/hooks/<name>.sh`:
 
 | Event | Matcher | Hooks |
 |---|---|---|
@@ -39,19 +39,19 @@ Then wire the hooks in `~/.claude/settings.json`, each as `bash ~/Desktop/agents
 | PermissionDenied, PostToolUseFailure | — | `log-errors.sh` |
 | SubagentStart, SubagentStop, PreCompact | — | `log-launches.sh` |
 
-In a project, run `lite/bin/project-ready.sh` once. Requirements: macOS or Linux, bash, python3, git, `gh` logged in.
+In a project, run `flow/bin/project-ready.sh` once. Requirements: macOS or Linux, bash, python3, git, `gh` logged in.
 
 ## Run the tests
 
 Every hook and script has a `<name>-cases.sh` file next to it: temporary folders, `PASS`/`FAIL` per case, exit 1 if one fails.
 
 ```bash
-for f in lite/hooks/*-cases.sh lite/bin/*-cases.sh; do bash "$f" >/dev/null && echo "ok   $f" || echo "FAIL $f"; done
+for f in flow/hooks/*-cases.sh flow/bin/*-cases.sh; do bash "$f" >/dev/null && echo "ok   $f" || echo "FAIL $f"; done
 ```
 
-## lite
+## flow
 
-`lite/CLAUDE.md` holds the global rules: `~/.claude/CLAUDE.md` is a symlink to it, so every merge applies from the next session. The flow, in three diagrams, is in [`lite/FLOW.md`](lite/FLOW.md).
+`flow/CLAUDE.md` holds the global rules: `~/.claude/CLAUDE.md` is a symlink to it, so every merge applies from the next session. The flow, in three diagrams, is in [`flow/FLOW.md`](flow/FLOW.md).
 
 ### Who does what
 
@@ -61,12 +61,12 @@ for f in lite/hooks/*-cases.sh lite/bin/*-cases.sh; do bash "$f" >/dev/null && e
 - **`task-writer`**: splits the design into small tasks, one PR each with its acceptance criteria and their command, grouped into waves; for every wave it also writes the tester's task `E2E-<n>`.
 - **`developer`**: does one task in its own worktree, runs the fast tests (unit, lint, typecheck), opens the PR with the results and fixes what the reviewer asks.
 - **`reviewer`**: reads the code and the results reported in the PR, without running tests, against the task and the directives; answers `APPROVED` or `CHANGES`. Never merges.
-- **`security`**: looks at the project the way an attacker would, with the principles in `lite/docs/security.md`. Once, at the start, it audits the whole project; at the end of every wave, in parallel with the tester, it looks for the holes the wave's diff opened. Without its sign-off (`security-ok.sh`) `merge-pr.sh` does not take the wave to `main`. Writes no code.
+- **`security`**: looks at the project the way an attacker would, with the principles in `flow/docs/security.md`. Once, at the start, it audits the whole project; at the end of every wave, in parallel with the tester, it looks for the holes the wave's diff opened. Without its sign-off (`security-ok.sh`) `merge-pr.sh` does not take the wave to `main`. Writes no code.
 - **`tester`**: at the end of a wave, on the wave branch, writes the end-to-end tests and runs them once together with the existing ones that cover the changed files. Every red becomes either a fix to its own test, a flaky test, or an app bug that goes to a developer as a task.
 
 **Wave**: a group of independent tasks that run in parallel on a branch `wave/<slug>-<n>`. It reaches `main` only with green E2E and the security sign-off, and the next wave starts from there.
 
-### Scripts (`lite/bin/`)
+### Scripts (`flow/bin/`)
 
 | Script | When | What it does |
 |---|---|---|
@@ -80,13 +80,13 @@ for f in lite/hooks/*-cases.sh lite/bin/*-cases.sh; do bash "$f" >/dev/null && e
 | `clean-wave.sh <slug> <wave> <PR>` | at the end of a wave, after the error check | Removes the wave's tasks from `main` with a PR it merges by itself (on the last wave also `tasks/<slug>` and `docs/features/<slug>`), and the worktrees and branches left over from the wave (`wave-worktrees.sh`); `--dry-run` shows what it would do |
 | `wave-worktrees.sh <slug> <wave\|all> [<PR>...]` | inside `clean-wave.sh` | Removes the `sec/`, `test/`, `tasks/` worktrees and branches of a finished wave and the `rev-<PR>` ones; skips a worktree with uncommitted changes |
 
-### Project templates (`lite/templates/`)
+### Project templates (`flow/templates/`)
 
-The agents are the same for every project; what changes lives in a few project scripts with a fixed contract: `pre-merge.sh` (fast checks before a merge), `e2e.sh` (one E2E run at a time, with a queue and a log), `e2e-select.sh` with `spec-per-folder.txt` (which specs to run given the changed files). On a new project the architect copies them from here and adapts only the «TO ADAPT» (to adapt) block. What each must do: [`lite/templates/README.md`](lite/templates/README.md).
+The agents are the same for every project; what changes lives in a few project scripts with a fixed contract: `pre-merge.sh` (fast checks before a merge), `e2e.sh` (one E2E run at a time, with a queue and a log), `e2e-select.sh` with `spec-per-folder.txt` (which specs to run given the changed files). On a new project the architect copies them from here and adapts only the «TO ADAPT» (to adapt) block. What each must do: [`flow/templates/README.md`](flow/templates/README.md).
 
 At the end of a wave, errors are split into **damage** (lost work, data touched without consent, money spent, a push to `main`, wrong code on `main`, a task stuck with no way out: a recap is written) and **friction** (everything else: one line in `docs/recap/friction.md`; the third occurrence becomes damage).
 
-### Hooks (`lite/hooks/`)
+### Hooks (`flow/hooks/`)
 
 Every hook has its own test file `<name>-cases.sh`, run after every change.
 
@@ -95,7 +95,7 @@ Every hook has its own test file `<name>-cases.sh`, run after every change.
 - **`cd-main.sh`** (PreToolUse on `Bash`): the main session does not `cd` or `pushd` into `.claude/worktrees/`, because the shell would stay there; `git -C`, absolute paths and `(cd <worktree> && …)` pass. Agents, in turn, do not run state-changing git commands (`merge`, `checkout`, `reset`, `commit`…) in the main checkout, even after a failed `cd`.
 - **`read-limit.sh`** (PreToolUse on `Read|Bash`): developer, reviewer and tester read at most 300 lines of a file at a time, with Read, `cat` or `sed -n`.
 - **`global-memory.sh`** (PreToolUse on `Edit|Write|NotebookEdit|Bash`): nothing about a project enters the global memory (`~/.claude/projects/<home>/memory/`). It blocks `type: project` memories and any memory that names a project (a git repo under `~/Desktop` or a folder with a memory of its own); every other write there, even from Bash, asks the user.
-- **`costly-commands.sh`** (PreToolUse on `Bash`): stops a subagent that runs a command listed in the `Commands only with approval:` line of the project's `CLAUDE.md` (deploys, databases with real data, paid calls) and tells it to ask in its report; the main session passes (`lite/templates/README.md`).
+- **`costly-commands.sh`** (PreToolUse on `Bash`): stops a subagent that runs a command listed in the `Commands only with approval:` line of the project's `CLAUDE.md` (deploys, databases with real data, paid calls) and tells it to ask in its report; the main session passes (`flow/templates/README.md`).
 - **`log-errors.sh`**: logs denied permissions and failed commands to `~/.claude/logs/errors/`, which `errors.sh` reads.
 - **`log-launches.sh`** (SubagentStart, SubagentStop, PreCompact): logs every agent launch to `~/.claude/logs/launches/` (type, outcome read from the first lines of the report, turns, tokens and model from the subagent's transcript, compactions), which `errors.sh` summarises. Entries expire after 30 days; it never blocks anything.
 
