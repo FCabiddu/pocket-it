@@ -10,8 +10,6 @@ An agent system for [Claude Code](https://claude.com/claude-code) that takes a f
 |---|---|
 | `lite/` | The software-delivery flow, explained below |
 | `mvp-builder/` | Builds static sites (no framework, no build step) with its `design-compass.md` |
-| `legal-advisor/` | Privacy policy, cookie policy, terms and conditions for a client site (EU/Italy) |
-| `legal-check/` | Legal audit of one's own products (card games, board games, online role-playing games with a game master): rights and licences, privacy, payments, marketing, product safety, AI, third-party disclaimers. Writes a report, never touches the product |
 | `link-skills.sh` | Rebuilds `~/.claude/skills` from every `*/.claude/skills/*/` folder |
 
 ## Design choices
