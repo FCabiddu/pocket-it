@@ -1,62 +1,105 @@
 # pocket-it
 
-Questa cartella è `~/.claude/agents` (symlink). Contiene i pacchetti di agenti che Claude Code carica da `~/.claude/agents/**/.claude/agents/*.md`: il checkout locale deve stare su main, aggiornato dopo ogni merge, e gli agenti si leggono all'avvio di una sessione.
+An agent system for [Claude Code](https://claude.com/claude-code) that takes a feature from the request to `main` through dedicated agents, each with one job: **analyst**, **architect**, **task-writer**, **developer**, **reviewer**, **security**, **tester**. Hooks stop an agent before it does harm, scripts enforce the gates (pre-merge checks, security sign-off, end-to-end tests), and the rules stay short because whatever can be enforced by a script is not written as a rule.
 
-| Cartella | Cosa |
+**Why it exists.** One session that does everything loses context, skips steps and merges code nobody checked. Here every agent gets only the instructions of its own work, runs in its own git worktree, and every claim in a pull request comes with the command that proves it. The main session launches agents, carries their questions to the user, merges and reports; during a wave it writes no code.
+
+**How it is laid out.** This folder is installed as `~/.claude/agents` (a symlink). Claude Code loads every agent from `~/.claude/agents/**/.claude/agents/*.md`, so the checkout stays on `main` and the agents are read when a session starts.
+
+| Folder | What |
 |---|---|
-| `lite/` | Il sistema per il lavoro sul software (dal 22/09/2026), spiegato sotto |
-| `mvp-builder/` | Pacchetto per costruire siti statici, con il suo `design-compass.md` |
-| `legal-advisor/` | Pacchetto per privacy, cookie e termini |
-| `legal-check/` | Verifica legale dei propri prodotti (giochi di carte, da tavolo, gioco di ruolo online con master): diritti e licenze, privacy, pagamenti, marketing, sicurezza prodotto, AI, disclaimer di terze parti. Scrive un report, non tocca il prodotto |
-| `link-skills.sh` | Ricostruisce `~/.claude/skills` da tutte le cartelle `*/.claude/skills/*/` |
+| `lite/` | The software-delivery flow, explained below |
+| `mvp-builder/` | Builds static sites (no framework, no build step) with its `design-compass.md` |
+| `legal-advisor/` | Privacy policy, cookie policy, terms and conditions for a client site (EU/Italy) |
+| `legal-check/` | Legal audit of one's own products (card games, board games, online role-playing games with a game master): rights and licences, privacy, payments, marketing, product safety, AI, third-party disclaimers. Writes a report, never touches the product |
+| `link-skills.sh` | Rebuilds `~/.claude/skills` from every `*/.claude/skills/*/` folder |
+
+## Design choices
+
+- **One job per agent, short instructions.** Every agent file is 20–45 lines. An agent that knows less about the rest of the flow makes fewer assumptions about it.
+- **Proof in the PR, not trust.** Every acceptance criterion has a command and a tolerance; the developer pastes the runs in the PR body, the reviewer reads them without rerunning, `pre-merge.sh` reruns the fast checks before the merge.
+- **Gates are scripts, not sentences.** Pushes to `main`, force pushes, edits outside a worktree, costly commands and writes to the global memory are stopped by hooks with their own test cases. A rule is written only when no script can enforce it.
+- **Isolation by default.** Each agent works in its own git worktree; the agents' Bash runs inside the Claude Code sandbox (project only, GitHub and npm only, no `.env`).
+- **Errors are sorted, not collected.** Damage gets a recap that ends in a removed instruction, a new hook or, last, a rule. Friction gets one line, and only the third occurrence is worth a fix.
+
+## Install
+
+```bash
+git clone https://github.com/FCabiddu/pocket-it.git ~/Desktop/agents
+ln -s ~/Desktop/agents ~/.claude/agents     # Claude Code loads */.claude/agents/*.md from here
+cp ~/Desktop/agents/lite/CLAUDE.md ~/.claude/CLAUDE.md
+~/Desktop/agents/link-skills.sh             # rebuilds ~/.claude/skills
+```
+
+Then wire the hooks in `~/.claude/settings.json`, each as `bash ~/Desktop/agents/lite/hooks/<name>.sh`:
+
+| Event | Matcher | Hooks |
+|---|---|---|
+| PreToolUse | `Bash` | `guard.sh`, `comandi-costosi.sh`, `cd-principale.sh`, `memoria-globale.sh` |
+| PreToolUse | `Edit\|Write\|NotebookEdit` | `reviewer-edit.sh`, `memoria-globale.sh` |
+| PreToolUse | `Read\|Bash` | `read-limit.sh` |
+| PermissionDenied, PostToolUseFailure | — | `log-errors.sh` |
+| SubagentStart, SubagentStop, PreCompact | — | `log-lanci.sh` |
+
+In a project, run `lite/bin/progetto-pronto.sh` once. Requirements: macOS or Linux, bash, python3, git, `gh` logged in.
+
+## Run the tests
+
+Every hook and script has a `<name>-cases.sh` file next to it: temporary folders, `PASS`/`FAIL` per case, exit 1 if one fails.
+
+```bash
+for f in lite/hooks/*-cases.sh lite/bin/*-cases.sh; do bash "$f" >/dev/null && echo "ok   $f" || echo "FAIL $f"; done
+```
 
 ## lite
 
-`lite/CLAUDE.md` sono le regole globali: si installano copiandolo in `~/.claude/CLAUDE.md`. Il flusso, in tre diagrammi, sta in [`lite/FLUSSO.md`](lite/FLUSSO.md).
+`lite/CLAUDE.md` holds the global rules: install them by copying the file to `~/.claude/CLAUDE.md`. The flow, in three diagrams, is in [`lite/FLUSSO.md`](lite/FLUSSO.md).
 
-### Chi lavora
+### Who does what
 
-- **Sessione principale**: lancia gli agenti, porta le loro domande all'utente, mergia e riferisce. Durante un'onda non scrive codice.
-- **`analyst`**: trasforma la richiesta in requisiti verificabili (`docs/features/<slug>/requisiti.md`) e dice cosa si può fare sul codice di oggi. I requisiti sono l'unico documento che l'utente approva.
-- **`architect`**: sceglie la soluzione tecnica e scrive il design: un indice `design-tecnico.md` e un file per argomento in `design-tecnico/`, al massimo 150 righe ciascuno; le alternative scartate e le parti già mergiate vanno in `archivio/`, che nessun task cita. Tiene aggiornate le direttive del progetto (stack, pattern, test, invarianti) e controlla i task prima che partano.
-- **`task-writer`**: divide il design in task piccoli, una PR ciascuno con i criteri e il loro comando, raggruppati in onde; per ogni onda scrive anche il task `E2E-<n>` del tester.
-- **`developer`**: fa un task sul suo worktree, esegue i test veloci (unit, lint, typecheck), apre la PR con i risultati e corregge quello che chiede il reviewer.
-- **`reviewer`**: legge il codice e i risultati riportati nella PR, senza lanciare test, rispetto al task e alle direttive; risponde APPROVED oppure CHANGES. Non mergia.
-- **`security`**: guarda il progetto da attaccante, con i principi di `lite/docs/sicurezza.md`. Una volta all'inizio analizza tutto il progetto (Audit); a fine onda, in parallelo al tester, cerca i buchi aperti dal diff dell'onda. Senza il suo ok (`sicurezza-ok.sh`) `merge-pr.sh` non porta l'onda su main. Non scrive codice.
-- **`tester`**: a fine onda, sul branch dell'onda, scrive gli E2E e li lancia una volta insieme a quelli che coprono i file cambiati. Ogni rosso diventa una correzione del suo test, un test instabile o un errore dell'app, che passa a un developer come task.
+- **Main session**: launches the agents, carries their questions to the user, merges and reports. Writes no code during a wave.
+- **`analyst`**: turns the request into verifiable requirements (`docs/features/<slug>/requisiti.md`) and says what is feasible on today's code. The requirements are the only document the user approves.
+- **`architect`**: chooses the technical solution and writes the design: an index `design-tecnico.md` plus one file per topic in `design-tecnico/`, at most 150 lines each; discarded alternatives and parts already merged go to `archivio/`, which no task cites. Keeps the project's directives (stack, patterns, tests, invariants) up to date and checks the tasks before they start.
+- **`task-writer`**: splits the design into small tasks, one PR each with its acceptance criteria and their command, grouped into waves; for every wave it also writes the tester's task `E2E-<n>`.
+- **`developer`**: does one task in its own worktree, runs the fast tests (unit, lint, typecheck), opens the PR with the results and fixes what the reviewer asks.
+- **`reviewer`**: reads the code and the results reported in the PR, without running tests, against the task and the directives; answers `APPROVED` or `CHANGES`. Never merges.
+- **`security`**: looks at the project the way an attacker would, with the principles in `lite/docs/sicurezza.md`. Once, at the start, it audits the whole project; at the end of every wave, in parallel with the tester, it looks for the holes the wave's diff opened. Without its sign-off (`sicurezza-ok.sh`) `merge-pr.sh` does not take the wave to `main`. Writes no code.
+- **`tester`**: at the end of a wave, on the wave branch, writes the end-to-end tests and runs them once together with the existing ones that cover the changed files. Every red becomes either a fix to its own test, a flaky test, or an app bug that goes to a developer as a task.
 
-**Onda**: gruppo di task indipendenti che girano in parallelo su un branch `onda/<slug>-<n>`. Arriva su main solo con gli E2E verdi, e l'onda dopo parte da lì.
+**Wave**: a group of independent tasks that run in parallel on a branch `onda/<slug>-<n>`. It reaches `main` only with green E2E and the security sign-off, and the next wave starts from there.
 
-### Script (`lite/bin/`)
+### Scripts (`lite/bin/`)
 
-| Script | Quando | Cosa fa |
+| Script | When | What it does |
 |---|---|---|
-| `worktree-new.sh <branch> [base]` | prima di lanciare un agente | Crea il worktree dell'agente (con `NOTE.md`, il punto del lavoro dell'agente, escluso da git); `--review <PR>` per quello del reviewer |
-| `design-check.sh` | l'architect, quando controlla i task | Segnala file del design oltre 150 righe, citazioni a titoli che non esistono o all'archivio, task senza «Da leggere» |
-| `progetto-pronto.sh [--prova]` | una volta, all'inizio di un progetto | Controlla che il progetto abbia direttive, le righe `E2E:`, `Deploy da main:` e `Comandi solo con ok:` in `CLAUDE.md`, `scripts/pre-merge.sh`, `scripts/e2e.sh`, `scripts/e2e-scelta.sh` e `.claude/settings.json` con la sandbox (chiavi e tipi); se manca qualcosa, lo crea l'architect dai modelli |
-| `merge-pr.sh <PR>` | a PR approvata | Controlla il piano `tasks/<slug>/INDEX.md` se la PR tocca `tasks/` (`piano.sh`), lancia `scripts/pre-merge.sh` del progetto (senza, non mergia), per un'onda verso main vuole l'ok del security, mergia nella base della PR e toglie worktree e branch |
-| `sicurezza-ok.sh <PR>` | dopo `SICUREZZA OK` del security | Segna il commit di testa della PR dell'onda (stato «security»); un commit aggiunto dopo chiede un nuovo controllo |
-| `stop-worktree-procs.sh <dir>` | dentro `merge-pr.sh` | Ferma i processi rimasti accesi in un worktree (server, watcher) prima di toglierlo |
-| `errori.sh --onda <slug>-<n> [--regole v7]` | a fine onda | Mostra gli errori registrati dopo il lancio precedente e il riassunto dei lanci degli agenti (quanti per tipo, durate, turni, token, esiti, chi è vicino al limite di turni, chi ha compattato, chi è partito senza finire); con `--onda` aggiunge la riga dell'onda al tabellone `docs/recap/metriche.md` del progetto (task, PR, giri di review, RIGIRA, lanci, durata, token; `danni` e `attriti` li compila chi legge) |
-| `pulisci-onda.sh <slug> <onda> <PR>` | a fine onda, dopo il controllo degli errori | Toglie da main i task dell'onda con una PR che mergia da sola (all'ultima onda anche `tasks/<slug>` e `docs/features/<slug>`); `--prova` mostra cosa farebbe |
+| `worktree-new.sh <branch> [base]` | before launching an agent | Creates the agent's worktree (with `NOTE.md`, the agent's progress notes, kept out of git); `--review <PR>` for the reviewer's |
+| `design-check.sh` | the architect, when checking tasks | Flags design files over 150 lines, references to headings that do not exist or to the archive, tasks without a «Da leggere» (reading list) section |
+| `progetto-pronto.sh [--prova]` | once, at the start of a project | Checks that the project has its directives, the `E2E:`, `Deploy da main:` and `Comandi solo con ok:` lines in `CLAUDE.md`, `scripts/pre-merge.sh`, `scripts/e2e.sh`, `scripts/e2e-scelta.sh` and a `.claude/settings.json` with the sandbox (keys and types); whatever is missing, the architect creates from the templates |
+| `merge-pr.sh <PR>` | once a PR is approved | Checks the plan `tasks/<slug>/INDEX.md` if the PR touches `tasks/` (`piano.sh`), runs the project's `scripts/pre-merge.sh` (without it, no merge), for a wave going to `main` requires the security sign-off, merges into the PR's base and removes worktree and branch |
+| `sicurezza-ok.sh <PR>` | after the security agent's `SICUREZZA OK` | Marks the head commit of the wave PR (status «security»); a commit added later asks for a new check |
+| `stop-worktree-procs.sh <dir>` | inside `merge-pr.sh` | Stops the processes still running in a worktree (servers, watchers) before removing it |
+| `errori.sh --onda <slug>-<n> [--regole v7]` | at the end of a wave | Shows the errors logged since the previous run and a summary of the agent launches (how many per type, durations, turns, tokens, outcomes, who is near the turn limit, who compacted, who left without finishing); with `--onda` it appends the wave's row to the project's board `docs/recap/metriche.md` (tasks, PRs, review rounds, reruns, launches, duration, tokens; `danni` and `attriti` are filled in by the reader) |
+| `pulisci-onda.sh <slug> <onda> <PR>` | at the end of a wave, after the error check | Removes the wave's tasks from `main` with a PR it merges by itself (on the last wave also `tasks/<slug>` and `docs/features/<slug>`); `--prova` is a dry run |
 
-### Modelli per il progetto (`lite/templates/`)
+### Project templates (`lite/templates/`)
 
-Gli agenti sono uguali per ogni progetto; quello che cambia sta in pochi script del progetto con un uso fisso: `pre-merge.sh` (controlli veloci prima del merge), `e2e.sh` (un giro E2E alla volta, con fila e registro), `e2e-scelta.sh` con `spec-per-cartella.txt` (quali spec lanciare dai file cambiati). Su un progetto nuovo l'architect li copia da qui e adatta solo il blocco «DA ADATTARE». Cosa deve fare ciascuno: [`lite/templates/README.md`](lite/templates/README.md).
+The agents are the same for every project; what changes lives in a few project scripts with a fixed contract: `pre-merge.sh` (fast checks before a merge), `e2e.sh` (one E2E run at a time, with a queue and a log), `e2e-scelta.sh` with `spec-per-cartella.txt` (which specs to run given the changed files). On a new project the architect copies them from here and adapts only the «DA ADATTARE» (to adapt) block. What each must do: [`lite/templates/README.md`](lite/templates/README.md).
 
-A fine onda gli errori si dividono in **danni** (lavoro perso, dati toccati senza consenso, soldi spesi, push su main, codice sbagliato su main, task fermo senza via d'uscita: si scrive un recap) e **attriti** (tutto il resto: una riga in `docs/recap/attriti.md`; alla terza volta diventa un danno).
+At the end of a wave, errors are split into **damage** (lost work, data touched without consent, money spent, a push to `main`, wrong code on `main`, a task stuck with no way out: a recap is written) and **friction** (everything else: one line in `docs/recap/attriti.md`; the third occurrence becomes damage).
 
-### Hook (`lite/hooks/`)
+### Hooks (`lite/hooks/`)
 
-Ogni hook ha il suo file di casi `<nome>-cases.sh`, che si lancia dopo ogni modifica.
+Every hook has its own test file `<name>-cases.sh`, run after every change.
 
-- **`guard.sh`**: blocca i push su main e i force push, ignorando il testo dentro heredoc e virgolette; si scavalca con `ALLOW_MAIN_PUSH=1`.
-- **`reviewer-edit.sh`** (PreToolUse su `Edit|Write|NotebookEdit`): gli agenti scrivono solo dentro `.claude/worktrees/`.
-- **`cd-principale.sh`** (PreToolUse su `Bash`): la sessione principale non entra con `cd` o `pushd` in `.claude/worktrees/`, perché la shell resterebbe lì; passano `git -C`, i percorsi assoluti e `(cd <worktree> && …)`. Gli agenti invece non lanciano git che cambia stato (`merge`, `checkout`, `reset`, `commit`…) nel checkout principale, anche dopo un `cd` fallito. Casi in `cd-principale-cases.sh`.
-- **`read-limit.sh`** (PreToolUse su `Read|Bash`): developer, reviewer e tester leggono al massimo 300 righe di un file per volta, con Read, `cat` o `sed -n`.
-- **`memoria-globale.sh`** (PreToolUse su `Edit|Write|NotebookEdit|Bash`): nella memoria globale (`~/.claude/projects/<home>/memory/`) non entra niente di un progetto. Blocca le memorie `type: project` e quelle che nominano un progetto (repo git sotto `~/Desktop` o cartelle con una memoria propria); ogni altra scrittura lì, anche da Bash, chiede conferma all'utente. Casi in `memoria-globale-cases.sh`.
-- **`comandi-costosi.sh`** (PreToolUse Bash): ferma un subagente che lancia un comando della riga `Comandi solo con ok:` del `CLAUDE.md` del progetto (deploy, DB con dati veri, chiamate a pagamento) e gli dice di chiederlo nel report; la sessione principale passa (`lite/templates/README.md`).
-- **`log-errors.sh`**: registra i permessi negati e i comandi falliti in `~/.claude/logs/errori/`, che poi `errori.sh` legge.
-- **`log-lanci.sh`** (SubagentStart, SubagentStop, PreCompact): registra ogni lancio di agente in `~/.claude/logs/lanci/` (tipo, esito letto dalle prime righe del report, turni, token e modello dal transcript del subagente, compattazioni), che poi `errori.sh` riassume. Sparisce da solo dopo 30 giorni, non blocca mai niente.
+- **`guard.sh`**: blocks pushes to `main` and force pushes, ignoring text inside heredocs and quotes; overridden with `ALLOW_MAIN_PUSH=1`.
+- **`reviewer-edit.sh`** (PreToolUse on `Edit|Write|NotebookEdit`): agents write only inside `.claude/worktrees/`.
+- **`cd-principale.sh`** (PreToolUse on `Bash`): the main session does not `cd` or `pushd` into `.claude/worktrees/`, because the shell would stay there; `git -C`, absolute paths and `(cd <worktree> && …)` pass. Agents, in turn, do not run state-changing git commands (`merge`, `checkout`, `reset`, `commit`…) in the main checkout, even after a failed `cd`.
+- **`read-limit.sh`** (PreToolUse on `Read|Bash`): developer, reviewer and tester read at most 300 lines of a file at a time, with Read, `cat` or `sed -n`.
+- **`memoria-globale.sh`** (PreToolUse on `Edit|Write|NotebookEdit|Bash`): nothing about a project enters the global memory (`~/.claude/projects/<home>/memory/`). It blocks `type: project` memories and any memory that names a project (a git repo under `~/Desktop` or a folder with a memory of its own); every other write there, even from Bash, asks the user.
+- **`comandi-costosi.sh`** (PreToolUse on `Bash`): stops a subagent that runs a command listed in the `Comandi solo con ok:` line of the project's `CLAUDE.md` (deploys, databases with real data, paid calls) and tells it to ask in its report; the main session passes (`lite/templates/README.md`).
+- **`log-errors.sh`**: logs denied permissions and failed commands to `~/.claude/logs/errori/`, which `errori.sh` reads.
+- **`log-lanci.sh`** (SubagentStart, SubagentStop, PreCompact): logs every agent launch to `~/.claude/logs/lanci/` (type, outcome read from the first lines of the report, turns, tokens and model from the subagent's transcript, compactions), which `errori.sh` summarises. Entries expire after 30 days; it never blocks anything.
 
-Ogni agente ha solo le istruzioni del suo lavoro. Una regola nuova la approva il proprietario.
+Every agent carries only the instructions of its own job. A new rule is approved by the owner.
+
+Script names, protocol words (`APPROVED`, `CHANGES`, `SICUREZZA OK`, `E2E VERDE`, `RIGIRA`) and the project files the flow expects are in Italian: they are literals checked by the scripts and hooks.

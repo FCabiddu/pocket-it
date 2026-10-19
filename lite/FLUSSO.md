@@ -1,49 +1,49 @@
-# Flusso del sistema lite
+# The lite flow
 
-Il flusso descritto da `CLAUDE.md` (regole v7), dagli agenti in `.claude/agents/`, dagli script in `bin/` e dagli hook in `hooks/`. Va aggiornato quando cambia uno di questi. Cosa fa ogni agente, script e hook è nel [README](../README.md#lite).
+The flow described by `CLAUDE.md` (rules v7), the agents in `.claude/agents/`, the scripts in `bin/` and the hooks in `hooks/`. It is updated whenever one of them changes. What every agent, script and hook does is in the [README](../README.md#lite).
 
-## 1 · Il quadro
+## 1 · The big picture
 
-All'inizio di un progetto, una volta, `progetto-pronto.sh` controlla che il progetto abbia gli script che il flusso usa (`templates/README.md`); se manca qualcosa, l'architect lo crea dai modelli. Una feature passa da questi passi; il lavoro piccolo (bug, modifica) lo fa la sessione principale da sola, su un branch, con PR e merge.
+Once, at the start of a project, `progetto-pronto.sh` checks that the project has the scripts the flow uses (`templates/README.md`); whatever is missing, the architect creates from the templates. A feature goes through these steps; small work (a bug, a change) is done by the main session alone, on a branch, with a PR and a merge.
 
 ```mermaid
 flowchart LR
-    R(["Richiesta"]) --> A["1 · analyst<br/>requisiti"] --> U{"l'utente approva?"}
-    U -- "sì" --> AR["2 · architect<br/>design"] --> TW["3 · task-writer<br/>task e onde"]
-    TW --> O["4 · Onda<br/>developer + reviewer"] --> T["5 · tester<br/>E2E"] --> M["6 · main"]
-    M -- "altra onda" --> O
-    M -- "finito" --> F(["Fatto"])
+    R(["Request"]) --> A["1 · analyst<br/>requirements"] --> U{"user approves?"}
+    U -- "yes" --> AR["2 · architect<br/>design"] --> TW["3 · task-writer<br/>tasks and waves"]
+    TW --> O["4 · Wave<br/>developer + reviewer"] --> T["5 · tester<br/>E2E"] --> M["6 · main"]
+    M -- "next wave" --> O
+    M -- "done" --> F(["Done"])
 ```
 
-## 2 · Un'onda
+## 2 · A wave
 
-I task di un'onda girano in parallelo, ognuno con il suo developer.
+The tasks of a wave run in parallel, each with its own developer.
 
 ```mermaid
 flowchart TD
-    B["branch onda/slug-N<br/>da main"] --> D["developer<br/>codice + test veloci"]
-    D --> R{"reviewer<br/>legge il codice"}
-    R -- "da correggere" --> D
-    R -- "ok" --> P["merge nel branch dell'onda<br/>(tsc, lint, unit automatici)"]
+    B["branch onda/slug-N<br/>from main"] --> D["developer<br/>code + fast tests"]
+    D --> R{"reviewer<br/>reads the code"}
+    R -- "changes" --> D
+    R -- "ok" --> P["merge into the wave branch<br/>(tsc, lint, unit run automatically)"]
 ```
 
-## 3 · Gli E2E e gli errori
+## 3 · E2E and errors
 
-A fine onda, prima di main, tester e security lavorano in parallelo; le loro righe si correggono insieme. Se le direttive del progetto rimandano gli E2E (per esempio al rilascio), il tester li scrive senza lanciarli e l'onda va su main con la sua PR approvata. Se serve una scelta che il design non ha fatto, decide l'architect (e l'utente se c'è da decidere).
+At the end of a wave, before `main`, tester and security work in parallel; their findings are fixed together. If the project's directives defer the E2E (for example to the release), the tester writes them without running them and the wave goes to `main` with its approved PR. If a choice is needed that the design did not make, the architect decides (and the user, if there is something to decide).
 
 ```mermaid
 flowchart TD
-    T["tester<br/>scrive e lancia gli E2E"] --> V{"verdi?"}
-    S["security<br/>cerca i buchi nel diff dell'onda"] --> SO{"ok?"}
-    SO -- "buchi" --> D
+    T["tester<br/>writes and runs the E2E"] --> V{"green?"}
+    S["security<br/>looks for holes in the wave's diff"] --> SO{"ok?"}
+    SO -- "holes" --> D
     SO -- "SICUREZZA OK<br/>sicurezza-ok.sh" --> M
-    V -- "sì" --> M["l'onda va su main<br/>(merge-pr.sh vuole l'ok del security)"]
-    V -- "test sbagliato" --> T
-    V -- "errori dell'app" --> D["developer corregge<br/>tutte le righe del giro<br/>reviewer controlla"]
-    D -- "un solo RIGIRA:<br/>rilancia i rossi" --> T
-    D -. "2 giri ancora rosso" .-> U["si chiede all'utente"]
+    V -- "yes" --> M["the wave goes to main<br/>(merge-pr.sh requires the security sign-off)"]
+    V -- "wrong test" --> T
+    V -- "app bugs" --> D["developer fixes<br/>every finding of the round<br/>reviewer checks"]
+    D -- "one RIGIRA (rerun):<br/>rerun the reds" --> T
+    D -. "still red after 2 rounds" .-> U["ask the user"]
 ```
 
-## Fine onda
+## End of a wave
 
-Con l'onda su main: `errori.sh` e i report degli agenti; ogni attrito è una riga in `docs/recap/attriti.md` (alla terza volta è un danno), ogni danno un recap discusso con l'utente; poi `pulisci-onda.sh` toglie da main i task dell'onda, e parte l'onda dopo.
+With the wave on `main`: `errori.sh` and the agents' reports; every friction is one line in `docs/recap/attriti.md` (the third time it is damage), every damage a recap discussed with the user; then `pulisci-onda.sh` removes the wave's tasks from `main`, and the next wave starts.
