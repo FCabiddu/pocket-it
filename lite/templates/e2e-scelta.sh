@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Modello del flusso lite (lite/templates/e2e-scelta.sh): l'architect lo copia in
-# scripts/e2e-scelta.sh insieme a e2e/spec-per-cartella.txt (modello: spec-per-cartella.txt).
-# Un progetto può sostituirne la logica (per esempio seguendo gli import), ma tiene uso e uscita.
+# Template of the lite flow (lite/templates/e2e-scelta.sh): the architect copies it to
+# scripts/e2e-scelta.sh together with e2e/spec-per-cartella.txt (template: spec-per-cartella.txt).
+# A project may replace its logic (for example following the imports), but keeps usage and output.
 #
-# Sceglie gli spec E2E da lanciare dai file cambiati, con la mappa:
-#   bash scripts/e2e-scelta.sh [--base <ref>] [--head <ref>]   default origin/main e HEAD
-#   bash scripts/e2e-scelta.sh --verifica                      controlla la mappa
-# stdout: gli spec scelti, uno per riga, ordinati, senza doppioni (vuoto se nessuno).
-# stderr: per ogni file cambiato, quali voci porta e perché; il tester lo incolla nella PR.
+# Picks the E2E specs to run from the changed files, with the map:
+#   bash scripts/e2e-scelta.sh [--base <ref>] [--head <ref>]   default origin/main and HEAD
+#   bash scripts/e2e-scelta.sh --verifica                      checks the map
+# stdout: the chosen specs, one per line, sorted, without duplicates (empty if none).
+# stderr: for every changed file, which entries it brings and why; the tester pastes it in the PR.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 MAP="${E2E_MAPPA:-e2e/spec-per-cartella.txt}"
-[ -f "$MAP" ] || { echo "e2e-scelta: manca $MAP" >&2; exit 2; }
+[ -f "$MAP" ] || { echo "e2e-scelta: $MAP is missing" >&2; exit 2; }
 
 base=origin/main head=HEAD verifica=0
 while [ $# -gt 0 ]; do
@@ -19,7 +19,7 @@ while [ $# -gt 0 ]; do
     --base) base=$2; shift 2;;
     --head) head=$2; shift 2;;
     --verifica) verifica=1; shift;;
-    *) echo "e2e-scelta: argomento sconosciuto $1" >&2; exit 2;;
+    *) echo "e2e-scelta: unknown argument $1" >&2; exit 2;;
   esac
 done
 
@@ -59,30 +59,30 @@ if verifica:
     for name, voci in groups.items():
         for v in voci:
             if v not in ("tutti", "nessuno") and v not in groups and not glob.glob(v):
-                bad.append(f"gruppo ={name}: {v} non esiste")
+                bad.append(f"group ={name}: {v} does not exist")
     for n, pre, voci in rows:
         if voci != ["nessuno"] and not any(f.startswith(pre) for f in files):
-            bad.append(f"riga {n}: il prefisso {pre} non combacia con nessun file")
+            bad.append(f"line {n}: the prefix {pre} matches no file")
         for v in voci:
             if v not in ("tutti", "nessuno") and v not in groups and not glob.glob(v):
-                bad.append(f"riga {n}: {v} non è un gruppo né uno spec esistente")
+                bad.append(f"line {n}: {v} is neither a group nor an existing spec")
     for b in bad: print(b, file=sys.stderr)
-    print(f"e2e-scelta: mappa {'con errori' if bad else 'giusta'}", file=sys.stderr)
+    print(f"e2e-scelta: map {'with errors' if bad else 'ok'}", file=sys.stderr)
     sys.exit(1 if bad else 0)
 
 scelti = set()
 for f in files:
     if re.search(test_re, f):
-        print(f"{f}: nessuno (file di test)", file=sys.stderr); continue
+        print(f"{f}: nessuno (test file)", file=sys.stderr); continue
     if is_spec(f):
         if glob.glob(f): scelti.add(f)
-        print(f"{f}: sé stesso (spec cambiato)", file=sys.stderr); continue
+        print(f"{f}: itself (changed spec)", file=sys.stderr); continue
     hit = [(n, voci) for n, pre, voci in rows if f.startswith(pre)]
     if not hit:
         scelti |= set(tutti)
-        print(f"{f}: tutti (nessuna riga della mappa)", file=sys.stderr); continue
+        print(f"{f}: tutti (no line in the map)", file=sys.stderr); continue
     for n, voci in hit:
         scelti |= espandi(voci)
-    print(f"{f}: {' '.join(v for _, vs in hit for v in vs)} (righe {', '.join(str(n) for n, _ in hit)})", file=sys.stderr)
+    print(f"{f}: {' '.join(v for _, vs in hit for v in vs)} (lines {', '.join(str(n) for n, _ in hit)})", file=sys.stderr)
 for s in sorted(scelti): print(s)
 EOF

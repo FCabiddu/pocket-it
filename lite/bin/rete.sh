@@ -1,8 +1,8 @@
-# Ripete un comando di rete (gh, git fetch/push/ls-remote) quando fallisce per la rete:
-# DNS caduto o GitHub non raggiungibile per 1-2 minuti (attriti dell'08/10 e del 14/10).
-# Un errore che non è di rete (PR inesistente, merge rifiutato) esce subito.
+# Retries a network command (gh, git fetch/push/ls-remote) when it fails because of the network:
+# DNS down or GitHub unreachable for 1-2 minutes (frictions of 08/10 and 14/10).
+# An error that is not network-related (missing PR, rejected merge) exits at once.
 #   source rete.sh; rete gh pr view 12 --json state
-# RETE_ATTESE: secondi di attesa fra i tentativi (default «10 20 30 60», circa 2 minuti).
+# RETE_ATTESE: seconds to wait between attempts (default «10 20 30 60», about 2 minutes).
 
 rete_errore='error connecting to|could not resolve host|could not resolve hostname|temporary failure in name resolution|connection (reset|refused|timed out)|operation timed out|tls handshake|unable to access|i/o timeout|no such host|network is unreachable|unexpected eof|http 50[234]'
 
@@ -15,7 +15,7 @@ rete() {
     if [ "$attesa" = fine ] || ! grep -qiE "$rete_errore" "$err"; then
       cat "$err" >&2; rm -f "$err"; return "$rc"
     fi
-    echo "rete: $1 fallito per la rete ($(grep -iEm1 "$rete_errore" "$err")), riprovo fra $attesa s" >&2
+    echo "rete: $1 failed because of the network ($(grep -iEm1 "$rete_errore" "$err")), retrying in $attesa s" >&2
     sleep "$attesa"
   done
 }

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash): i comandi «solo con ok» del progetto non li lancia un agente.
-# Il CLAUDE.md del progetto li elenca in una riga: `Comandi solo con ok: <regex>, <regex>, ...`
-# (regex di Python, separate da virgola, quindi senza virgole dentro; `nessuno` = nessun comando).
-# - Solo per i subagenti (agent_type presente): la sessione principale passa, è lei che chiede l'ok all'utente.
-# - Il CLAUDE.md si cerca nel repo del cwd del comando e dei `cd <dir>` che il comando contiene
-#   (radice = cartella di `git rev-parse --git-common-dir`, quindi vale anche nei worktree).
-# - Comando che combacia con una regex: exit 2 e il messaggio di fermarsi e chiederlo nel report.
-# - Nessuna riga, `nessuno`, fuori da un repo, errore proprio: passa (exit 0).
+# PreToolUse(Bash): the project's «only with ok» commands are not run by an agent.
+# The project's CLAUDE.md lists them on one line: `Comandi solo con ok: <regex>, <regex>, ...`
+# (Python regexes, comma-separated, hence with no commas inside; `nessuno` = no command).
+# - Only for subagents (agent_type present): the main session passes, it is the one asking the user for the ok.
+# - CLAUDE.md is looked up in the repo of the command's cwd and of the `cd <dir>` the command contains
+#   (root = folder of `git rev-parse --git-common-dir`, so it works in the worktrees too).
+# - Command matching a regex: exit 2 and the message to stop and ask for it in the report.
+# - No line, `nessuno`, outside a repo, own error: passes (exit 0).
 input=$(cat)
 out=$(printf '%s' "$input" | python3 -c '
 import json, os, re, subprocess, sys
@@ -55,5 +55,5 @@ for dir in dirs:
             continue
 ' 2>/dev/null)
 [ -z "$out" ] && exit 0
-echo "comandi-costosi: «${out}» è un comando solo con ok dell'utente (riga «Comandi solo con ok» nel CLAUDE.md del progetto): fermati e chiedilo nel report, non lanciarlo" >&2
+echo "comandi-costosi: «${out}» is a command that needs the user's ok (line «Comandi solo con ok» in the project's CLAUDE.md): stop and ask for it in the report, do not run it" >&2
 exit 2

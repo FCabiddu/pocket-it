@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Registro dei lanci degli agenti, per rileggerlo a fine onda con bin/errori.sh:
-# - SubagentStart: chi parte (tipo, id, cwd);
-# - SubagentStop: come è finito (esito letto dalle prime righe del report, con regole fisse e nessun LLM),
-#   turni, token e modello letti dal transcript del subagente;
-# - PreCompact: una compattazione del contesto (un agente che compatta più di 2 volte ha un task troppo grande).
-# La durata non si salva: la calcola errori.sh dalla coppia start/stop con lo stesso agent_id.
-# Un file per giorno in ~/.claude/logs/lanci/; sparisce da solo dopo 30 giorni. Non blocca mai niente.
+# Register of the agent launches, to be read back at the end of a wave with bin/errori.sh:
+# - SubagentStart: who starts (type, id, cwd);
+# - SubagentStop: how it ended (outcome read from the first lines of the report, with fixed rules and no LLM),
+#   turns, tokens and model read from the subagent's transcript;
+# - PreCompact: a context compaction (an agent that compacts more than 2 times has a task that is too big).
+# The duration is not saved: errori.sh computes it from the start/stop pair with the same agent_id.
+# One file per day in ~/.claude/logs/lanci/; it disappears by itself after 30 days. It never blocks anything.
 input=$(cat)
-dir="${LANCI_DIR:-$HOME/.claude/logs/lanci}"; mkdir -p "$dir"   # LANCI_DIR solo per le prove
-# Pulizia: i log dei giorni si buttano dopo 30 giorni. Una volta al giorno, non a ogni evento.
+dir="${LANCI_DIR:-$HOME/.claude/logs/lanci}"; mkdir -p "$dir"   # LANCI_DIR only for the tests
+# Cleanup: the daily logs are thrown away after 30 days. Once a day, not at every event.
 oggi="$dir/.pulito-$(date +%F)"
 if [ ! -e "$oggi" ]; then
   rm -f "$dir"/.pulito-* 2>/dev/null
@@ -29,7 +29,7 @@ base = {"ora": datetime.datetime.now().isoformat(timespec="seconds"), "evento": 
 if ev == "SubagentStop":
     ultimo = " ".join((d.get("last_assistant_message") or "").split())
     testa = ultimo[:300]
-    # Esito: il primo marcatore che compare nelle prime righe del report.
+    # Outcome: the first marker that appears in the first lines of the report.
     regole = [(r"\bAPPROVED\b", "APPROVED"), (r"\bCHANGES\b", "CHANGES"),
               (r"\bE2E VERDE\b", "E2E VERDE"), (r"\bE2E ROSS[OI]\b", "E2E ROSSO"), (r"\bE2E SCRITTI\b", "E2E SCRITTI"),
               (r"\bSICUREZZA OK\b", "SICUREZZA OK"), (r"\bSICUREZZA\s+[—-]", "SICUREZZA"),
@@ -47,8 +47,8 @@ if ev == "SubagentStop":
     else:
         base["esito"] = "altro"
     base["ultimo"] = testa
-    # Turni, token e modello dal transcript del subagente (campo agent_transcript_path; se manca si ricava
-    # dal transcript della sessione: <cartella>/<sessione>/subagents/agent-<id>.jsonl).
+    # Turns, tokens and model from the transcript of the subagent (field agent_transcript_path; if missing it is derived
+    # from the session transcript: <folder>/<session>/subagents/agent-<id>.jsonl).
     tp = d.get("agent_transcript_path")
     if not tp and d.get("transcript_path") and d.get("session_id") and d.get("agent_id"):
         tp = os.path.join(os.path.dirname(d["transcript_path"]), d["session_id"], "subagents", "agent-%s.jsonl" % d["agent_id"])

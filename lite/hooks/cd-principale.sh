@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash): la sessione principale (agent_type assente) non entra con «cd» o «pushd» in un worktree
-# (.claude/worktrees/): la cartella della shell resta lì per i comandi dopo, e uno script che toglie il worktree
-# (merge-pr.sh) la fa sparire sotto la shell. Passano «git -C», i percorsi assoluti e «(cd <worktree> && …)»,
-# perché un cd fra parentesi gira in una subshell.
-# Gli agenti (agent_type presente) lavorano nel loro worktree: per loro il blocco è un altro. Niente git che cambia
-# stato (merge, checkout, reset, commit…) nel checkout principale. La cartella si segue segmento per segmento; un cd
-# verso una cartella che non esiste lascia la cartella com'era, come fa la shell (05/10: «cd <worktree tolto> && S=…;
-# git merge origin/main» ha mergiato nel checkout principale).
+# PreToolUse(Bash): the main session (agent_type absent) does not enter a worktree (.claude/worktrees/) with «cd»
+# or «pushd»: the shell's directory stays there for the commands that follow, and a script that removes the worktree
+# (merge-pr.sh) makes it vanish under the shell. «git -C», absolute paths and «(cd <worktree> && …)» pass,
+# because a cd inside parentheses runs in a subshell.
+# Agents (agent_type present) work in their own worktree: for them the block is a different one. No git that changes
+# state (merge, checkout, reset, commit…) in the main checkout. The directory is followed segment by segment; a cd
+# to a directory that does not exist leaves the directory as it was, as the shell does (05/10: «cd <removed worktree> && S=…;
+# git merge origin/main» merged into the main checkout).
 input=$(cat)
 msg=$(printf '%s' "$input" | python3 -c '
 import json, os, re, shlex, sys
@@ -41,7 +41,7 @@ for t in toks:
 segs.append(cur)
 MUTA = {"merge", "checkout", "switch", "reset", "commit", "pull", "rebase", "cherry-pick", "stash", "restore", "revert", "am"}
 def principale(path):
-    # checkout principale: la prima .git risalendo è una cartella (in un worktree è un file)
+    # main checkout: the first .git going up is a directory (in a worktree it is a file)
     p = path
     while True:
         g = os.path.join(p, ".git")
@@ -54,7 +54,7 @@ ASSIGN = re.compile(r"^([A-Za-z_]\w*)=(.*)$", re.S)
 VAR = re.compile(r"\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))")
 env = dict(os.environ)
 def expand(s):
-    # le variabili assegnate prima nello stesso comando (15/10: «W=<worktree>; cd $W» passava)
+    # variables assigned earlier in the same command (15/10: «W=<worktree>; cd $W» passed)
     return VAR.sub(lambda m: env.get(m.group(1) or m.group(2), m.group(0)), s)
 depth, d, stack = 0, cwd, []
 for seg in segs:
@@ -80,14 +80,14 @@ for seg in segs:
             else:
                 i += 1
         if i < len(seg) and seg[i] in MUTA and principale(gd):
-            print("git " + seg[i] + " nel checkout principale (" + gd + "): un agente lavora solo nel suo worktree; controlla che il cd sia riuscito e usa && fra cd e git")
+            print("git " + seg[i] + " in the main checkout (" + gd + "): an agent works only in its own worktree; check that the cd succeeded and use && between cd and git")
             sys.exit(0)
         continue
     if not seg or seg[0] not in ("cd", "pushd"):
         continue
     args = [expand(a) for a in seg[1:] if not a.startswith("-")]
     if not agent and depth == 0 and args and ("$" in args[0] or "`" in args[0]):
-        print("cd verso una cartella che non si legge dal comando (" + args[0] + "): dalla sessione principale usa un percorso esplicito, git -C o (cd <cartella> && …)")
+        print("cd to a directory that cannot be read from the command (" + args[0] + "): from the main session use an explicit path, git -C or (cd <dir> && …)")
         sys.exit(0)
     target = os.path.normpath(os.path.join(d, os.path.expanduser(args[0]))) if args else os.path.expanduser("~")
     if agent:
@@ -96,7 +96,7 @@ for seg in segs:
         continue
     if depth == 0:
         if "/.claude/worktrees/" in target + "/" and not target.endswith("/.claude/worktrees"):
-            print("niente cd nei worktree dalla sessione principale (" + target + "): usa git -C, percorsi assoluti o (cd <worktree> && …)")
+            print("no cd into worktrees from the main session (" + target + "): use git -C, absolute paths or (cd <worktree> && …)")
             sys.exit(0)
         d = target
 ')

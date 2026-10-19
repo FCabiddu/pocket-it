@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Casi di prova di comandi-costosi.sh: `bash lite/hooks/comandi-costosi-cases.sh`. Esce con 1 se un caso fallisce.
+# Test cases of comandi-costosi.sh: `bash lite/hooks/comandi-costosi-cases.sh`. Exits with 1 if a case fails.
 H=$(dirname "$0")/comandi-costosi.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 tmp=$(cd "$tmp" && pwd -P)
@@ -14,7 +14,7 @@ t() {
   printf '%s' "$(python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","agent_type":sys.argv[1] or None,"tool_input":{"command":sys.argv[3]},"cwd":sys.argv[2]}))' "$agent" "$cwd" "$cmd")" | bash "$H" >/dev/null 2>"$tmp/err"; rc=$?
   got=$([ $rc -eq 2 ] && echo BLOCK || echo ok)
   if [ "$got" = "$exp" ]; then r=PASS; else r=FAIL; fail=1; fi
-  printf '%s  atteso %-5s ottenuto %-5s  %-10s %-18s %s\n' "$r" "$exp" "$got" "${agent:-principale}" "${cwd#$tmp/}" "$(printf '%s' "$cmd" | head -c 60)"
+  printf '%s  expected %-5s got %-5s  %-10s %-18s %s\n' "$r" "$exp" "$got" "${agent:-main}" "${cwd#$tmp/}" "$(printf '%s' "$cmd" | head -c 60)"
 }
 t BLOCK developer "$R"                        'netlify deploy --prod'
 t ok    ""        "$R"                        'netlify deploy --prod'
@@ -33,6 +33,6 @@ t ok    developer "$N"                        'netlify deploy'
 t ok    developer "$N"                        'echo nessuno'
 t ok    developer "$R"                        ''
 printf '{rotto' | bash "$H" >/dev/null 2>&1; rc=$?
-if [ $rc -eq 0 ]; then echo "PASS  JSON rotto → exit 0"; else echo "FAIL  JSON rotto → exit $rc"; fail=1; fi
-printf '%s' "$(python3 -c 'import json; print(json.dumps({"tool_name":"Bash","agent_type":"developer","tool_input":{"command":"netlify deploy"},"cwd":"'"$R"'"}))')" | bash "$H" 2>&1 >/dev/null | grep -q 'fermati e chiedilo nel report' && echo "PASS  messaggio di stop su stderr" || { echo "FAIL  messaggio di stop su stderr"; fail=1; }
+if [ $rc -eq 0 ]; then echo "PASS  broken JSON → exit 0"; else echo "FAIL  broken JSON → exit $rc"; fail=1; fi
+printf '%s' "$(python3 -c 'import json; print(json.dumps({"tool_name":"Bash","agent_type":"developer","tool_input":{"command":"netlify deploy"},"cwd":"'"$R"'"}))')" | bash "$H" 2>&1 >/dev/null | grep -q 'stop and ask for it in the report' && echo "PASS  stop message on stderr" || { echo "FAIL  stop message on stderr"; fail=1; }
 exit $fail

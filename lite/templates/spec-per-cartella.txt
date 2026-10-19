@@ -1,23 +1,23 @@
-# Mappa degli spec E2E del giro di fine onda: la legge scripts/e2e-scelta.sh.
-# Modello del flusso lite (lite/templates/spec-per-cartella.txt); la tiene l'architect.
+# Map of the E2E specs for the end-of-wave run: scripts/e2e-scelta.sh reads it.
+# Template of the lite flow (lite/templates/spec-per-cartella.txt); the architect maintains it.
 #
-# @spec <glob...>       dove stanno gli spec: «tutti» sono questi (default e2e/**/*.spec.ts)
-# @test <regex>         un file di test che combacia non porta nulla
-# =GRUPPO spec...       un gruppo di spec (una superficie, una rotta)
-# <prefisso> <voci...>  un file cambiato il cui percorso inizia con <prefisso> porta le sue voci;
-#                       una voce è un GRUPPO, uno spec, «tutti» o «nessuno». Contano tutte le righe che combaciano.
-# Uno spec cambiato porta sé stesso. Un file che non combacia con nessuna riga porta «tutti»:
-# ogni cartella dell'app deve avere la sua riga, se no ogni onda lancia la suite intera.
-# Uno spec nuovo o una superficie nuova aggiunge qui la sua riga nella stessa PR.
-# Si controlla con `bash scripts/e2e-scelta.sh --verifica`.
+# @spec <glob...>       where the specs live: «tutti» (all) means these (default e2e/**/*.spec.ts)
+# @test <regex>         a test file that matches brings nothing
+# =GROUP spec...        a group of specs (one surface, one route)
+# <prefix> <entries...> a changed file whose path starts with <prefix> brings its entries;
+#                       an entry is a GROUP, a spec, «tutti» (all) or «nessuno» (none). Every matching line counts.
+# A changed spec brings itself. A file that matches no line brings «tutti»:
+# every folder of the app must have its line, otherwise every wave runs the whole suite.
+# A new spec or a new surface adds its line here in the same PR.
+# Checked with `bash scripts/e2e-scelta.sh --verifica`.
 
 @spec e2e/**/*.spec.ts
 @test (/__tests__/|\.test\.[jt]sx?$)
 
-# Gruppi (esempio)
+# Groups (example)
 =HOME e2e/home.spec.ts
 
-# Non cambiano ciò che gli E2E vedono
+# They do not change what the E2E see
 docs/ nessuno
 tasks/ nessuno
 scripts/ nessuno
@@ -25,10 +25,10 @@ scripts/ nessuno
 CLAUDE.md nessuno
 e2e/spec-per-cartella.txt nessuno
 
-# Strumenti E2E: valgono «tutti» (un progetto può restringerli agli spec che li importano)
+# E2E tooling: counts as «tutti» (a project may narrow it to the specs that import it)
 e2e/lib/ tutti
 e2e/pages/ tutti
 playwright.config.ts tutti
 
-# Codice dell'app (esempio: una riga per rotta o cartella)
+# App code (example: one line per route or folder)
 src/app/page.tsx HOME

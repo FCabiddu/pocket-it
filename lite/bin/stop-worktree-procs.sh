@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Ferma i processi la cui cartella di lavoro è dentro <dir> (server next dev, watcher rimasti accesi),
-# tranne chi l'ha chiamato e i suoi antenati. Prima TERM, poi KILL dopo 5 secondi. Stampa cosa ferma.
-#   stop-worktree-procs.sh <dir>     (usato da merge-pr.sh prima di togliere un worktree)
+# Stops the processes whose working directory is inside <dir> (next dev servers, watchers left running),
+# except the caller and its ancestors. First TERM, then KILL after 5 seconds. Prints what it stops.
+#   stop-worktree-procs.sh <dir>     (used by merge-pr.sh before removing a worktree)
 set -uo pipefail
 
-dir=$(cd "${1:?uso: stop-worktree-procs.sh <dir>}" 2>/dev/null && pwd -P) || exit 0
+dir=$(cd "${1:?usage: stop-worktree-procs.sh <dir>}" 2>/dev/null && pwd -P) || exit 0
 
 keep=" "; p=$$
 while [ -n "$p" ] && [ "$p" -gt 1 ]; do keep="$keep$p "; p=$(ps -o ppid= -p "$p" | tr -d ' '); done
@@ -15,7 +15,7 @@ pids=$(lsof -nP -d cwd -Fpn 2>/dev/null | awk -v d="$dir" '
 todo=""
 for pid in $pids; do
   case "$keep" in *" $pid "*) continue ;; esac
-  echo "stop-worktree-procs: fermo $pid ($(ps -o command= -p "$pid" | cut -c1-80))"
+  echo "stop-worktree-procs: stopping $pid ($(ps -o command= -p "$pid" | cut -c1-80))"
   kill "$pid" 2>/dev/null && todo="$todo $pid"
 done
 [ -z "$todo" ] && exit 0
@@ -24,5 +24,5 @@ for _ in 1 2 3 4 5; do
   [ -z "$alive" ] && exit 0
   sleep 1
 done
-for pid in $alive; do echo "stop-worktree-procs: $pid non si è fermato, KILL"; kill -9 "$pid" 2>/dev/null; done
+for pid in $alive; do echo "stop-worktree-procs: $pid did not stop, KILL"; kill -9 "$pid" 2>/dev/null; done
 exit 0

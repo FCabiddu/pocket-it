@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Casi di prova di memoria-globale.sh: `bash lite/hooks/memoria-globale-cases.sh`. Esce con 1 se un caso fallisce.
+# Test cases for memoria-globale.sh: `bash lite/hooks/memoria-globale-cases.sh`. Exits with 1 if a case fails.
 H=$(dirname "$0")/memoria-globale.sh
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 tmp=$(cd "$tmp" && pwd -P)
@@ -20,7 +20,7 @@ ti = {"command": sys.argv[3]} if sys.argv[1] == "Bash" else {"file_path": sys.ar
 print(json.dumps({"tool_name":sys.argv[1],"tool_input":ti,"cwd":"/"}))' "$tool" "$path" "$text")" | bash "$H" 2>/dev/null > "$tmp/out"; rc=$?
   if [ $rc -eq 2 ]; then got=BLOCK; elif grep -q '"permissionDecision": "ask"' "$tmp/out"; then got=ASK; else got=ok; fi
   if [ "$got" = "$exp" ]; then r=PASS; else r=FAIL; fail=1; fi
-  printf '%s  atteso %-5s ottenuto %-5s  %-5s %s | %s\n' "$r" "$exp" "$got" "$tool" "${path#$tmp/}" "$(printf '%s' "$text" | head -c 50 | tr '\n' ' ')"
+  printf '%s  expected %-5s got %-5s  %-5s %s | %s\n' "$r" "$exp" "$got" "$tool" "${path#$tmp/}" "$(printf '%s' "$text" | head -c 50 | tr '\n' ' ')"
 }
 t BLOCK Write "$G/tf-costi.md"            $'---\nname: x\nmetadata:\n  type: project\n---\ncosti'
 t BLOCK Write "$G/feedback-x.md"          $'---\ntype: feedback\n---\nnei test di App Demo non cambiare modello'

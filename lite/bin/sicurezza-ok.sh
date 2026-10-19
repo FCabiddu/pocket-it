@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Segna che l'agente security ha risposto `SICUREZZA OK` sulla PR di un'onda verso main.
-#   sicurezza-ok.sh <PR>     (da dentro il repo)
-# Mette lo stato «security» = success sul commit di testa della PR. merge-pr.sh non porta
-# un'onda su main senza quello stato sul commit che mergia: un commit aggiunto dopo l'ok
-# (una correzione, un merge di main) chiede un nuovo controllo di security.
+# Records that the security agent answered `SICUREZZA OK` on the PR of a wave towards main.
+#   sicurezza-ok.sh <PR>     (from inside the repo)
+# Sets the «security» = success status on the PR's head commit. merge-pr.sh does not bring
+# a wave to main without that status on the commit it merges: a commit added after the sign-off
+# (a fix, a merge of main) requires a new security check.
 set -euo pipefail
 die() { echo "sicurezza-ok: $1" >&2; exit "${2:-1}"; }
-pr="${1:-}"; [ -n "$pr" ] || die "uso: sicurezza-ok.sh <PR>" 2
+pr="${1:-}"; [ -n "$pr" ] || die "usage: sicurezza-ok.sh <PR>" 2
 read -r state branch base head < <(gh pr view "$pr" --json state,headRefName,baseRefName,headRefOid -q '.state + " " + .headRefName + " " + .baseRefName + " " + .headRefOid')
-[ "$state" = OPEN ] || die "la PR $pr è $state, non OPEN"
-case "$branch" in onda/*) ;; *) die "la PR $pr non è di un'onda ($branch)";; esac
-[ "$base" = main ] || die "la PR $pr va verso $base, non verso main"
+[ "$state" = OPEN ] || die "PR $pr is $state, not OPEN"
+case "$branch" in onda/*) ;; *) die "PR $pr is not a wave PR ($branch)";; esac
+[ "$base" = main ] || die "PR $pr targets $base, not main"
 gh api -X POST "repos/{owner}/{repo}/statuses/$head" -f state=success -f context=security \
-  -f description="SICUREZZA OK dell'agente security" >/dev/null
-echo "sicurezza-ok: PR $pr, commit ${head:0:8} segnato"
+  -f description="SICUREZZA OK from the security agent" >/dev/null
+echo "sicurezza-ok: PR $pr, commit ${head:0:8} marked"

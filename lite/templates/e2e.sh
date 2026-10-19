@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
-# Modello del flusso lite (lite/templates/e2e.sh): l'architect lo copia in scripts/e2e.sh
-# e adatta solo il blocco «DA ADATTARE». Uso: `bash scripts/e2e.sh <spec...> [opzioni del runner]`.
+# Template of the lite flow (lite/templates/e2e.sh): the architect copies it to scripts/e2e.sh
+# and adapts only the «DA ADATTARE» block. Usage: `bash scripts/e2e.sh <spec...> [runner options]`.
 #
-# Cosa garantisce, uguale in ogni progetto:
-#  - un solo giro E2E alla volta sulla macchina per ogni posto (porta), condiviso da tutti i
-#    worktree del repo: chi arriva aspetta in fila fino a WAIT_MAX secondi. Un posto il cui
-#    processo è morto si libera da solo; una porta occupata da altro si salta;
-#  - un solo giro alla volta nello stesso worktree;
-#  - se c'è scripts/e2e-build.sh, lo lancia dopo aver preso il posto (build del progetto);
-#  - il runner riceve PORT e BASE_URL del posto;
-#  - ogni giro lascia una riga (ora, exit, riepilogo, argomenti) in
-#    <git-common-dir>/e2e-giri/<branch>.log, fuori da git e comune ai worktree: la PR del
-#    tester riporta ogni giro e il reviewer lo confronta con questo file.
+# What it guarantees, the same in every project:
+#  - one E2E run at a time on the machine for every slot (port), shared by all the
+#    worktrees of the repo: whoever arrives waits in the queue up to WAIT_MAX seconds. A slot whose
+#    process is dead frees itself; a port taken by something else is skipped;
+#  - one run at a time in the same worktree;
+#  - if scripts/e2e-build.sh exists, it runs it after taking the slot (project build);
+#  - the runner receives the slot's PORT and BASE_URL;
+#  - every run leaves a line (time, exit, summary, arguments) in
+#    <git-common-dir>/e2e-giri/<branch>.log, outside git and shared by the worktrees: the tester's
+#    PR reports every run and the reviewer compares it with this file.
 set -euo pipefail
 
-# Riga «E2E:» di CLAUDE.md: con «E2E: al rilascio» gli E2E si lanciano solo nel giro prima del rilascio.
-# E2E_FORZA=1 solo per un giro che l'utente chiede.
+# «E2E:» line of CLAUDE.md: with «E2E: al rilascio» the E2E run only in the round before the release.
+# E2E_FORZA=1 only for a run the user asks for.
 if grep -qE '^E2E: al rilascio' "$(git rev-parse --show-toplevel)/CLAUDE.md" 2>/dev/null && [ "${E2E_FORZA:-}" != 1 ]; then
-  echo "e2e: CLAUDE.md dice «E2E: al rilascio», gli E2E si lanciano solo nel giro prima del rilascio (E2E_FORZA=1)" >&2
+  echo "e2e: CLAUDE.md says «E2E: al rilascio», the E2E run only in the round before the release (E2E_FORZA=1)" >&2
   exit 1
 fi
 
 # --- DA ADATTARE ------------------------------------------------------------------------
-PORTS=(3101)      # un posto per porta; più porte solo se due giri insieme non si disturbano (DB condiviso: una)
-WAIT_MAX=3600     # secondi di fila al massimo
-run_e2e() {       # il runner del progetto; riceve gli argomenti dello script
+PORTS=(3101)      # one slot per port; more ports only if two runs together do not disturb each other (shared DB: one)
+WAIT_MAX=3600     # maximum seconds in the queue
+run_e2e() {       # the project's runner; receives the script's arguments
   npx playwright test "$@"
 }
-# Riepilogo del runner per il registro (righe tipo «12 passed», «1 failed»).
+# Summary of the runner for the log (lines like «12 passed», «1 failed»).
 summary() { grep -oE '^ +[0-9]+ (passed|failed|flaky|skipped|did not run)' "$1" | sed 's/^ *//' | paste -sd, - | sed 's/,/, /g'; }
 # -----------------------------------------------------------------------------------------
 
@@ -37,7 +37,7 @@ here="$(git rev-parse --path-format=absolute --git-dir)/e2e-running"
 if ! mkdir "$here" 2>/dev/null; then
   pid=$(cat "$here/pid" 2>/dev/null || true)
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-    echo "e2e: in questo worktree gira già un e2e (pid $pid)" >&2
+    echo "e2e: an e2e run is already going in this worktree (pid $pid)" >&2
     exit 1
   fi
 fi
@@ -75,16 +75,16 @@ trap 'rm -rf "$here"' EXIT
 
 waited=0
 until port=$(take_slot); do
-  [ "$waited" -eq 0 ] && echo "e2e: tutti i posti (${PORTS[*]}) sono occupati, aspetto..." >&2
+  [ "$waited" -eq 0 ] && echo "e2e: all the slots (${PORTS[*]}) are taken, waiting..." >&2
   if [ "$waited" -ge "$WAIT_MAX" ]; then
-    echo "e2e: nessun posto libero dopo ${WAIT_MAX}s" >&2
+    echo "e2e: no free slot after ${WAIT_MAX}s" >&2
     exit 1
   fi
   sleep 5
   waited=$((waited + 5))
 done
 trap 'rm -rf "$slots/$port" "$here"' EXIT
-echo "e2e: posto sulla porta $port" >&2
+echo "e2e: slot on port $port" >&2
 
 if [ -f scripts/e2e-build.sh ]; then bash scripts/e2e-build.sh >&2; fi
 
@@ -98,6 +98,6 @@ PORT=$port BASE_URL="http://localhost:$port" run_e2e "$@" 2>&1 | tee "$out"
 code=${PIPESTATUS[0]}
 set -e
 esito=$(summary "$out" || true)
-printf '%s\texit=%s\t%s\t%s\n' "$(date +%Y-%m-%dT%H:%M:%S)" "$code" "${esito:-nessun riepilogo}" "$*" >>"$log"
+printf '%s\texit=%s\t%s\t%s\n' "$(date +%Y-%m-%dT%H:%M:%S)" "$code" "${esito:-no summary}" "$*" >>"$log"
 rm -f "$out"
 exit "$code"

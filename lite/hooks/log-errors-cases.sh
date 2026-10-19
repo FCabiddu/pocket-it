@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Casi di prova di log-errors.sh + errori.sh: `bash lite/hooks/log-errors-cases.sh`. Esce con 1 se un caso fallisce.
+# Test cases of log-errors.sh + errori.sh: `bash lite/hooks/log-errors-cases.sh`. Exits with 1 if a case fails.
 H=$(cd "$(dirname "$0")" && pwd)/log-errors.sh; E=$(cd "$(dirname "$0")/../bin" && pwd)/errori.sh
 tmp=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$tmp"' EXIT
 export ERRORI_DIR=$tmp/log; R=$tmp/repo; git init -q "$R"; fail=0
@@ -7,10 +7,10 @@ ev() { python3 -c 'import json,sys; d={"hook_event_name":"PermissionDenied","ses
 ev "rm -rf x" '{"reason": "prova-motivo"}'
 ev "git push" '{}'
 out=$(cd "$R" && bash "$E")
-c() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 (atteso $2, ottenuto $3)"; fail=1; fi; }
+c() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 (expected $2, got $3)"; fail=1; fi; }
 has() { printf '%s' "$out" | grep -c -- "$1"; }
-c "il motivo compare sotto il comando"      1 "$(has 'prova-motivo')"
-c "il comando negato compare"               1 "$(has 'rm -rf x')"
-c "i campi noti non finiscono in altro"     0 "$(has 'transcript_path')"
-c "senza campi nuovi nessuna riga altro"    1 "$(has '  → ')"
+c "the reason appears under the command"    1 "$(has 'prova-motivo')"
+c "the denied command appears"              1 "$(has 'rm -rf x')"
+c "known fields do not end up in altro"     0 "$(has 'transcript_path')"
+c "without new fields no altro line"        1 "$(has '  → ')"
 exit $fail
